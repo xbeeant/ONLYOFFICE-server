@@ -3,16 +3,16 @@ var sockjs = require('sockjs'),
 var arrDictionaries = {};
 
 // Add en_US
-arrDictionaries["1033"] = new nodehun.Dictionary(__dirname + '/Dictionaries/en_US/en_US.aff',
-	__dirname + './Dictionaries/en_US/en_US.dic');
+arrDictionaries["1033"] = new nodehun.Dictionary(__dirname + './../Dictionaries/en_US/en_US.aff',
+	__dirname + './../Dictionaries/en_US/en_US.dic');
 // Add ru_RU
-arrDictionaries["1049"] = new nodehun.Dictionary(__dirname + './Dictionaries/ru_RU/ru_RU.aff',
-	__dirname + './Dictionaries/ru_RU/ru_RU.dic');
+arrDictionaries["1049"] = new nodehun.Dictionary(__dirname + './../Dictionaries/ru_RU/ru_RU.aff',
+	__dirname + './../Dictionaries/ru_RU/ru_RU.dic');
 // Add de_DE_frami
-arrDictionaries["1031"] = new nodehun.Dictionary(__dirname + './Dictionaries/de_DE_frami/de_DE_frami.aff',
-	__dirname + './Dictionaries/de_DE_frami/de_DE_frami.dic');
+arrDictionaries["1031"] = new nodehun.Dictionary(__dirname + './../Dictionaries/de_DE_frami/de_DE_frami.aff',
+	__dirname + './../Dictionaries/de_DE_frami/de_DE_frami.dic');
 
-var logger = require('./logger');
+var logger = require('./../../Common/sources/logger');
 
 exports.install = function (server, callbackFunction) {
 	'use strict';

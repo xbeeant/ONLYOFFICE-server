@@ -2,7 +2,7 @@ var config = require('./configSpellCheck.json');
 
 process.env.NODE_ENV = config['server']['mode'];
 
-var logger = require('./logger');
+var logger = require('./../../Common/sources/logger');
 
 // 2. Express server
 var express = require('express');
