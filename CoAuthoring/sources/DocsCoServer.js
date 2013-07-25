@@ -6,7 +6,7 @@ var sockjs = require('sockjs'),
 if (config["mongodb"])
 	dataBase = require('./database');
 	
-var logger = require('./logger');
+var logger = require('./../../Common/sources/logger');
 
 var c_oAscRecalcIndexTypes = {
 	RecalcIndexAdd:		1,
