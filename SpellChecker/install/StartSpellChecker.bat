@@ -1,2 +1,2 @@
-call node --debug ../sources/serverSpellCheck.js
+call node --debug ../sources/server.js
 pause
