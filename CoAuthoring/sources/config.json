@@ -3,18 +3,6 @@
 		"port": 3000,
 		"mode": "development"
 	},
-	"log": {
-		"appenders": [
-			{ 
-				"type": "console" 
-			},
-			{
-				"type": "file",
-				"filename": "../logs/coauthoring.log"
-			}
-		],
-		"replaceConsole": "true"
-	},
 	"mongodb": {
 		"host": "localhost",
 		"port": 27017,

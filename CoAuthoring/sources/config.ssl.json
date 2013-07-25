@@ -3,15 +3,6 @@
 		"port": 443,
 		"mode": "production"
 	},
-	"log": {
-		"appenders": [
-			{
-				"type": "file",
-				"filename": "../logs/coauthoring.log"
-			}
-		],
-		"replaceConsole": "true"
-	},
 	"mongodb": {
 		"host": "10.0.1.102",
 		"port": 27017,
