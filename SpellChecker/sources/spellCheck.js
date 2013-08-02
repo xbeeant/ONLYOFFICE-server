@@ -11,6 +11,9 @@ arrDictionaries["1049"] = new nodehun.Dictionary(__dirname + './../Dictionaries/
 // Add de_DE_frami
 arrDictionaries["1031"] = new nodehun.Dictionary(__dirname + './../Dictionaries/de_DE_frami/de_DE_frami.aff',
 	__dirname + './../Dictionaries/de_DE_frami/de_DE_frami.dic');
+// Add es_ES
+arrDictionaries["3082"] = new nodehun.Dictionary(__dirname + './../Dictionaries/es_ES/es_ES.aff',
+	__dirname + './../Dictionaries/es_ES/es_ES.dic');
 
 var logger = require('./../../Common/sources/logger');
 
