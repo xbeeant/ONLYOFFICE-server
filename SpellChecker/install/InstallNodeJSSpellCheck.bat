@@ -9,7 +9,7 @@ ECHO ----------------------------------------
 ECHO Install node.js module spellCheck (nodehun) 
 ECHO ----------------------------------------
 
-call npm install express@2.5.8 || exit /b 1
+call npm install express || exit /b 1
 call npm install sockjs || exit /b 1
 
 call npm install -g node-gyp || exit /b 1

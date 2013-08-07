@@ -6,6 +6,7 @@ var logger = require('./../../Common/sources/logger');
 
 // 2. Express server
 var express = require('express');
+var http = require('http');
 var app = {};
 
 if(config['ssl'])
@@ -13,12 +14,13 @@ if(config['ssl'])
 	var fs = require("fs");
 	var privateKey = fs.readFileSync(config['ssl']['key']).toString();
 	var certificate = fs.readFileSync(config['ssl']['cert']).toString();
-	app = express.createServer({key: privateKey, cert:certificate});
+	app = express({key: privateKey, cert:certificate});
 }
 else
 {
-	app = express.createServer();
+	app = express();
 }
+var server = http.createServer(app);
 
 app.configure(function(){
     app.use(express.bodyParser());
@@ -36,9 +38,9 @@ app.configure('production', function(){
 
 var spellCheck  = require('./spellCheck');
 
-spellCheck.install(app, function(){
-	app.listen(config['server']['port'], function(){
-		logger.info("Express server listening on port %d in %s mode", app.address().port, app.settings.env);
+spellCheck.install(server, function(){
+	server.listen(config['server']['port'], function(){
+		logger.info("Express server listening on port %d in %s mode", config['server']['port'], app.settings.env);
 	});
 	
 	app.get('/index.html', function(req, res) {
