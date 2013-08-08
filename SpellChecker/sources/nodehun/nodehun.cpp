@@ -1,6 +1,7 @@
 #include "license.nodehun"
 #include "nodehun.hpp"
 #include <iostream>
+#include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
 
@@ -157,7 +158,7 @@ void Nodehun::SpellDictionary::CheckSuggestions(uv_work_t* request) {
     spellData->numSuggest = 0;
 }
 
-void Nodehun::SpellDictionary::SendSuggestions(uv_work_t* request){
+void Nodehun::SpellDictionary::SendSuggestions( uv_work_t* request, int status ){
   HandleScope scope;
   Nodehun::SpellData* spellData = static_cast<Nodehun::SpellData*>(request->data);
   
@@ -251,7 +252,7 @@ void Nodehun::SpellDictionary::addDictionaryWork(uv_work_t* request){
   }
 }
 
-void Nodehun::SpellDictionary::addDictionaryFinish(uv_work_t* request){
+void Nodehun::SpellDictionary::addDictionaryFinish(uv_work_t* request, int status){
   HandleScope scope;
   Nodehun::DictData* dictData = static_cast<Nodehun::DictData*>(request->data);
   
@@ -337,7 +338,7 @@ void Nodehun::SpellDictionary::addRemoveWordWork(uv_work_t* request){
   wordData->success = status == 0;
 }
 
-void Nodehun::SpellDictionary::addRemoveWordFinish(uv_work_t* request){
+void Nodehun::SpellDictionary::addRemoveWordFinish(uv_work_t* request, int status){
   HandleScope scope;
   Nodehun::WordData* wordData = static_cast<Nodehun::WordData*>(request->data);
   
