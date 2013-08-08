@@ -2,30 +2,53 @@ var sockjs = require('sockjs'),
 	nodehun = require('nodehun');
 var arrDictionaries = {};
 
+function CheckDictionary( dict, correct, uncorect)
+{
+	if(dict)
+	{
+		dict.spellSuggest(correct, function(a,b){
+			if(!a)
+				logger.error('Error: spelling correct word %s failed!', correct)
+			});
+			
+		dict.spellSuggestions(uncorect,function(a,b){
+			if(a)
+				logger.error('Error: spelling uncorect word %s failed!', uncorect)
+			});
+	}
+	else
+	{
+		logger.error('Error: no dictionary');
+	}
+}
+
 // Add en_US
-arrDictionaries["1033"] = new nodehun.Dictionary(__dirname + './../Dictionaries/en_US/en_US.aff',
-	__dirname + './../Dictionaries/en_US/en_US.dic');
+arrDictionaries["1033"] = new nodehun.Dictionary(__dirname + '/../Dictionaries1/en_US/en_US.aff',
+	__dirname + '/../Dictionaries/en_US/en_US.dic');
+	
+//CheckDictionary( arrDictionaries["1033"], 'color', 'calor' )
+
 // Add ru_RU
-arrDictionaries["1049"] = new nodehun.Dictionary(__dirname + './../Dictionaries/ru_RU/ru_RU.aff',
-	__dirname + './../Dictionaries/ru_RU/ru_RU.dic');
+arrDictionaries["1049"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/ru_RU/ru_RU.aff',
+	__dirname + '/../Dictionaries/ru_RU/ru_RU.dic');
 // Add de_DE_frami
-arrDictionaries["1031"] = new nodehun.Dictionary(__dirname + './../Dictionaries/de_DE_frami/de_DE_frami.aff',
-	__dirname + './../Dictionaries/de_DE_frami/de_DE_frami.dic');
+arrDictionaries["1031"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/de_DE_frami/de_DE_frami.aff',
+	__dirname + '/../Dictionaries/de_DE_frami/de_DE_frami.dic');
 // Add es_ES
-arrDictionaries["3082"] = new nodehun.Dictionary(__dirname + './../Dictionaries/es_ES/es_ES.aff',
-	__dirname + './../Dictionaries/es_ES/es_ES.dic');
+arrDictionaries["3082"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/es_ES/es_ES.aff',
+	__dirname + '/../Dictionaries/es_ES/es_ES.dic');
 // Add fr_FR
-arrDictionaries["1036"] = new nodehun.Dictionary(__dirname + './../Dictionaries/fr_FR/fr_FR.aff',
-	__dirname + './../Dictionaries/fr_FR/fr_FR.dic');
+arrDictionaries["1036"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/fr_FR/fr_FR.aff',
+	__dirname + '/../Dictionaries/fr_FR/fr_FR.dic');
 // Add it_IT
-arrDictionaries["1040"] = new nodehun.Dictionary(__dirname + './../Dictionaries/it_IT/it_IT.aff',
-	__dirname + './../Dictionaries/it_IT/it_IT.dic');
+arrDictionaries["1040"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/it_IT/it_IT.aff',
+	__dirname + '/../Dictionaries/it_IT/it_IT.dic');
 // Add lv_LV
-arrDictionaries["1062"] = new nodehun.Dictionary(__dirname + './../Dictionaries/lv_LV/lv_LV.aff',
-	__dirname + './../Dictionaries/lv_LV/lv_LV.dic');
+arrDictionaries["1062"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/lv_LV/lv_LV.aff',
+	__dirname + '/../Dictionaries/lv_LV/lv_LV.dic');
 
 var logger = require('./../../Common/sources/logger');
-
+ 
 exports.install = function (server, callbackFunction) {
 	'use strict';
 	var sockjs_opts = {sockjs_url:"http://cdn.sockjs.org/sockjs-0.3.min.js"},
