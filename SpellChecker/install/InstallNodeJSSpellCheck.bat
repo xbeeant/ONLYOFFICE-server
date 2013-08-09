@@ -13,10 +13,8 @@ call npm install express || exit /b 1
 call npm install sockjs || exit /b 1
 
 call npm install -g node-gyp || exit /b 1
-call npm install nodehun@0.0.5 || exit /b 1
 
-COPY sources\nodehun\nodehun.cpp node_modules\nodehun\src\nodehun.cpp
-COPY sources\nodehun\replist.hxx node_modules\nodehun\src\hunspell\src\hunspell\replist.hxx
+XCOPY /S nodehun node_modules\nodehun\ /Y 
 
 cd /D node_modules\nodehun\src || exit /b 1
 call node-gyp configure || exit /b 1
