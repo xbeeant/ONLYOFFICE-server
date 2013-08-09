@@ -100,6 +100,9 @@ arrDictionaries["1043"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/n
 // Add nn_NO
 arrDictionaries["2068"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/nn_NO/nn_NO.aff',
 	__dirname + '/../Dictionaries/nn_NO/nn_NO.dic');
+// Add ro_RO
+arrDictionaries["1048"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/ro_RO/ro_RO.aff',
+	__dirname + '/../Dictionaries/ro_RO/ro_RO.dic');
 
 var logger = require('./../../Common/sources/logger');
  
