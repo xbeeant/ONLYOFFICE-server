@@ -31,9 +31,9 @@ arrDictionaries["1033"] = new nodehun.Dictionary(__dirname + '/../Dictionaries1/
 // Add ru_RU
 arrDictionaries["1049"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/ru_RU/ru_RU.aff',
 	__dirname + '/../Dictionaries/ru_RU/ru_RU.dic');
-// Add de_DE_frami
-arrDictionaries["1031"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/de_DE_frami/de_DE_frami.aff',
-	__dirname + '/../Dictionaries/de_DE_frami/de_DE_frami.dic');
+// Add de_DE
+arrDictionaries["1031"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/de_DE/de_DE.aff',
+	__dirname + '/../Dictionaries/de_DE/de_DE.dic');
 // Add es_ES
 arrDictionaries["3082"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/es_ES/es_ES.aff',
 	__dirname + '/../Dictionaries/es_ES/es_ES.dic');
