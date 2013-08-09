@@ -46,6 +46,9 @@ arrDictionaries["1040"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/i
 // Add lv_LV
 arrDictionaries["1062"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/lv_LV/lv_LV.aff',
 	__dirname + '/../Dictionaries/lv_LV/lv_LV.dic');
+// Add cs_CZ
+arrDictionaries["1029"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/cs_CZ/cs_CZ.aff',
+	__dirname + '/../Dictionaries/cs_CZ/cs_CZ.dic');
 
 var logger = require('./../../Common/sources/logger');
  
