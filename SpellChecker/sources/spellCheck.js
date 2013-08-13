@@ -1,116 +1,37 @@
 var sockjs = require('sockjs'),
-	nodehun = require('nodehun');
+	nodehun = require('nodehun'),
+	config = require('./config.json'),
+	logger = require('./../../Common/sources/logger');
 var arrDictionaries = {};
 
-function CheckDictionary( dict, correct, uncorect)
-{
-	if(dict)
-	{
-		dict.spellSuggest(correct, function(a,b){
-			if(!a)
-				logger.error('Error: spelling correct word %s failed!', correct)
-			});
-			
-		dict.spellSuggestions(uncorect,function(a,b){
-			if(a)
-				logger.error('Error: spelling uncorect word %s failed!', uncorect)
-			});
+(function() {
+	// Read dictionaries
+	var arrDictionariesConfig = config['dictionaries'];
+	var oDictTmp = null, pathTmp = '', oDictName = null;
+	for (var indexDict = 0, lengthDict = arrDictionariesConfig.length; indexDict < lengthDict; ++indexDict) {
+		oDictTmp = arrDictionariesConfig[indexDict];
+		oDictName = oDictTmp.name;
+		pathTmp = __dirname + '/../Dictionaries/' + oDictName + '/' + oDictName + '.';
+		arrDictionaries[oDictTmp.id] = new nodehun.Dictionary(pathTmp + 'aff', pathTmp + 'dic');
 	}
-	else
-	{
+})();
+
+/*function CheckDictionary (dict, correct, uncorect) {
+	if (dict) {
+		dict.spellSuggest(correct, function (a, b) {
+			if(!a)
+				logger.error('Error: spelling correct word %s failed!', correct);
+		});
+
+		dict.spellSuggestions(uncorect, function (a, b) {
+			if(a)
+				logger.error('Error: spelling uncorect word %s failed!', uncorect);
+		});
+	} else {
 		logger.error('Error: no dictionary');
 	}
 }
-
-// Add en_US
-arrDictionaries["1033"] = new nodehun.Dictionary(__dirname + '/../Dictionaries1/en_US/en_US.aff',
-	__dirname + '/../Dictionaries/en_US/en_US.dic');
-	
-//CheckDictionary( arrDictionaries["1033"], 'color', 'calor' )
-
-// Add ru_RU
-arrDictionaries["1049"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/ru_RU/ru_RU.aff',
-	__dirname + '/../Dictionaries/ru_RU/ru_RU.dic');
-// Add de_DE
-arrDictionaries["1031"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/de_DE/de_DE.aff',
-	__dirname + '/../Dictionaries/de_DE/de_DE.dic');
-// Add es_ES
-arrDictionaries["3082"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/es_ES/es_ES.aff',
-	__dirname + '/../Dictionaries/es_ES/es_ES.dic');
-// Add fr_FR
-arrDictionaries["1036"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/fr_FR/fr_FR.aff',
-	__dirname + '/../Dictionaries/fr_FR/fr_FR.dic');
-// Add it_IT
-arrDictionaries["1040"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/it_IT/it_IT.aff',
-	__dirname + '/../Dictionaries/it_IT/it_IT.dic');
-// Add lv_LV
-arrDictionaries["1062"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/lv_LV/lv_LV.aff',
-	__dirname + '/../Dictionaries/lv_LV/lv_LV.dic');
-// Add cs_CZ
-arrDictionaries["1029"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/cs_CZ/cs_CZ.aff',
-	__dirname + '/../Dictionaries/cs_CZ/cs_CZ.dic');
-// Add el_GR
-arrDictionaries["1032"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/el_GR/el_GR.aff',
-	__dirname + '/../Dictionaries/el_GR/el_GR.dic');
-// Add pl_PL
-arrDictionaries["1045"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/pl_PL/pl_PL.aff',
-	__dirname + '/../Dictionaries/pl_PL/pl_PL.dic');
-// Add pt_BR
-arrDictionaries["1046"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/pt_BR/pt_BR.aff',
-	__dirname + '/../Dictionaries/pt_BR/pt_BR.dic');
-// Add pt_PT
-arrDictionaries["2070"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/pt_PT/pt_PT.aff',
-	__dirname + '/../Dictionaries/pt_PT/pt_PT.dic');
-// Add vi_VN
-arrDictionaries["1066"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/vi_VN/vi_VN.aff',
-	__dirname + '/../Dictionaries/vi_VN/vi_VN.dic');
-// Add ko_KR
-arrDictionaries["1042"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/ko_KR/ko_KR.aff',
-	__dirname + '/../Dictionaries/ko_KR/ko_KR.dic');
-// Add uk_UA
-arrDictionaries["1058"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/uk_UA/uk_UA.aff',
-	__dirname + '/../Dictionaries/uk_UA/uk_UA.dic');
-// Add tr_TR
-arrDictionaries["1055"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/tr_TR/tr_TR.aff',
-	__dirname + '/../Dictionaries/tr_TR/tr_TR.dic');
-// Add ca_ES
-arrDictionaries["1027"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/ca_ES/ca_ES.aff',
-	__dirname + '/../Dictionaries/ca_ES/ca_ES.dic');
-// Add da_DK
-arrDictionaries["1030"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/da_DK/da_DK.aff',
-	__dirname + '/../Dictionaries/da_DK/da_DK.dic');
-// Add de_AT
-arrDictionaries["3079"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/de_AT/de_AT.aff',
-	__dirname + '/../Dictionaries/de_AT/de_AT.dic');
-// Add de_CH
-arrDictionaries["2055"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/de_CH/de_CH.aff',
-	__dirname + '/../Dictionaries/de_CH/de_CH.dic');
-// Add hu_HU
-arrDictionaries["1038"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/hu_HU/hu_HU.aff',
-	__dirname + '/../Dictionaries/hu_HU/hu_HU.dic');
-// Add lt_LT
-arrDictionaries["1063"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/lt_LT/lt_LT.aff',
-	__dirname + '/../Dictionaries/lt_LT/lt_LT.dic');
-// Add nb_NO
-arrDictionaries["1044"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/nb_NO/nb_NO.aff',
-	__dirname + '/../Dictionaries/nb_NO/nb_NO.dic');
-// Add nl_NL
-arrDictionaries["1043"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/nl_NL/nl_NL.aff',
-	__dirname + '/../Dictionaries/nl_NL/nl_NL.dic');
-// Add nn_NO
-arrDictionaries["2068"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/nn_NO/nn_NO.aff',
-	__dirname + '/../Dictionaries/nn_NO/nn_NO.dic');
-// Add ro_RO
-arrDictionaries["1048"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/ro_RO/ro_RO.aff',
-	__dirname + '/../Dictionaries/ro_RO/ro_RO.dic');
-// Add sk_SK
-arrDictionaries["1051"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/sk_SK/sk_SK.aff',
-	__dirname + '/../Dictionaries/sk_SK/sk_SK.dic');
-// Add sv_SE
-arrDictionaries["1053"] = new nodehun.Dictionary(__dirname + '/../Dictionaries/sv_SE/sv_SE.aff',
-	__dirname + '/../Dictionaries/sv_SE/sv_SE.dic');
-
-var logger = require('./../../Common/sources/logger');
+CheckDictionary(arrDictionaries[0x0409], 'color', 'calor');*/
  
 exports.install = function (server, callbackFunction) {
 	'use strict';
