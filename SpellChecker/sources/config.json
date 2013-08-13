@@ -2,5 +2,34 @@
 	"server": {
 		"port": 4000,
 		"mode": "development"
-	}
+	},
+	"dictionaries": [
+		{"name": "en_US", "id": 1033},
+		{"name": "ru_RU", "id": 1049},
+		{"name": "es_ES", "id": 3082},
+		{"name": "fr_FR", "id": 1036},
+		{"name": "it_IT", "id": 1040},
+		{"name": "lv_LV", "id": 1062},
+		{"name": "cs_CZ", "id": 1029},
+		{"name": "el_GR", "id": 1032},
+		{"name": "pl_PL", "id": 1045},
+		{"name": "pt_BR", "id": 1046},
+		{"name": "pt_PT", "id": 2070},
+		{"name": "vi_VN", "id": 1066},
+		{"name": "ko_KR", "id": 1042},
+		{"name": "uk_UA", "id": 1058},
+		{"name": "tr_TR", "id": 1055},
+		{"name": "ca_ES", "id": 1027},
+		{"name": "da_DK", "id": 1030},
+		{"name": "de_AT", "id": 3079},
+		{"name": "de_CH", "id": 2055},
+		{"name": "hu_HU", "id": 1038},
+		{"name": "lt_LT", "id": 1063},
+		{"name": "nb_NO", "id": 1044},
+		{"name": "nl_NL", "id": 1043},
+		{"name": "nn_NO", "id": 2068},
+		{"name": "ro_RO", "id": 1048},
+		{"name": "sk_SK", "id": 1051},
+		{"name": "sv_SE", "id": 1053}
+	]
 }
