@@ -591,7 +591,7 @@ exports.install = function (server, callbackFunction) {
 		
 		// Для Excel block теперь это объект { sheetId, type, rangeOrObjectId, guid }
 		function getlockrange(conn, data) {
-			var participants = getParticipants(conn.docId), documentLocks, currentLock;
+			var participants = getParticipants(conn.docId), documentLocks, documentLock;
             if (!locks.hasOwnProperty(conn.docId)) {
                 locks[conn.docId] = [];
             }
@@ -608,21 +608,24 @@ exports.install = function (server, callbackFunction) {
 				for (var keyLockInArray in documentLocks) {
 					if (true === isLock)
 						break;
+					if (!documentLocks.hasOwnProperty(keyLockInArray))
+						continue;
+					documentLock = documentLocks[keyLockInArray];
 					// Проверка вхождения объекта в массив (текущий пользователь еще раз прислал lock)
-					if (documentLocks[keyLockInArray].user === conn.userId &&
-						blockRange.sheetId === documentLocks[keyLockInArray].block.sheetId &&
+					if (documentLock.user === conn.userId &&
+						blockRange.sheetId === documentLock.block.sheetId &&
 						blockRange.type === c_oAscLockTypeElem.Object &&
-						documentLocks[keyLockInArray].block.type === c_oAscLockTypeElem.Object &&
-						documentLocks[keyLockInArray].block.rangeOrObjectId === blockRange.rangeOrObjectId) {
+						documentLock.block.type === c_oAscLockTypeElem.Object &&
+						documentLock.block.rangeOrObjectId === blockRange.rangeOrObjectId) {
 						isExistInArray = true;
 						break;
 					}
 					
 					if (c_oAscLockTypeElem.Sheet === blockRange.type &&
-						c_oAscLockTypeElem.Sheet === documentLocks[keyLockInArray].block.type) {
+						c_oAscLockTypeElem.Sheet === documentLock.block.type) {
 						// Если текущий пользователь прислал lock текущего листа, то не заносим в массив, а если нового, то заносим
-						if (documentLocks[keyLockInArray].user === conn.userId) {
-							if (blockRange.sheetId === documentLocks[keyLockInArray].block.sheetId) {
+						if (documentLock.user === conn.userId) {
+							if (blockRange.sheetId === documentLock.block.sheetId) {
 								// уже есть в массиве
 								isExistInArray = true;
 								break;
@@ -637,10 +640,10 @@ exports.install = function (server, callbackFunction) {
 						}
 					}
 					
-					if (documentLocks[keyLockInArray].user === conn.userId || !(documentLocks[keyLockInArray].block) ||
-						blockRange.sheetId !== documentLocks[keyLockInArray].block.sheetId)
+					if (documentLock.user === conn.userId || !(documentLock.block) ||
+						blockRange.sheetId !== documentLock.block.sheetId)
 						continue;
-					isLock = compareExcelBlock(blockRange, documentLocks[keyLockInArray].block);
+					isLock = compareExcelBlock(blockRange, documentLock.block);
 				}
 			}
 			if (0 === lengthArray)
