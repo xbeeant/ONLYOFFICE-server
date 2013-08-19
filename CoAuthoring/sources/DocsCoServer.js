@@ -433,8 +433,10 @@ exports.install = function (server, callbackFunction) {
 			return true;
 		
 		// Не учитываем lock от ChangeProperties (только если это не lock листа)
-		if (c_oAscLockTypeElemSubType.ChangeProperties === oldBlock.subType
-			&& c_oAscLockTypeElem.Sheet !== newBlock.type)
+		if ((c_oAscLockTypeElemSubType.ChangeProperties === oldBlock.subType &&
+				c_oAscLockTypeElem.Sheet !== newBlock.type) ||
+			(c_oAscLockTypeElemSubType.ChangeProperties === newBlock.subType &&
+				c_oAscLockTypeElem.Sheet !== oldBlock.type))
 			return false;
 			
 		var resultLock = false;
