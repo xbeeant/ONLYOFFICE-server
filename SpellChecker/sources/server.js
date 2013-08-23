@@ -6,21 +6,28 @@ var logger = require('./../../Common/sources/logger');
 
 // 2. Express server
 var express = require('express');
+
 var http = require('http');
-var app = {};
+var https = require('https');
+
+var fs = require("fs");
+	
+var app = express();
+var server = {};
 
 if(config['ssl'])
 {
-	var fs = require("fs");
 	var privateKey = fs.readFileSync(config['ssl']['key']).toString();
 	var certificate = fs.readFileSync(config['ssl']['cert']).toString();
-	app = express({key: privateKey, cert:certificate});
+	
+	var options = {key: privateKey, cert:certificate};
+	
+	server = https.createServer(options, app);
 }
 else
 {
-	app = express();
+	server = http.createServer(app);
 }
-var server = http.createServer(app);
 
 app.configure(function(){
     app.use(express.bodyParser());
