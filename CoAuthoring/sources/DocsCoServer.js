@@ -26,6 +26,12 @@ var c_oAscLockTypeElemSubType = {
 	ChangeProperties:	5
 };
 
+var c_oAscLockTypeElemPresentation = {
+	Object		: 1,
+	Slide		: 2,
+	Presentation: 3
+};
+
 function CRecalcIndexElement(recalcType, position, bIsSaveIndex) {
 	if ( !(this instanceof CRecalcIndexElement) ) {
 		return new CRecalcIndexElement (recalcType, position, bIsSaveIndex);
@@ -476,6 +482,31 @@ exports.install = function (server, callbackFunction) {
 		return Object.prototype.toString.call(obj).slice(8, -1).toLowerCase();
 	}
 
+	// Сравнение для презентаций
+	function comparePresentationBlock(newBlock, oldBlock) {
+		var resultLock = false;
+
+		switch (newBlock.type) {
+			case c_oAscLockTypeElemPresentation.Presentation:
+				if (c_oAscLockTypeElemPresentation.Presentation === oldBlock.type)
+					resultLock = newBlock.val === oldBlock.val;
+				break;
+			case c_oAscLockTypeElemPresentation.Slide:
+				if (c_oAscLockTypeElemPresentation.Slide === oldBlock.type)
+					resultLock = newBlock.val === oldBlock.val;
+				else if (c_oAscLockTypeElemPresentation.Object === oldBlock.type)
+					resultLock = newBlock.val === oldBlock.slideId;
+				break;
+			case c_oAscLockTypeElemPresentation.Object:
+				if (c_oAscLockTypeElemPresentation.Slide === oldBlock.type)
+					resultLock = newBlock.slideId === oldBlock.val;
+				else if (c_oAscLockTypeElemPresentation.Object === oldBlock.type)
+					resultLock = newBlock.objId === oldBlock.objId;
+				break;
+		}
+		return resultLock;
+	}
+
 
     dataHandler = (function () {
         function auth(conn, data) {
@@ -664,6 +695,50 @@ exports.install = function (server, callbackFunction) {
             });
 		}
 
+		// Для презентаций это объект { type, val } или { type, slideId, objId }
+		function getlockpresentation(conn, data) {
+			var participants = getParticipants(conn.docId), documentLocks, documentLock;
+			if (!locks.hasOwnProperty(conn.docId)) {
+				locks[conn.docId] = [];
+			}
+			documentLocks = locks[conn.docId];
+
+			// Data is array now
+			var arrayBlocks = data.block;
+			var isLock = false;
+			var isExistInArray = false;
+			var i = 0, blockRange = null;
+			var lengthArray = (arrayBlocks) ? arrayBlocks.length : 0;
+			for (; i < lengthArray && false === isLock; ++i) {
+				blockRange = arrayBlocks[i];
+				for (var keyLockInArray in documentLocks) {
+					if (true === isLock)
+						break;
+					if (!documentLocks.hasOwnProperty(keyLockInArray))
+						continue;
+					documentLock = documentLocks[keyLockInArray];
+
+					if (documentLock.user === conn.userId || !(documentLock.block))
+						continue;
+					isLock = comparePresentationBlock(blockRange, documentLock.block);
+				}
+			}
+			if (0 === lengthArray)
+				isLock = true;
+
+			if (!isLock && !isExistInArray) {
+				//Ok. take lock
+				for (i = 0; i < lengthArray; ++i) {
+					blockRange = arrayBlocks[i];
+					documentLocks.push({time:Date.now(), user:conn.userId, block:blockRange, sessionId:conn.sessionId});
+				}
+			}
+
+			_.each(participants, function (participant) {
+				sendData(participant.connection, {type:"getlock", locks:locks[conn.docId]});
+			});
+		}
+
 		// Для Excel необходимо делать пересчет lock-ов при добавлении/удалении строк/столбцов
 		function savechanges(conn, data) {
 			var docLock, userLocks, participants;
@@ -821,6 +896,7 @@ exports.install = function (server, callbackFunction) {
             message:message,
             getlock:getlock,
 			getlockrange:getlockrange,
+			getlockpresentation: getlockpresentation,
 			savechanges:savechanges,
 			issavelock:issavelock,
 			unsavelock:unsavelock,
