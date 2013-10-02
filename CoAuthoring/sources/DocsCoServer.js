@@ -307,34 +307,12 @@ exports.install = function (server, callbackFunction) {
                         return el.connection.docId === participant.connection.docId && el.connection.userId !== participant.connection.userId;
                     }).map(
                     function (conn) {
-                        return {id: conn.connection.userId, username: conn.connection.userName,
-							isviewermode: conn.connection.isViewerMode};
+                        return {id: conn.connection.userId, username: conn.connection.userName};
                     }).value()
             });
 			
 			sendData(participant.connection, {type:"connectstate",
 				state: stateConnect,
-				id: _userId,
-				username: _userName
-			});
-        });
-    }
-	
-	function sendParticipantsIsViewerMode(participants, isViewerMode, _userId, _userName) {
-        _.each(participants, function (participant) {
-            sendData(participant.connection, {type:"participants",
-                participants:_.chain(connections).filter(
-                    function (el) {
-                        return el.connection.docId === participant.connection.docId && el.connection.userId !== participant.connection.userId;
-                    }).map(
-                    function (conn) {
-                        return {id: conn.connection.userId, username: conn.connection.userName,
-							isviewermode: conn.connection.isViewerMode};
-                    }).value()
-            });
-			
-			sendData(participant.connection, {type:"isviewermode",
-				isviewermode: isViewerMode,
 				id: _userId,
 				username: _userName
 			});
@@ -524,7 +502,6 @@ exports.install = function (server, callbackFunction) {
                 conn.sessionState = 1;
                 conn.userId = data.user;
 				conn.userName = data.username;
-				conn.isViewerMode = data.isviewermode;
 				conn.serverHost = data.serverHost;
 				conn.serverPath = data.serverPath;
                 //Set the unique ID
@@ -556,8 +533,7 @@ exports.install = function (server, callbackFunction) {
                         result:1,
                         sessionId:conn.sessionId,
                         participants:_.map(participants, function (conn) {
-                            return {id: conn.connection.userId, username: conn.connection.userName,
-								isviewermode: conn.connection.isViewerMode};
+                            return {id: conn.connection.userId, username: conn.connection.userName};
                         }),
                         messages:messages[data.docid],
                         locks:locks[conn.docId],
@@ -589,7 +565,7 @@ exports.install = function (server, callbackFunction) {
         }
 
         function getlock(conn, data) {
-            var participants = getParticipants(conn.docId), documentLocks, currentLock;
+            var participants = getParticipants(conn.docId), documentLocks;
             if (!locks.hasOwnProperty(conn.docId)) {
                 locks[conn.docId] = {};
             }
@@ -865,14 +841,6 @@ exports.install = function (server, callbackFunction) {
                 sendData(participant.connection, {type:"unsavelock"});
             });
 		}
-		// Выставляем режим редактирования или просмотра
-		function setisviewermode(conn, data) {
-			if (data && conn.isViewerMode != data.isviewermode) {
-				conn.isViewerMode = data.isviewermode;
-				var participants = getParticipants(conn.docId);
-				sendParticipantsIsViewerMode (participants, conn.isViewerMode, conn.userId, conn.userName);
-			}
-		}
 		// Возвращаем все сообщения для документа
 		function getmessages(conn, data) {
 			sendData(conn, {type:"message", messages:messages[conn.docId]});
@@ -885,8 +853,7 @@ exports.install = function (server, callbackFunction) {
 				{
 					type:"getusers",
 					participants:_.map(participants, function (conn) {
-						return {id: conn.connection.userId, username: conn.connection.userName,
-							isviewermode: conn.connection.isViewerMode};
+						return {id: conn.connection.userId, username: conn.connection.userName};
 					})
 				});
 		}
@@ -900,7 +867,6 @@ exports.install = function (server, callbackFunction) {
 			savechanges:savechanges,
 			issavelock:issavelock,
 			unsavelock:unsavelock,
-			setisviewermode:setisviewermode,
 			getmessages:getmessages,
 			getusers:getusers
         };
