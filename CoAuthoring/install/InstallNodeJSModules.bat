@@ -14,7 +14,7 @@ call npm install underscore || exit /b 1
 call npm install sockjs || exit /b 1
 call npm install mongodb@1.1.4 || exit /b 1
 
-cd /D ..\..\Common || exit /b 1
+cd /D ..\Common || exit /b 1
 call npm install log4js || exit /b 1
 
 CD /D %RUN_FOLDER% || exit /b 1
