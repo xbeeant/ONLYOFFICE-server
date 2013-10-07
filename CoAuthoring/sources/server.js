@@ -6,18 +6,27 @@ var logger = require('./../../Common/sources/logger');
 
 // 2. Express server
 var express = require('express');
-var app = {};
+
+var http = require('http');
+var https = require('https');
+
+var fs = require("fs");
+	
+var app = express();
+var server = {};
 
 if(config['ssl'])
 {
-	var fs = require("fs");
 	var privateKey = fs.readFileSync(config['ssl']['key']).toString();
 	var certificate = fs.readFileSync(config['ssl']['cert']).toString();
-	app = express.createServer({key: privateKey, cert:certificate});
+	
+	var options = {key: privateKey, cert:certificate};
+	
+	server = https.createServer(options, app);
 }
 else
 {
-	app = express.createServer();
+	server = http.createServer(app);
 }
 
 app.configure(function(){
@@ -36,9 +45,9 @@ app.configure('production', function(){
 
 var docsCoServer  = require('./DocsCoServer');
 
-docsCoServer.install(app, function(){
-	app.listen(config['server']['port'], function(){
-		logger.info("Express server listening on port %d in %s mode", app.address().port, app.settings.env);
+docsCoServer.install(server, function(){
+	server.listen(config['server']['port'], function(){
+		logger.info("Express server listening on port %d in %s mode", config['server']['port'], app.settings.env);
 	});
 	
 	app.get('/index.html', function(req, res) {

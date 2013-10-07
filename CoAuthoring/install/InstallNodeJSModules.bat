@@ -9,7 +9,7 @@ ECHO ----------------------------------------
 ECHO Install node.js modules 
 ECHO ----------------------------------------
 
-call npm install express@2.5.8 || exit /b 1
+call npm install express || exit /b 1
 call npm install underscore || exit /b 1
 call npm install sockjs || exit /b 1
 call npm install mongodb@1.1.4 || exit /b 1
