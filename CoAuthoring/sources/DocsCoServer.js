@@ -499,8 +499,15 @@ exports.install = function (server, callbackFunction) {
                     //TODO: Send some shit back
                 }
 
+				// Увеличиваем индекс обращения к документу
+				if (!indexuser.hasOwnProperty(conn.docId)) {
+					indexuser[conn.docId] = 1;
+				} else {
+					indexuser[conn.docId] += 1;
+				}
+
                 conn.sessionState = 1;
-                conn.userId = data.user;
+                conn.userId = data.user + indexuser[conn.docId];
 				conn.userName = data.username;
 				conn.serverHost = data.serverHost;
 				conn.serverPath = data.serverPath;
@@ -520,13 +527,6 @@ exports.install = function (server, callbackFunction) {
                 connections.push({connection:conn});
                 var participants = getParticipants(data.docid, data.user);
 				
-				// Увеличиваем индекс обращения к документу
-				if (!indexuser.hasOwnProperty(conn.docId)) {
-					indexuser[conn.docId] = 1;
-				} else {
-					indexuser[conn.docId] += 1;
-				}
-				
                 sendData(conn,
                     {
                         type:"auth",
@@ -540,7 +540,7 @@ exports.install = function (server, callbackFunction) {
                         changes:objchanges[conn.docId],
 						indexuser:indexuser[conn.docId]
                     });//Or 0 if fails
-                sendParticipantsState(participants, true, data.user, data.username);
+                sendParticipantsState(participants, true, conn.userId, conn.userName);
             }
         }
 
