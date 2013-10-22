@@ -525,7 +525,7 @@ exports.install = function (server, callbackFunction) {
                     conn.sessionId = conn.id;
                 }
                 connections.push({connection:conn});
-                var participants = getParticipants(data.docid, data.user);
+                var participants = getParticipants(conn.docId, conn.userId);
 				
                 sendData(conn,
                     {
@@ -535,7 +535,7 @@ exports.install = function (server, callbackFunction) {
                         participants:_.map(participants, function (conn) {
                             return {id: conn.connection.userId, username: conn.connection.userName};
                         }),
-                        messages:messages[data.docid],
+                        messages:messages[conn.docid],
                         locks:locks[conn.docId],
                         changes:objchanges[conn.docId],
 						indexuser:indexuser[conn.docId]
