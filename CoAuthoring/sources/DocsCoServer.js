@@ -211,7 +211,7 @@ exports.install = function (server, callbackFunction) {
             logger.error("On error");
         });
         conn.on('close', function () {
-            var connection = this, docLock, userLocks, i, participants, reconected;
+            var connection = this, docLock, userLocks, participants, reconected;
 
             logger.info("Connection closed or timed out");
             //Check if it's not already reconnected
@@ -226,15 +226,15 @@ exports.install = function (server, callbackFunction) {
 
 			var state = (false == reconected) ? false : undefined;
 			participants = getParticipants(conn.docId);
-            sendParticipantsState(participants, state, connection.userId, connection.userName);
+			var participantsMap = _.map(participants, function (conn) { return {id: conn.connection.userId, username: conn.connection.userName};});
+            sendParticipantsState(participants, state, connection.userId, connection.userName, participantsMap);
 
             if (!reconected) {
 				// Для данного пользователя снимаем лок с сохранения
 				if (undefined != arrsavelock[conn.docId] && connection.userId == arrsavelock[conn.docId].user) {
 					arrsavelock[conn.docId] = undefined;
 				}
-				
-				participants = getParticipants(conn.docId);
+
 				// Если у нас нет пользователей, то удаляем все сообщения
 				if (0 >= participants.length) {
 					// remove messages from dataBase
@@ -299,23 +299,23 @@ exports.install = function (server, callbackFunction) {
         conn.write(JSON.stringify(data));
     }
 
-    function sendParticipantsState(participants, stateConnect, _userId, _userName) {
+    function sendParticipantsState(participants, stateConnect, _userId, _userName, participantsMap) {
         _.each(participants, function (participant) {
-            sendData(participant.connection, {type:"participants",
-                participants:_.chain(connections).filter(
-                    function (el) {
-                        return el.connection.docId === participant.connection.docId && el.connection.userId !== participant.connection.userId;
-                    }).map(
-                    function (conn) {
-                        return {id: conn.connection.userId, username: conn.connection.userName};
-                    }).value()
-            });
-			
-			sendData(participant.connection, {type:"connectstate",
-				state: stateConnect,
-				id: _userId,
-				username: _userName
-			});
+			if (participant.connection.userId !== _userId) {
+				sendData(participant.connection,
+					{
+						type			: "participants",
+						participants	: participantsMap
+					});
+
+				sendData(participant.connection,
+					{
+						type		: "connectstate",
+						state		: stateConnect,
+						id			: _userId,
+						username	: _userName
+					});
+			}
         });
     }
 
@@ -353,6 +353,8 @@ exports.install = function (server, callbackFunction) {
 
 	// Пересчет только для чужих Lock при сохранении на клиенте, который добавлял/удалял строки или столбцы
 	function _recalcLockArray (userId, _locks, oRecalcIndexColumns, oRecalcIndexRows) {
+		if (null == _locks)
+			return;
 		var count = _locks.length;
 		var element = null, oRangeOrObjectId = null;
 		var i;
@@ -490,7 +492,6 @@ exports.install = function (server, callbackFunction) {
         function auth(conn, data) {
             //TODO: Do authorization etc. check md5 or query db
             if (data.token && data.user) {
-
                 //Parse docId
                 var parsed = urlParse.exec(conn.url);
                 if (parsed.length > 1) {
@@ -525,22 +526,21 @@ exports.install = function (server, callbackFunction) {
                     conn.sessionId = conn.id;
                 }
                 connections.push({connection:conn});
-                var participants = getParticipants(conn.docId, conn.userId);
+                var participants = getParticipants(conn.docId);
+				var participantsMap = _.map(participants, function (conn) { return {id: conn.connection.userId, username: conn.connection.userName};});
 				
                 sendData(conn,
                     {
-                        type:"auth",
-                        result:1,
-                        sessionId:conn.sessionId,
-                        participants:_.map(participants, function (conn) {
-                            return {id: conn.connection.userId, username: conn.connection.userName};
-                        }),
-                        messages:messages[conn.docid],
-                        locks:locks[conn.docId],
-                        changes:objchanges[conn.docId],
-						indexuser:indexuser[conn.docId]
+                        type			: "auth",
+                        result			: 1,
+                        sessionId		: conn.sessionId,
+                        participants	: participantsMap,
+                        messages		: messages[conn.docid],
+                        locks			: locks[conn.docId],
+                        changes			: objchanges[conn.docId],
+						indexuser		: indexuser[conn.docId]
                     });//Or 0 if fails
-                sendParticipantsState(participants, true, conn.userId, conn.userName);
+                sendParticipantsState(participants, true, conn.userId, conn.userName, participantsMap);
             }
         }
 
@@ -802,7 +802,7 @@ exports.install = function (server, callbackFunction) {
 		}
 		
 		// Можем ли мы сохранять ?
-		function issavelock(conn, data) {
+		function issavelock(conn) {
 			var _docId = conn.docId;
 			var _userId = conn.userId;
 			var _time = Date.now();
@@ -829,7 +829,7 @@ exports.install = function (server, callbackFunction) {
             });
 		}
 		// Снимаем лок с сохранения
-		function unsavelock(conn, data) {
+		function unsavelock(conn) {
 			if (undefined != arrsavelock[conn.docId] && conn.userId != arrsavelock[conn.docId].user) {
 				// Не можем удалять не свой лок
 				return;
@@ -842,12 +842,12 @@ exports.install = function (server, callbackFunction) {
             });
 		}
 		// Возвращаем все сообщения для документа
-		function getmessages(conn, data) {
+		function getmessages(conn) {
 			sendData(conn, {type:"message", messages:messages[conn.docId]});
 		}
 		// Возвращаем всех пользователей для документа
-		function getusers(conn, data) {
-			var participants = getParticipants(conn.docId, conn.userId);
+		function getusers(conn) {
+			var participants = getParticipants(conn.docId);
 
 			sendData(conn,
 				{
