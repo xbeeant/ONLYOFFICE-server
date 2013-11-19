@@ -1,4 +1,4 @@
-var sockjs = require('sockjs'),
+﻿var sockjs = require('sockjs'),
 	nodehun = require('nodehun'),
 	config = require('./config.json'),
 	logger = require('./../../Common/sources/logger');

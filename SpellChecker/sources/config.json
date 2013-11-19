@@ -1,4 +1,4 @@
-{
+﻿{
 	"server": {
 		"port": 4000,
 		"mode": "development"
