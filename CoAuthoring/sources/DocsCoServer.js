@@ -1,4 +1,4 @@
-var sockjs = require('sockjs'),
+﻿var sockjs = require('sockjs'),
     _ = require('underscore'),
 	dataBase  = null,
 	http = require('http'),

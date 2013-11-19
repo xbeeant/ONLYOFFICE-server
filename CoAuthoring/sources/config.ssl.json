@@ -1,4 +1,4 @@
-{
+﻿{
 	"server": {
 		"port": 443,
 		"mode": "production"
