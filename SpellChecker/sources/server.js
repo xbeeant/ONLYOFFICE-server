@@ -1,4 +1,4 @@
-var config = require('./config.json');
+﻿var config = require('./config.json');
 
 process.env.NODE_ENV = config['server']['mode'];
 
