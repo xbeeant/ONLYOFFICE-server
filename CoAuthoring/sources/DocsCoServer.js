@@ -822,11 +822,9 @@ exports.install = function (server, callbackFunction) {
 					}
 				}, 60000);
 			}
-			
-			var participants = getParticipants(conn.docId);
-			_.each(participants, function (participant) {
-                sendData(participant.connection, {type:"savelock", savelock:isSaveLock});
-            });
+
+			// Отправляем только тому, кто спрашивал (всем отправлять нельзя)
+			sendData(conn, {type:"savelock", savelock:isSaveLock});
 		}
 		// Снимаем лок с сохранения
 		function unsavelock(conn) {
@@ -835,11 +833,9 @@ exports.install = function (server, callbackFunction) {
 				return;
 			}
 			arrsavelock[conn.docId] = undefined;
-			
-			var participants = getParticipants(conn.docId);
-			_.each(participants, function (participant) {
-                sendData(participant.connection, {type:"unsavelock"});
-            });
+
+			// Отправляем только тому, кто спрашивал (всем отправлять нельзя)
+			sendData(conn, {type:"unsavelock"});
 		}
 		// Возвращаем все сообщения для документа
 		function getmessages(conn) {
