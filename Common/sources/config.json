@@ -2,7 +2,8 @@
 	"log": {
 		"appenders": [
 			{ 
-				"type": "console" 
+				"type": "console",
+				"level": "WARN"
 			},
 			{
 				"type": "file",
