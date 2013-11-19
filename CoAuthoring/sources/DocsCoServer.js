@@ -232,6 +232,9 @@ exports.install = function (server, callbackFunction) {
             if (!reconected) {
 				// Для данного пользователя снимаем лок с сохранения
 				if (undefined != arrsavelock[conn.docId] && connection.userId == arrsavelock[conn.docId].user) {
+					// Очищаем предыдущий таймер
+					if (null != arrsavelock[conn.docId].saveLockTimeOutId)
+						clearTimeout(arrsavelock[conn.docId].saveLockTimeOutId);
 					arrsavelock[conn.docId] = undefined;
 				}
 
@@ -252,7 +255,10 @@ exports.install = function (server, callbackFunction) {
 						dataBase.remove ("changes", {docid:conn.docId});
 					// remove changes from memory
 					delete objchanges[conn.docId];
-					
+
+					// Очищаем предыдущий таймер
+					if (null != arrsavelock[conn.docId] && null != arrsavelock[conn.docId].saveLockTimeOutId)
+						clearTimeout(arrsavelock[conn.docId].saveLockTimeOutId);
 					// На всякий случай снимаем lock
 					arrsavelock[conn.docId] = undefined;
 				}
@@ -806,19 +812,15 @@ exports.install = function (server, callbackFunction) {
 			var _docId = conn.docId;
 			var _userId = conn.userId;
 			var _time = Date.now();
-			var isSaveLock = (undefined === arrsavelock[conn.docId]) ? false : arrsavelock[conn.docId].savelock;
+			var isSaveLock = (undefined === arrsavelock[_docId]) ? false : arrsavelock[_docId].savelock;
 			if (false === isSaveLock) {
-				arrsavelock[conn.docId] = {docid:conn.docId, savelock:true, time:Date.now(), user:conn.userId};
-				var _tmpsavelock = arrsavelock;
+				arrsavelock[conn.docId] = {docid:_docId, savelock:true, time:Date.now(), user:conn.userId};
+				var _tmpSaveLock = arrsavelock[_docId];
 				// Вдруг не придет unlock,  пустим timeout на lock 60 секунд
-				setTimeout(function () {
-					if (_tmpsavelock[_docId] && _userId == _tmpsavelock[_docId].user && _time == _tmpsavelock[_docId].time) {
-						_tmpsavelock[_docId] = undefined;
-			
-						var participants = getParticipants(_docId);
-						_.each(participants, function (participant) {
-							sendData(participant.connection, {type:"unsavelock"});
-						});
+				arrsavelock[conn.docId].saveLockTimeOutId = setTimeout(function () {
+					if (_tmpSaveLock && _userId == _tmpSaveLock.user && _time == _tmpSaveLock.time) {
+						// Снимаем лок с сохранения
+						arrsavelock[_docId] = undefined;
 					}
 				}, 60000);
 			}
@@ -832,6 +834,10 @@ exports.install = function (server, callbackFunction) {
 				// Не можем удалять не свой лок
 				return;
 			}
+			// Очищаем предыдущий таймер
+			if (arrsavelock[conn.docId] && null != arrsavelock[conn.docId].saveLockTimeOutId)
+				clearTimeout(arrsavelock[conn.docId].saveLockTimeOutId);
+
 			arrsavelock[conn.docId] = undefined;
 
 			// Отправляем только тому, кто спрашивал (всем отправлять нельзя)
