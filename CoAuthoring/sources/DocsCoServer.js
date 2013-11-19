@@ -344,7 +344,7 @@ exports.install = function (server, callbackFunction) {
 			logger.warn('problem with request on server: ' + e.message);
 		});
 		
-		var sendData = JSON.stringify({"id": docId, "c": "cc", "t": "", "v": ""});
+		var sendData = JSON.stringify({"id": docId, "c": "cc"});
 
 		// write data to request body
 		req.write(sendData);
