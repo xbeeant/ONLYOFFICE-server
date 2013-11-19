@@ -2,14 +2,16 @@
 	"log": {
 		"appenders": [
 			{ 
-				"type": "console",
-				"level": "WARN"
+				"type": "console"
 			},
 			{
 				"type": "file",
 				"filename": "../logs/serverLogs.log"
 			}
 		],
-		"replaceConsole": "true"
+		"replaceConsole": "true",
+		"levels": {
+			"nodeJS": "WARN"
+		}
 	}
 }
