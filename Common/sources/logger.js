@@ -1,4 +1,4 @@
-var config = require('./config.json');
+﻿var config = require('./config.json');
 
 var log4js = require('log4js');
 log4js.configure(config['log']);
