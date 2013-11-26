@@ -80,9 +80,7 @@ exports.install = function (server, callbackFunction) {
 					data.usrCorrect[index] = false;
 					--data.usrWordsLength;
 					checkEnd();
-				}
-
-				if ("spell" === data.type) {
+				} else if ("spell" === data.type) {
 					oDictionary.spellSuggest(word, function (a, b) {
 						data.usrCorrect[index] = a;
 						--data.usrWordsLength;
