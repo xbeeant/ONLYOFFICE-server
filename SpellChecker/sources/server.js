@@ -15,24 +15,20 @@ var fs = require("fs");
 var app = express();
 var server = {};
 
-if(config['ssl'])
-{
+if (config['ssl']) {
 	var privateKey = fs.readFileSync(config['ssl']['key']).toString();
 	var certificate = fs.readFileSync(config['ssl']['cert']).toString();
 	
 	var options = {key: privateKey, cert:certificate};
 	
 	server = https.createServer(options, app);
-}
-else
-{
+} else {
 	server = http.createServer(app);
 }
 
 app.configure(function(){
     app.use(express.bodyParser());
     app.use(express.methodOverride());
-    app.use(express.static(__dirname + '/public'));
 });
 
 app.configure('development', function () {
