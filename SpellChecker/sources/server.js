@@ -28,7 +28,6 @@ if (config['ssl']) {
 
 app.configure(function(){
     app.use(express.bodyParser());
-    app.use(express.methodOverride());
 });
 
 app.configure('development', function () {
