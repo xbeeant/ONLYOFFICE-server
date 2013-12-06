@@ -2,11 +2,10 @@
     _ = require('underscore'),
 	dataBase  = null,
 	http = require('http'),
+	logger = require('./../../Common/sources/logger'),
 	config = require('./config.json');
 if (config["mongodb"])
 	dataBase = require('./database');
-	
-var logger = require('./../../Common/sources/logger');
 
 var c_oAscRecalcIndexTypes = {
 	RecalcIndexAdd:		1,
