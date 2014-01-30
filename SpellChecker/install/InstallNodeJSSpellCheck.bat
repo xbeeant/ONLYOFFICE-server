@@ -21,7 +21,7 @@ call node-gyp configure || exit /b 1
 call node-gyp build	|| exit /b 1
 
 cd /D ..\..\..\..\Common || exit /b 1
-call npm install log4js --production || exit /b 1
+call npm install log4js --production --no-optional || exit /b 1
 
 CD /D %RUN_FOLDER% || exit /b 1
 
