@@ -15,7 +15,7 @@ call npm install sockjs --production|| exit /b 1
 call npm install mongodb@1.1.4 --production || exit /b 1
 
 cd /D ..\Common || exit /b 1
-call npm install log4js --production || exit /b 1
+call npm install log4js@0.6.2 --production || exit /b 1
 
 CD /D %RUN_FOLDER% || exit /b 1
 
