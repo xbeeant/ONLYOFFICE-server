@@ -9,7 +9,7 @@ ECHO ----------------------------------------
 ECHO Build node.js module spellCheck (nodehun) 
 ECHO ----------------------------------------
 
-call npm install -g node-gyp || exit /b 1
+call npm list -g node-gyp || call npm install -g node-gyp || exit /b 1
 
 XCOPY /S nodehun node_modules\nodehun\ /Y 
 
