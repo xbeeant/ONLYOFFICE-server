@@ -1,11 +1,14 @@
 ﻿var sockjs = require('sockjs'),
     _ = require('underscore'),
 	dataBase  = null,
+	mysqlBase = null,
 	http = require('http'),
 	logger = require('./../../Common/sources/logger'),
 	config = require('./config.json');
 if (config["mongodb"])
 	dataBase = require('./database');
+if (config["mysql"])
+	mysqlBase = require('./mysqlbase');
 
 var c_oAscRecalcIndexTypes = {
 	RecalcIndexAdd:		1,
@@ -758,7 +761,9 @@ exports.install = function (server, callbackFunction) {
 			// insert in dataBase
 			logger.info("database insert changes: " + JSON.stringify(objchange));
 			if (dataBase)
-				dataBase.insert ("changes", objchange);
+				dataBase.insert("changes", objchange);
+			if (mysqlBase)
+				mysqlBase.insert(conn.docId, JSON.stringify(data.changes));
 			
 			if (!data.endSaveChanges) {
 				sendData(conn, {type:"savePartChanges"});
