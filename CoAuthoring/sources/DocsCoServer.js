@@ -8,7 +8,7 @@
 if (config["mongodb"])
 	dataBase = require('./database');
 if (config["mysql"])
-	mysqlBase = require('./mysqlbase');
+	mysqlBase = require('./mySqlBase');
 
 var c_oAscRecalcIndexTypes = {
 	RecalcIndexAdd:		1,
