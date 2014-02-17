@@ -761,7 +761,7 @@ exports.install = function (server, callbackFunction) {
 			if (dataBase)
 				dataBase.insert("changes", objchange);
 			if (mysqlBase)
-				mysqlBase.insert(conn.docId, JSON.stringify(data.changes));
+				mysqlBase.insert(conn.docId, data.changes);
 			
 			if (!data.endSaveChanges) {
 				sendData(conn, {type:"savePartChanges"});
@@ -923,9 +923,28 @@ exports.install = function (server, callbackFunction) {
 		}
 		callbackFunction ();
 	});
+	var callbackLoadChangesMySql = (function (arrayElements){
+		if (null != arrayElements) {
+			// add elements
+			var docId, data, objchange;
+			for (var i = 0; i < arrayElements.length; ++i) {
+				docId = arrayElements[i].docid;
+				try {
+					objchange = {docid:docId, changes:arrayElements[i].data}; // Пишем пока без времени и пользователя (это не особо нужно)
+					if (!objchanges.hasOwnProperty(docId))
+						objchanges[docId] = [objchange];
+					else
+						objchanges[docId].push(objchange);
+				} catch (e) {}
+			}
+		}
+		callbackFunction ();
+	});
 	
 	if (dataBase)
 		dataBase.load ("messages", callbackLoadMessages);
+	else if (mysqlBase)
+		mysqlBase.load(callbackLoadChangesMySql);
 	else
 		callbackLoadMessages(null);
 };
