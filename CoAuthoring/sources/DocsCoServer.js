@@ -10,6 +10,8 @@ if (config["mongodb"])
 if (config["mysql"])
 	mysqlBase = require('./mySqlBase');
 
+var c_oAscSaveTimeOutDelay = 5000;	// Время ожидания для сохранения на сервере (для отработки F5 в браузере)
+
 var c_oAscRecalcIndexTypes = {
 	RecalcIndexAdd:		1,
 	RecalcIndexRemove:	2
@@ -190,7 +192,8 @@ exports.install = function (server, callbackFunction) {
 		objchanges = {},
 		indexuser = {},
         locks = {},
-		arrsavelock = [],
+		arrsavelock = {},
+		saveTimers = {},// Таймеры сохранения, после выхода всех пользователей
         dataHandler,
         urlParse = new RegExp("^/doc/([0-9-.a-zA-Z_=]*)/c.+", 'i'),
 		serverPort = 80;
@@ -242,27 +245,18 @@ exports.install = function (server, callbackFunction) {
 
 				// Если у нас нет пользователей, то удаляем все сообщения
 				if (0 >= participants.length) {
-					// remove messages from dataBase
-					if (dataBase)
-						dataBase.remove ("messages", {docid:conn.docId});
-					// remove messages from memory
-					delete messages[conn.docId];
-					
-					// ToDo Send changes to save server
-					if (objchanges[conn.docId] && 0 < objchanges[conn.docId].length)
-						sendChangesToServer(conn.serverHost, conn.serverPath, conn.docId);
-					
-					// remove changes from dataBase
-					if (dataBase)
-						dataBase.remove ("changes", {docid:conn.docId});
-					// remove changes from memory
-					delete objchanges[conn.docId];
-
 					// Очищаем предыдущий таймер
 					if (null != arrsavelock[conn.docId] && null != arrsavelock[conn.docId].saveLockTimeOutId)
 						clearTimeout(arrsavelock[conn.docId].saveLockTimeOutId);
 					// На всякий случай снимаем lock
 					arrsavelock[conn.docId] = undefined;
+
+					// ToDo Send changes to save server
+					if (objchanges[conn.docId] && 0 < objchanges[conn.docId].length) {
+						saveTimers[conn.docId] = setTimeout(function () {
+							sendChangesToServer(conn.serverHost, conn.serverPath, conn.docId);
+						}, c_oAscSaveTimeOutDelay);
+					}
 				}
 				
                 //Давайдосвиданья!
@@ -507,6 +501,10 @@ exports.install = function (server, callbackFunction) {
                 } else {
                     //TODO: Send some shit back
                 }
+
+				// Очищаем таймер сохранения
+				if (saveTimers[conn.docId])
+					clearTimeout(saveTimers[conn.docId]);
 
 				// Увеличиваем индекс обращения к документу
 				if (!indexuser.hasOwnProperty(conn.docId)) {
@@ -863,6 +861,20 @@ exports.install = function (server, callbackFunction) {
 					})
 				});
 		}
+		// Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
+		function removechanges(conn) {
+			// remove messages from dataBase
+			if (dataBase)
+				dataBase.remove ("messages", {docid:conn.docId});
+			// remove messages from memory
+			delete messages[conn.docId];
+
+			// remove changes from dataBase
+			if (dataBase)
+				dataBase.remove ("changes", {docid:conn.docId});
+			// remove changes from memory
+			delete objchanges[conn.docId];
+		}
 
         return {
             auth:auth,
@@ -874,7 +886,8 @@ exports.install = function (server, callbackFunction) {
 			issavelock:issavelock,
 			unsavelock:unsavelock,
 			getmessages:getmessages,
-			getusers:getusers
+			getusers:getusers,
+			removechanges:removechanges
         };
     }());
 
