@@ -10,6 +10,8 @@ if (config["mongodb"])
 if (config["mysql"])
 	mysqlBase = require('./mySqlBase');
 
+var objchanges = {}, messages = {};
+
 var c_oAscSaveTimeOutDelay = 5000;	// Время ожидания для сохранения на сервере (для отработки F5 в браузере)
 
 var c_oAscRecalcIndexTypes = {
@@ -188,8 +190,6 @@ exports.install = function (server, callbackFunction) {
     var sockjs_opts = {sockjs_url:"http://cdn.sockjs.org/sockjs-0.3.min.js"},
         sockjs_echo = sockjs.createServer(sockjs_opts),
         connections = [],
-        messages = {},
-		objchanges = {},
 		indexuser = {},
         locks = {},
 		arrsavelock = {},
@@ -254,7 +254,7 @@ exports.install = function (server, callbackFunction) {
 					// ToDo Send changes to save server
 					if (objchanges[conn.docId] && 0 < objchanges[conn.docId].length) {
 						saveTimers[conn.docId] = setTimeout(function () {
-							sendChangesToServer(conn.serverHost, conn.serverPath, conn.docId);
+							sendChangesToServer(conn.serverHost, conn.serverPath,  conn.docId, conn.address);
 						}, c_oAscSaveTimeOutDelay);
 					}
 				}
@@ -327,7 +327,7 @@ exports.install = function (server, callbackFunction) {
         });
     }
 	
-	function sendChangesToServer(serverHost, serverPath, docId) {
+	function sendChangesToServer(serverHost, serverPath, docId, address) {
 		if (!serverHost || !serverPath)
 			return;
 		// Пошлем пока только информацию о том, что нужно сбросить кеш
@@ -346,7 +346,7 @@ exports.install = function (server, callbackFunction) {
 			logger.warn('problem with request on server: ' + e.message);
 		});
 		
-		var sendData = JSON.stringify({"id": docId, "c": "cc"});
+		var sendData = JSON.stringify({'id': docId, 'c': 'cc', 'remove': address.address + ':' + address.port + '/removechanges.html?' + docId});
 
 		// write data to request body
 		req.write(sendData);
@@ -861,20 +861,6 @@ exports.install = function (server, callbackFunction) {
 					})
 				});
 		}
-		// Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
-		function removechanges(conn) {
-			// remove messages from dataBase
-			if (dataBase)
-				dataBase.remove ("messages", {docid:conn.docId});
-			// remove messages from memory
-			delete messages[conn.docId];
-
-			// remove changes from dataBase
-			if (dataBase)
-				dataBase.remove ("changes", {docid:conn.docId});
-			// remove changes from memory
-			delete objchanges[conn.docId];
-		}
 
         return {
             auth:auth,
@@ -886,8 +872,7 @@ exports.install = function (server, callbackFunction) {
 			issavelock:issavelock,
 			unsavelock:unsavelock,
 			getmessages:getmessages,
-			getusers:getusers,
-			removechanges:removechanges
+			getusers:getusers
         };
     }());
 
@@ -947,4 +932,18 @@ exports.install = function (server, callbackFunction) {
 		mysqlBase.load(callbackLoadChangesMySql);
 	else
 		callbackLoadMessages(null);
+};
+// Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
+exports.removechanges = function (id) {
+	// remove messages from dataBase
+	if (dataBase)
+		dataBase.remove ("messages", {docid:id});
+	// remove messages from memory
+	delete messages[id];
+
+	// remove changes from dataBase
+	if (dataBase)
+		dataBase.remove ("changes", {docid:id});
+	// remove changes from memory
+	delete objchanges[id];
 };
