@@ -346,7 +346,7 @@ exports.install = function (server, callbackFunction) {
 			logger.warn('problem with request on server: ' + e.message);
 		});
 		
-		var sendData = JSON.stringify({'id': docId, 'c': 'cc', 'remove': address.address + ':' + address.port + '/removechanges.html?' + docId});
+		var sendData = JSON.stringify({'id': docId, 'c': 'cc', 'remove': address.address + ':' + address.port + '/removechanges.html?id=' + docId});
 
 		// write data to request body
 		req.write(sendData);
