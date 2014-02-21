@@ -254,7 +254,7 @@ exports.install = function (server, callbackFunction) {
 					// ToDo Send changes to save server
 					if (objchanges[conn.docId] && 0 < objchanges[conn.docId].length) {
 						saveTimers[conn.docId] = setTimeout(function () {
-							sendChangesToServer(conn.serverHost, conn.serverPath,  conn.docId, conn.address);
+							sendChangesToServer(conn.serverHost, conn.serverPath,  conn.docId);
 						}, c_oAscSaveTimeOutDelay);
 					}
 				}
@@ -327,7 +327,7 @@ exports.install = function (server, callbackFunction) {
         });
     }
 	
-	function sendChangesToServer(serverHost, serverPath, docId, address) {
+	function sendChangesToServer(serverHost, serverPath, docId) {
 		if (!serverHost || !serverPath)
 			return;
 		// Пошлем пока только информацию о том, что нужно сбросить кеш
@@ -346,7 +346,7 @@ exports.install = function (server, callbackFunction) {
 			logger.warn('problem with request on server: ' + e.message);
 		});
 		
-		var sendData = JSON.stringify({'id': docId, 'c': 'sfc', 'url': "http://" + address.address + ':' + address.port + '/removechanges.html?id=' + docId});
+		var sendData = JSON.stringify({'id': docId, 'c': 'sfc', 'url': '/removechanges.html?id=' + docId});
 
 		// write data to request body
 		req.write(sendData);
