@@ -251,10 +251,10 @@ exports.install = function (server, callbackFunction) {
 					// На всякий случай снимаем lock
 					arrsavelock[conn.docId] = undefined;
 
-					// ToDo Send changes to save server
+					// Send changes to save server
 					if (objchanges[conn.docId] && 0 < objchanges[conn.docId].length) {
 						saveTimers[conn.docId] = setTimeout(function () {
-							sendChangesToServer(conn.serverHost, conn.serverPath,  conn.docId);
+							sendChangesToServer(conn.serverHost, conn.serverPath,  conn.docId, conn.documentFormatSave);
 						}, c_oAscSaveTimeOutDelay);
 					}
 				}
@@ -327,7 +327,7 @@ exports.install = function (server, callbackFunction) {
         });
     }
 	
-	function sendChangesToServer(serverHost, serverPath, docId) {
+	function sendChangesToServer(serverHost, serverPath, docId, documentFormatSave) {
 		if (!serverHost || !serverPath)
 			return;
 		// Пошлем пока только информацию о том, что нужно сбросить кеш
@@ -346,7 +346,7 @@ exports.install = function (server, callbackFunction) {
 			logger.warn('problem with request on server: ' + e.message);
 		});
 		
-		var sendData = JSON.stringify({'id': docId, 'c': 'sfc', 'url': '/removechanges.html?id=' + docId});
+		var sendData = JSON.stringify({'id': docId, 'c': 'sfc', 'url': '/removechanges.html?id=' + docId, 'documentFormatSave': documentFormatSave});
 
 		// write data to request body
 		req.write(sendData);
@@ -518,6 +518,7 @@ exports.install = function (server, callbackFunction) {
 				conn.userName = data.username;
 				conn.serverHost = data.serverHost;
 				conn.serverPath = data.serverPath;
+				conn.documentFormatSave = data.documentFormatSave;
                 //Set the unique ID
                 if (data.sessionId !== null && _.isString(data.sessionId) && data.sessionId !== "") {
                     logger.info("restored old session id=" + data.sessionId);
@@ -911,8 +912,8 @@ exports.install = function (server, callbackFunction) {
 	var callbackLoadChangesMySql = (function (arrayElements){
 		if (null != arrayElements) {
 			// add elements
-			var docId, data, objchange;
-			for (var i = 0; i < arrayElements.length; ++i) {
+			var docId, data, objchange, i;
+			for (i = 0; i < arrayElements.length; ++i) {
 				docId = arrayElements[i].docid;
 				try {
 					objchange = {docid:docId, changes:arrayElements[i].data}; // Пишем пока без времени и пользователя (это не особо нужно)
@@ -922,6 +923,15 @@ exports.install = function (server, callbackFunction) {
 						objchanges[docId].push(objchange);
 				} catch (e) {}
 			}
+			// ToDo - send
+			/*for (i in objchange) if (objchange.hasOwnProperty(i)) {
+				// Send changes to save server
+				if (objchanges[i] && 0 < objchanges[i].length) {
+					saveTimers[i] = setTimeout(function () {
+						sendChangesToServer(conn.serverHost, conn.serverPath,  i, conn.documentFormatSave);
+					}, c_oAscSaveTimeOutDelay);
+				}
+			}*/
 		}
 		callbackFunction ();
 	});
