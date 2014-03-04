@@ -185,6 +185,22 @@ CRecalcIndex.prototype = {
 	}
 };
 
+function removeSaveChanges(id, deleteMessages) {
+	if (deleteMessages) {
+		// remove messages from dataBase
+		if (dataBase)
+			dataBase.remove ("messages", {docid:id});
+		// remove messages from memory
+		delete messages[id];
+	}
+
+	// remove changes from dataBase
+	if (dataBase)
+		dataBase.remove ("changes", {docid:id});
+	// remove changes from memory
+	delete objchanges[id];
+}
+
 exports.install = function (server, callbackFunction) {
     'use strict';
     var sockjs_opts = {sockjs_url:"http://cdn.sockjs.org/sockjs-0.3.min.js"},
@@ -216,7 +232,7 @@ exports.install = function (server, callbackFunction) {
             logger.error("On error");
         });
         conn.on('close', function () {
-            var connection = this, docLock, userLocks, participants, reconected;
+            var connection = this, docLock, userLocks, participants, reconected, curChanges;
 
             logger.info("Connection closed or timed out");
             //Check if it's not already reconnected
@@ -252,7 +268,11 @@ exports.install = function (server, callbackFunction) {
 					arrsavelock[conn.docId] = undefined;
 
 					// Send changes to save server
-					if (objchanges[conn.docId] && 0 < objchanges[conn.docId].length) {
+					curChanges = objchanges[conn.docId];
+					if (curChanges && 0 < curChanges.length) {
+						for (var i = 0; i < curChanges.length; ++i) {
+							delete curChanges[i].skipChange;
+						}
 						saveTimers[conn.docId] = setTimeout(function () {
 							sendChangesToServer(conn.serverHost, conn.serverPath,  conn.docId, conn.documentFormatSave);
 						}, c_oAscSaveTimeOutDelay);
@@ -750,8 +770,13 @@ exports.install = function (server, callbackFunction) {
 			} else {
 				userLocks = [];
 			}
+			if (false === data.isCoAuthoring && data.startSaveChanges) {
+				// Мы еще не в совместном редактировании, нужно удалить старые изменения
+				removeSaveChanges(conn.docId, /*deleteMessages*/false);
+			}
 			
-			var objchange = {docid:conn.docId, changes:data.changes, time:Date.now(), user:conn.userId};
+			var objchange = {docid:conn.docId, changes:data.changes, time:Date.now(),
+				user:conn.userId, skipChange: !data.isCoAuthoring};
 			if (!objchanges.hasOwnProperty(conn.docId)) {
                 objchanges[conn.docId] = [objchange];
             } else {
@@ -945,15 +970,5 @@ exports.install = function (server, callbackFunction) {
 };
 // Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
 exports.removechanges = function (id) {
-	// remove messages from dataBase
-	if (dataBase)
-		dataBase.remove ("messages", {docid:id});
-	// remove messages from memory
-	delete messages[id];
-
-	// remove changes from dataBase
-	if (dataBase)
-		dataBase.remove ("changes", {docid:id});
-	// remove changes from memory
-	delete objchanges[id];
+	removeSaveChanges(id, /*isDeleteMessages*/true);
 };
