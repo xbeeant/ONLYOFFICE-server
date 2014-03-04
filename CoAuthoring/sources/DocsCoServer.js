@@ -366,7 +366,10 @@ exports.install = function (server, callbackFunction) {
 			logger.warn('problem with request on server: ' + e.message);
 		});
 		
-		var sendData = JSON.stringify({'id': docId, 'c': 'sfc', 'url': '/removechanges.html?id=' + docId, 'documentFormatSave': documentFormatSave});
+		var sendData = JSON.stringify({'id': docId, 'c': 'sfc',
+			'url': '/removechanges.html?id=' + docId, 'documentFormatSave': documentFormatSave,
+			'delay': c_oAscSaveTimeOutDelay
+		});
 
 		// write data to request body
 		req.write(sendData);
