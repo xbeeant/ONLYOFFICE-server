@@ -746,7 +746,7 @@ exports.install = function (server, callbackFunction) {
 		function savechanges(conn, data) {
 			var docLock, userLocks, participants;
 			//Release locks
-			if (data.endSaveChanges) {
+			if (data.endSaveChanges && false !== data.isCoAuthoring) {
 				docLock = locks[conn.docId];
 				if (docLock) {
 					if ("array" === typeOf (docLock)) {
@@ -792,7 +792,7 @@ exports.install = function (server, callbackFunction) {
 			if (!data.endSaveChanges) {
 				sendData(conn, {type:"savePartChanges"});
 			} else {
-				if (data.isExcel) {
+				if (data.isExcel && false !== data.isCoAuthoring) {
 					var oElement = null;
 					var oRecalcIndexColumns = null, oRecalcIndexRows = null;
 					var oChanges = JSON.parse(data.changes);
