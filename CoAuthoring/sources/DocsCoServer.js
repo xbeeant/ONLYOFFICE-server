@@ -367,8 +367,8 @@ exports.install = function (server, callbackFunction) {
 		});
 		
 		var sendData = JSON.stringify({'id': docId, 'c': 'sfc',
-			'url': '/removechanges.html?id=' + docId, 'documentFormatSave': documentFormatSave,
-			'delay': c_oAscSaveTimeOutDelay
+			'url': '/removechanges.html?id=' + docId, 'outputformat': documentFormatSave,
+			'data': c_oAscSaveTimeOutDelay
 		});
 
 		// write data to request body
