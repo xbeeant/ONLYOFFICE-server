@@ -790,7 +790,7 @@ exports.install = function (server, callbackFunction) {
 			if (dataBase)
 				dataBase.insert("changes", objchange);
 			if (mysqlBase)
-				mysqlBase.insert(conn.docId, data.changes);
+				mysqlBase.insert(conn.docId, data.changes, conn.serverHost, conn.serverPath, conn.documentFormatSave);
 			
 			if (!data.endSaveChanges) {
 				sendData(conn, {type:"savePartChanges"});
@@ -912,8 +912,7 @@ exports.install = function (server, callbackFunction) {
     }});
 	
 	var callbackLoadMessages = (function (arrayElements){
-		if (null != arrayElements)
-		{
+		if (null != arrayElements) {
 			messages = arrayElements;
 			
 			// remove all messages from dataBase
@@ -927,8 +926,7 @@ exports.install = function (server, callbackFunction) {
 	});
 	
 	var callbackLoadChanges = (function (arrayElements){
-		if (null != arrayElements)
-		{
+		if (null != arrayElements) {
 			// ToDo Send changes to save server
 			
 			// remove all changes from dataBase
@@ -938,28 +936,34 @@ exports.install = function (server, callbackFunction) {
 		callbackFunction ();
 	});
 	var callbackLoadChangesMySql = (function (arrayElements){
+		var createTimer = function (id, objProp) {
+			return setTimeout(function () {
+				sendChangesToServer(objProp.serverHost, objProp.serverPath, id, objProp.documentFormatSave);
+			}, c_oAscSaveTimeOutDelay);
+		};
 		if (null != arrayElements) {
 			// add elements
-			var docId, data, objchange, i;
+			var docId, objchange, i, element, objProps = {};
 			for (i = 0; i < arrayElements.length; ++i) {
-				docId = arrayElements[i].docid;
+				element = arrayElements[i];
+				docId = element.docid;
 				try {
-					objchange = {docid:docId, changes:arrayElements[i].data}; // Пишем пока без времени и пользователя (это не особо нужно)
-					if (!objchanges.hasOwnProperty(docId))
+					objchange = {docid:docId, changes:element.data}; // Пишем пока без времени и пользователя (это не особо нужно)
+					if (!objchanges.hasOwnProperty(docId)) {
 						objchanges[docId] = [objchange];
-					else
+						objProps[docId] = {serverHost: element.serverHost,
+							serverPath: element.serverPath, documentFormatSave: element.documentFormatSave};
+					} else
 						objchanges[docId].push(objchange);
 				} catch (e) {}
 			}
-			// ToDo - send
-			/*for (i in objchange) if (objchange.hasOwnProperty(i)) {
+			// Send to server
+			for (i in objchanges) if (objchanges.hasOwnProperty(i)) {
 				// Send changes to save server
 				if (objchanges[i] && 0 < objchanges[i].length) {
-					saveTimers[i] = setTimeout(function () {
-						sendChangesToServer(conn.serverHost, conn.serverPath,  i, conn.documentFormatSave);
-					}, c_oAscSaveTimeOutDelay);
+					saveTimers[i] = createTimer(i, objProps[i]);
 				}
-			}*/
+			}
 		}
 		callbackFunction ();
 	});
