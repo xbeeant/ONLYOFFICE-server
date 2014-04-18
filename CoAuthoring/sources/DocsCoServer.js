@@ -825,7 +825,7 @@ exports.install = function (server, callbackFunction) {
 			
 			participants = getParticipants(conn.docId, conn.userId);
             _.each(participants, function (participant) {
-                sendData(participant.connection, {type:"savechanges", changes:data.changes, locks:_.map(userLocks, function (e) {
+                sendData(participant.connection, {type:"savechanges", changes:data.changes, user:conn.userId, locks:_.map(userLocks, function (e) {
                     return {
                         block:e.block,
                         user:e.user,
