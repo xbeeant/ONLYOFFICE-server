@@ -247,8 +247,7 @@ exports.install = function (server, callbackFunction) {
 
 			var state = (false == reconected) ? false : undefined;
 			participants = getParticipants(conn.docId);
-			var participantsMap = _.map(participants, function (conn) { return {id: conn.connection.userId, username: conn.connection.userName};});
-            sendParticipantsState(participants, state, connection.userId, connection.userName, participantsMap);
+            sendParticipantsState(participants, state, connection.userId, connection.userName, connection.userColor);
 
             if (!reconected) {
 				// Для данного пользователя снимаем лок с сохранения
@@ -321,21 +320,16 @@ exports.install = function (server, callbackFunction) {
         conn.write(JSON.stringify(data));
     }
 
-    function sendParticipantsState(participants, stateConnect, _userId, _userName, participantsMap) {
+    function sendParticipantsState(participants, stateConnect, _userId, _userName, _userColor) {
         _.each(participants, function (participant) {
 			if (participant.connection.userId !== _userId) {
-				sendData(participant.connection,
-					{
-						type			: "participants",
-						participants	: participantsMap
-					});
-
 				sendData(participant.connection,
 					{
 						type		: "connectstate",
 						state		: stateConnect,
 						id			: _userId,
-						username	: _userName
+						username	: _userName,
+						color		: _userColor
 					});
 			}
         });
@@ -517,6 +511,7 @@ exports.install = function (server, callbackFunction) {
         function auth(conn, data) {
             //TODO: Do authorization etc. check md5 or query db
             if (data.token && data.user) {
+				var user = data.user;
                 //Parse docId
                 var parsed = urlParse.exec(conn.url);
                 if (parsed.length > 1) {
@@ -537,8 +532,9 @@ exports.install = function (server, callbackFunction) {
 				}
 
                 conn.sessionState = 1;
-                conn.userId = data.user + indexuser[conn.docId];
-				conn.userName = data.username;
+                conn.userId = user.id + indexuser[conn.docId];
+				conn.userName = user.name;
+				conn.userColor = user.color;
 				conn.serverHost = data.serverHost;
 				conn.serverPath = data.serverPath;
 				conn.documentFormatSave = data.documentFormatSave;
@@ -557,7 +553,9 @@ exports.install = function (server, callbackFunction) {
                 }
                 connections.push({connection:conn});
                 var participants = getParticipants(conn.docId);
-				var participantsMap = _.map(participants, function (conn) { return {id: conn.connection.userId, username: conn.connection.userName};});
+				var participantsMap = _.map(participants, function (conn) {
+					return {id: conn.connection.userId,
+						username: conn.connection.userName, color: conn.connection.userColor};});
 				
                 sendData(conn,
                     {
@@ -570,7 +568,7 @@ exports.install = function (server, callbackFunction) {
                         changes			: objchanges[conn.docId],
 						indexuser		: indexuser[conn.docId]
                     });//Or 0 if fails
-                sendParticipantsState(participants, true, conn.userId, conn.userName, participantsMap);
+                sendParticipantsState(participants, true, conn.userId, conn.userName, conn.userColor);
             }
         }
 
@@ -878,18 +876,6 @@ exports.install = function (server, callbackFunction) {
 		function getmessages(conn) {
 			sendData(conn, {type:"message", messages:messages[conn.docId]});
 		}
-		// Возвращаем всех пользователей для документа
-		function getusers(conn) {
-			var participants = getParticipants(conn.docId);
-
-			sendData(conn,
-				{
-					type:"getusers",
-					participants:_.map(participants, function (conn) {
-						return {id: conn.connection.userId, username: conn.connection.userName};
-					})
-				});
-		}
 
         return {
             auth:auth,
@@ -900,8 +886,7 @@ exports.install = function (server, callbackFunction) {
 			savechanges:savechanges,
 			issavelock:issavelock,
 			unsavelock:unsavelock,
-			getmessages:getmessages,
-			getusers:getusers
+			getmessages:getmessages
         };
     }());
 
