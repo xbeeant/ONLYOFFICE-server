@@ -29,9 +29,11 @@
 		{"name": "vi_VN", "id": 1066},
 		{"name": "az_Latn_AZ", "id": 1068},
 		{"name": "de_CH", "id": 2055},
+		{"name": "en_GB", "id": 2057},
 		{"name": "nn_NO", "id": 2068},
 		{"name": "pt_PT", "id": 2070},
 		{"name": "de_AT", "id": 3079},
+		{"name": "en_AU", "id": 3081},
 		{"name": "es_ES", "id": 3082}		
 	]
 }
