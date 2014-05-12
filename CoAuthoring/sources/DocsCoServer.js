@@ -788,7 +788,7 @@ exports.install = function (server, callbackFunction) {
 			if (dataBase)
 				dataBase.insert("changes", objchange);
 			if (mysqlBase)
-				mysqlBase.insert(conn.docId, data.changes, conn.serverHost, conn.serverPath, conn.documentFormatSave);
+				mysqlBase.insert(conn.docId, conn.userId, data.changes, conn.serverHost, conn.serverPath, conn.documentFormatSave);
 			
 			if (!data.endSaveChanges) {
 				sendData(conn, {type:"savePartChanges"});
@@ -933,7 +933,7 @@ exports.install = function (server, callbackFunction) {
 				element = arrayElements[i];
 				docId = element.docid;
 				try {
-					objchange = {docid:docId, changes:element.data}; // Пишем пока без времени и пользователя (это не особо нужно)
+					objchange = {docid:docId, changes:element.data, user:element.userid}; // Пишем пока без времени (это не особо нужно)
 					if (!objchanges.hasOwnProperty(docId)) {
 						objchanges[docId] = [objchange];
 						objProps[docId] = {serverHost: element.serverHost,
