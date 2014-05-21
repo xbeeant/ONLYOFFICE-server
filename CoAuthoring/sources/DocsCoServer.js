@@ -279,6 +279,9 @@ exports.install = function (server, callbackFunction) {
 						saveTimers[conn.docId] = setTimeout(function () {
 							sendChangesToServer(conn.serverHost, conn.serverPort, conn.serverPath,  conn.docId, conn.documentFormatSave);
 						}, c_oAscSaveTimeOutDelay);
+					} else {
+						// Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
+						sendStatusDocument(conn.serverHost, conn.serverPort, conn.serverPath, conn.docId, false);
 					}
 				}
 				
@@ -344,18 +347,18 @@ exports.install = function (server, callbackFunction) {
             return el.connection.docId === docId && el.connection.userId !== exludeuserId;
         });
     }
-	
-	function sendChangesToServer(serverHost, serverPort, serverPath, docId, documentFormatSave) {
+
+	function sendServerRequest (serverHost, serverPort, serverPath, sendData) {
 		if (!serverHost || !serverPath)
 			return;
 		// Пошлем пока только информацию о том, что нужно сбросить кеш
 		var options = {
-		  host: serverHost,
-		  port: serverPort ? serverPort : defaultServerPort,
-		  path: serverPath,
-		  method: 'POST'
+			host: serverHost,
+			port: serverPort ? serverPort : defaultServerPort,
+			path: serverPath,
+			method: 'POST'
 		};
-		
+
 		var req = http.request(options, function(res) {
 			res.setEncoding('utf8');
 		});
@@ -363,15 +366,24 @@ exports.install = function (server, callbackFunction) {
 		req.on('error', function(e) {
 			logger.warn('problem with request on server: ' + e.message);
 		});
-		
-		var sendData = JSON.stringify({'id': docId, 'c': 'sfc',
-			'outputformat': documentFormatSave,
-			'data': c_oAscSaveTimeOutDelay
-		});
 
 		// write data to request body
 		req.write(sendData);
 		req.end();
+	}
+	
+	function sendChangesToServer(serverHost, serverPort, serverPath, docId, documentFormatSave) {
+		var sendData = JSON.stringify({'id': docId, 'c': 'sfc',
+			'outputformat': documentFormatSave,
+			'data': c_oAscSaveTimeOutDelay
+		});
+		sendServerRequest(serverHost, serverPort, serverPath, sendData);
+	}
+
+	// Отправка статуса, чтобы знать когда документ начал редактироваться, а когда закончился
+	function sendStatusDocument (serverHost, serverPort, serverPath, docId, status) {
+		var sendData = JSON.stringify({'id': docId, 'c': 'editstatus', 'status': status});
+		sendServerRequest(serverHost, serverPort, serverPath, sendData);
 	}
 
 	// Пересчет только для чужих Lock при сохранении на клиенте, который добавлял/удалял строки или столбцы
@@ -569,6 +581,11 @@ exports.install = function (server, callbackFunction) {
 				// Добавляем данного пользователя в базу данных
 				if (mysqlBase)
 					mysqlBase.insertUser(conn.docId, conn.userIdOriginal, conn.userId);
+
+				if (1 === participants.length) {
+					// Отправляем, что мы начали редактировать, когда зашел первый пользователь (на сервере нужно обновить статус)
+					sendStatusDocument(conn.serverHost, conn.serverPort, conn.serverPath, conn.docId, true);
+				}
 				
                 sendData(conn,
                     {
