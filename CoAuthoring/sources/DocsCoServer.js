@@ -258,6 +258,10 @@ exports.install = function (server, callbackFunction) {
 					arrsavelock[conn.docId] = undefined;
 				}
 
+				// Удаляем данного пользователя из базы данных
+				if (mysqlBase)
+					mysqlBase.deleteUser(conn.docId, conn.userId);
+
 				// Если у нас нет пользователей, то удаляем все сообщения
 				if (0 >= participants.length) {
 					// Очищаем предыдущий таймер
@@ -533,6 +537,7 @@ exports.install = function (server, callbackFunction) {
 
                 conn.sessionState = 1;
                 conn.userId = user.id + indexuser[conn.docId];
+				conn.userIdOriginal = user.id;
 				conn.userName = user.name;
 				conn.userColor = user.color;
 				conn.serverHost = data.serverHost;
@@ -544,7 +549,10 @@ exports.install = function (server, callbackFunction) {
 
                     //Kill previous connections
                     connections = _.reject(connections, function (el) {
-                        return el.connection.sessionId === data.sessionId;//Delete this connection
+                        var res = el.connection.sessionId === data.sessionId;//Delete this connection
+						if (res && mysqlBase)
+							mysqlBase.deleteUser(el.connection.docId, el.connection.userId);
+						return res;
                     });
                     conn.sessionId = data.sessionId;//restore old
 
@@ -556,6 +564,10 @@ exports.install = function (server, callbackFunction) {
 				var participantsMap = _.map(participants, function (conn) {
 					return {id: conn.connection.userId,
 						username: conn.connection.userName, color: conn.connection.userColor};});
+
+				// Добавляем данного пользователя в базу данных
+				if (mysqlBase)
+					mysqlBase.insertUser(conn.docId, conn.userIdOriginal, conn.userId);
 				
                 sendData(conn,
                     {
@@ -788,7 +800,8 @@ exports.install = function (server, callbackFunction) {
 			if (dataBase)
 				dataBase.insert("changes", objchange);
 			if (mysqlBase)
-				mysqlBase.insert(conn.docId, conn.userId, data.changes, conn.serverHost, conn.serverPath, conn.documentFormatSave);
+				mysqlBase.insertChanges(conn.docId, conn.userId, data.changes, conn.serverHost,
+					conn.serverPath, conn.documentFormatSave);
 			
 			if (!data.endSaveChanges) {
 				sendData(conn, {type:"savePartChanges"});
@@ -954,9 +967,9 @@ exports.install = function (server, callbackFunction) {
 	});
 	
 	if (dataBase)
-		dataBase.load ("messages", callbackLoadMessages);
+		dataBase.load("messages", callbackLoadMessages);
 	else if (mysqlBase)
-		mysqlBase.load(callbackLoadChangesMySql);
+		mysqlBase.loadChanges(callbackLoadChangesMySql);
 	else
 		callbackLoadMessages(null);
 };
