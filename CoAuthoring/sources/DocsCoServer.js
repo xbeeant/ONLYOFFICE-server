@@ -910,7 +910,7 @@ exports.install = function (server, callbackFunction) {
 		logger.info(message);
     }});
 	
-	var callbackLoadMessages = (function (arrayElements){
+	var callbackLoadMessages = function (arrayElements){
 		if (null != arrayElements) {
 			messages = arrayElements;
 			
@@ -922,9 +922,9 @@ exports.install = function (server, callbackFunction) {
 			dataBase.load ("changes", callbackLoadChanges);
 		else
 			callbackLoadChanges(null);
-	});
+	};
 	
-	var callbackLoadChanges = (function (arrayElements){
+	var callbackLoadChanges = function (arrayElements){
 		if (null != arrayElements) {
 			// ToDo Send changes to save server
 			
@@ -933,8 +933,15 @@ exports.install = function (server, callbackFunction) {
 				dataBase.remove ("changes", {});
 		}
 		callbackFunction ();
-	});
-	var callbackLoadChangesMySql = (function (arrayElements){
+	};
+
+	var callbackClearAllUsersMySql = function () {
+		if (mysqlBase)
+			mysqlBase.loadChanges(callbackLoadChangesMySql);
+		else
+			callbackLoadMessages(null);
+	};
+	var callbackLoadChangesMySql = function (arrayElements){
 		var createTimer = function (id, objProp) {
 			return setTimeout(function () {
 				sendChangesToServer(objProp.serverHost, objProp.serverPort, objProp.serverPath,
@@ -966,12 +973,12 @@ exports.install = function (server, callbackFunction) {
 			}
 		}
 		callbackFunction ();
-	});
+	};
 	
 	if (dataBase)
 		dataBase.load("messages", callbackLoadMessages);
 	else if (mysqlBase)
-		mysqlBase.loadChanges(callbackLoadChangesMySql);
+		mysqlBase.clearAllUsers(callbackClearAllUsersMySql);
 	else
 		callbackLoadMessages(null);
 };
