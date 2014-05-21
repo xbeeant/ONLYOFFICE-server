@@ -281,7 +281,7 @@ exports.install = function (server, callbackFunction) {
 						}, c_oAscSaveTimeOutDelay);
 					} else {
 						// Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
-						sendStatusDocument(conn.serverHost, conn.serverPort, conn.serverPath, conn.docId, false);
+						sendStatusDocument(conn.serverHost, conn.serverPort, conn.serverPath, conn.docId, 0/*false*/);
 					}
 				}
 				
@@ -584,7 +584,7 @@ exports.install = function (server, callbackFunction) {
 
 				if (1 === participants.length) {
 					// Отправляем, что мы начали редактировать, когда зашел первый пользователь (на сервере нужно обновить статус)
-					sendStatusDocument(conn.serverHost, conn.serverPort, conn.serverPath, conn.docId, true);
+					sendStatusDocument(conn.serverHost, conn.serverPort, conn.serverPath, conn.docId, 1/*true*/);
 				}
 				
                 sendData(conn,
