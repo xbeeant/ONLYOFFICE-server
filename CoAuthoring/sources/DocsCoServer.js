@@ -212,7 +212,7 @@ exports.install = function (server, callbackFunction) {
 		saveTimers = {},// Таймеры сохранения, после выхода всех пользователей
         dataHandler,
         urlParse = new RegExp("^/doc/([0-9-.a-zA-Z_=]*)/c.+", 'i'),
-		serverPort = 80;
+		defaultServerPort = 80;
 
     sockjs_echo.on('connection', function (conn) {
 		if (null == conn) {
@@ -277,7 +277,7 @@ exports.install = function (server, callbackFunction) {
 							delete curChanges[i].skipChange;
 						}
 						saveTimers[conn.docId] = setTimeout(function () {
-							sendChangesToServer(conn.serverHost, conn.serverPath,  conn.docId, conn.documentFormatSave);
+							sendChangesToServer(conn.serverHost, conn.serverPort, conn.serverPath,  conn.docId, conn.documentFormatSave);
 						}, c_oAscSaveTimeOutDelay);
 					}
 				}
@@ -345,13 +345,13 @@ exports.install = function (server, callbackFunction) {
         });
     }
 	
-	function sendChangesToServer(serverHost, serverPath, docId, documentFormatSave) {
+	function sendChangesToServer(serverHost, serverPort, serverPath, docId, documentFormatSave) {
 		if (!serverHost || !serverPath)
 			return;
 		// Пошлем пока только информацию о том, что нужно сбросить кеш
 		var options = {
 		  host: serverHost,
-		  port: serverPort,
+		  port: serverPort ? serverPort : defaultServerPort,
 		  path: serverPath,
 		  method: 'POST'
 		};
@@ -541,6 +541,7 @@ exports.install = function (server, callbackFunction) {
 				conn.userName = user.name;
 				conn.userColor = user.color;
 				conn.serverHost = data.serverHost;
+				conn.serverPort = data.serverPort;
 				conn.serverPath = data.serverPath;
 				conn.documentFormatSave = data.documentFormatSave;
                 //Set the unique ID
@@ -801,7 +802,7 @@ exports.install = function (server, callbackFunction) {
 				dataBase.insert("changes", objchange);
 			if (mysqlBase)
 				mysqlBase.insertChanges(conn.docId, conn.userId, data.changes, conn.serverHost,
-					conn.serverPath, conn.documentFormatSave);
+					conn.serverPort, conn.serverPath, conn.documentFormatSave);
 			
 			if (!data.endSaveChanges) {
 				sendData(conn, {type:"savePartChanges"});
@@ -936,7 +937,8 @@ exports.install = function (server, callbackFunction) {
 	var callbackLoadChangesMySql = (function (arrayElements){
 		var createTimer = function (id, objProp) {
 			return setTimeout(function () {
-				sendChangesToServer(objProp.serverHost, objProp.serverPath, id, objProp.documentFormatSave);
+				sendChangesToServer(objProp.serverHost, objProp.serverPort, objProp.serverPath,
+					id, objProp.documentFormatSave);
 			}, c_oAscSaveTimeOutDelay);
 		};
 		if (null != arrayElements) {
@@ -949,7 +951,7 @@ exports.install = function (server, callbackFunction) {
 					objchange = {docid:docId, changes:element.data, user:element.userid}; // Пишем пока без времени (это не особо нужно)
 					if (!objchanges.hasOwnProperty(docId)) {
 						objchanges[docId] = [objchange];
-						objProps[docId] = {serverHost: element.serverHost,
+						objProps[docId] = {serverHost: element.serverHost, serverPort: element.serverPort,
 							serverPath: element.serverPath, documentFormatSave: element.documentFormatSave};
 					} else
 						objchanges[docId].push(objchange);
