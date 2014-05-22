@@ -361,6 +361,12 @@ exports.install = function (server, callbackFunction) {
 
 		var req = http.request(options, function(res) {
 			res.setEncoding('utf8');
+			res.on('data', function(replyData) {
+				logger.info('replyData: ' + replyData);
+			});
+			res.on('end', function() {
+				logger.info('end');
+			});
 		});
 
 		req.on('error', function(e) {
