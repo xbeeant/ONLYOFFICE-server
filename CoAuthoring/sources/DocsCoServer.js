@@ -807,7 +807,7 @@ exports.install = function (server, callbackFunction) {
 			}
 			
 			var objchange = {docid:conn.docId, changes:data.changes, time:Date.now(),
-				user:conn.userId, skipChange: !data.isCoAuthoring};
+				user:conn.userId, useridoriginal: conn.userIdOriginal, skipChange: !data.isCoAuthoring};
 			if (!objchanges.hasOwnProperty(conn.docId)) {
                 objchanges[conn.docId] = [objchange];
             } else {
@@ -818,7 +818,7 @@ exports.install = function (server, callbackFunction) {
 			if (dataBase)
 				dataBase.insert("changes", objchange);
 			if (mysqlBase)
-				mysqlBase.insertChanges(conn.docId, conn.userId, data.changes, conn.serverHost,
+				mysqlBase.insertChanges(conn.docId, conn.userId, conn.userIdOriginal, data.changes, conn.serverHost,
 					conn.serverPort, conn.serverPath, conn.documentFormatSave);
 			
 			if (!data.endSaveChanges) {
@@ -972,7 +972,8 @@ exports.install = function (server, callbackFunction) {
 				element = arrayElements[i];
 				docId = element.docid;
 				try {
-					objchange = {docid:docId, changes:element.data, user:element.userid}; // Пишем пока без времени (это не особо нужно)
+					objchange = {docid:docId, changes:element.data, user:element.userid,
+						useridoriginal: element.useridoriginal}; // Пишем пока без времени (это не особо нужно)
 					if (!objchanges.hasOwnProperty(docId)) {
 						objchanges[docId] = [objchange];
 						objProps[docId] = {serverHost: element.serverHost, serverPort: element.serverPort,
