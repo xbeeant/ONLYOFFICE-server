@@ -559,7 +559,7 @@ exports.install = function (server, callbackFunction) {
 				conn.userName = user.name;
 				conn.userColor = user.color;
 				conn.serverHost = data.serverHost;
-				conn.serverPort = data.serverPort;
+				conn.serverPort = data.serverPort ? data.serverPort : '';
 				conn.serverPath = data.serverPath;
 				conn.documentFormatSave = data.documentFormatSave;
                 //Set the unique ID
