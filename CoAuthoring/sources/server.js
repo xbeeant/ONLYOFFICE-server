@@ -37,7 +37,7 @@ docsCoServer.install(server, function() {
 		res.send('Server is functioning normally');
 	});
 	
-	app.post('/removechanges.html', function(req, res) {
+	app.post('/RemoveChanges.ashx', function(req, res) {
 		docsCoServer.removechanges(req.query.id);
 		res.send('Remove success');
 	});
