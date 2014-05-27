@@ -1055,7 +1055,10 @@ exports.commandFromServer = function (query) {
 	if (null == docId)
 		return;
 
-	objServiceInfo[docId] = url.parse(query.callback);
+	try {
+		objServiceInfo[docId] = url.parse(decodeURIComponent(query.callback));
+	} catch (e) {return;}
+
 	switch(query.c) {
 		case "info":
 			// Подписка на эвенты:
