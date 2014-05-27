@@ -21,6 +21,13 @@ var c_oAscServerStatus = {
 	Closed		: 4
 };
 
+var c_oAscServerCommandErrors = {
+	NoError			: 0,
+	DocumentIdError	: 1,
+	ParseError		: 2,
+	CommandError	: 3
+};
+
 var c_oAscSaveTimeOutDelay = 5000;	// Время ожидания для сохранения на сервере (для отработки F5 в браузере)
 
 var c_oAscRecalcIndexTypes = {
@@ -210,13 +217,15 @@ function removeSaveChanges(id, deleteMessages) {
 	delete objchanges[id];
 }
 
-function getParticipantsId(docId) {
-	var result = [], element;
+function getOriginalParticipantsId(docId) {
+	var result = [], tmpObject = {}, element;
 	for (var i = 0, length = connections.length; i < length; ++i) {
 		element = connections[i];
 		if (element.connection.docId === docId)
-			result.push(element.connection.userId);
+			tmpObject[element.connection.userIdOriginal] = 1;
 	}
+	for(var name in tmpObject) if (tmpObject.hasOwnProperty(name))
+		result.push(name);
 	return result;
 }
 
@@ -256,7 +265,7 @@ function sendStatusDocument (docId, bChangeBase) {
 		return;
 
 	var status = c_oAscServerStatus.Editing;
-	var participants = getParticipantsId(docId);
+	var participants = getOriginalParticipantsId(docId);
 	var docChanges;
 	if (0 === participants.length && !((docChanges = objchanges[docId]) && 0 < docChanges.length))
 		status = c_oAscServerStatus.Closed;
@@ -1058,12 +1067,13 @@ exports.commandFromServer = function (query) {
 	// Ключ id-документа
 	var docId = query.key;
 	if (null == docId)
-		return;
+		return c_oAscServerCommandErrors.DocumentIdError;
 
 	try {
 		objServiceInfo[docId] = url.parse(decodeURIComponent(query.callback));
-	} catch (e) {return;}
+	} catch (e) {return c_oAscServerCommandErrors.ParseError;}
 
+	var result = c_oAscServerCommandErrors.NoError;
 	switch(query.c) {
 		case "info":
 			// Подписка на эвенты:
@@ -1074,5 +1084,10 @@ exports.commandFromServer = function (query) {
 			break;
 		case "drop":
 			break;
+		default:
+			result = c_oAscServerCommandErrors.CommandError;
+			break;
 	}
+
+	return result;
 };

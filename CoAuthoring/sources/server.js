@@ -43,7 +43,7 @@ docsCoServer.install(server, function() {
 	});
 
 	app.get('/CommandService.ashx', function(req, res) {
-		docsCoServer.commandFromServer(req.query);
-		res.send('Command success');
+		var result = docsCoServer.commandFromServer(req.query);
+		res.send('Command result: ' + result);
 	});
 });
