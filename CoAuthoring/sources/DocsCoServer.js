@@ -3,6 +3,7 @@
 	dataBase  = null,
 	mysqlBase = null,
 	http = require('http'),
+	url = require('url'),
 	logger = require('./../../Common/sources/logger'),
 	config = require('./config.json');
 if (config["mongodb"])
@@ -10,7 +11,15 @@ if (config["mongodb"])
 if (config["mysql"])
 	mysqlBase = require('./mySqlBase');
 
-var objchanges = {}, messages = {};
+var objchanges = {}, messages = {}, connections = [], defaultServerPort = 80, objServiceInfo = {};
+
+var c_oAscServerStatus = {
+	NotFound	: 0,
+	Editing		: 1,
+	MustSave	: 2,
+	Corrupted	: 3,
+	Closed		: 4
+};
 
 var c_oAscSaveTimeOutDelay = 5000;	// Время ожидания для сохранения на сервере (для отработки F5 в браузере)
 
@@ -201,18 +210,84 @@ function removeSaveChanges(id, deleteMessages) {
 	delete objchanges[id];
 }
 
+function getParticipantsId(docId) {
+	var result = [], element;
+	for (var i = 0, length = connections.length; i < length; ++i) {
+		element = connections[i];
+		if (element.connection.docId === docId)
+			result.push(element.connection.userId);
+	}
+	return result;
+}
+
+function sendServerRequest (serverHost, serverPort, serverPath, sendData) {
+	if (!serverHost || !serverPath)
+		return;
+	var options = {
+		host: serverHost,
+		port: serverPort ? serverPort : defaultServerPort,
+		path: serverPath,
+		method: 'POST'
+	};
+
+	var req = http.request(options, function(res) {
+		res.setEncoding('utf8');
+		res.on('data', function(replyData) {
+			logger.info('replyData: ' + replyData);
+		});
+		res.on('end', function() {
+			logger.info('end');
+		});
+	});
+
+	req.on('error', function(e) {
+		logger.warn('problem with request on server: ' + e.message);
+	});
+
+	// write data to request body
+	req.write(sendData);
+	req.end();
+}
+
+// Отправка статуса, чтобы знать когда документ начал редактироваться, а когда закончился
+function sendStatusDocument (docId, bChangeBase) {
+	var callback = objServiceInfo[docId];
+	if (null == callback)
+		return;
+
+	var status = c_oAscServerStatus.Editing;
+	var participants = getParticipantsId(docId);
+	var docChanges;
+	if (0 === participants.length && !((docChanges = objchanges[docId]) && 0 < docChanges.length))
+		status = c_oAscServerStatus.Closed;
+
+	if (bChangeBase) {
+		if (c_oAscServerStatus.Editing === status) {
+			// Добавить в базу
+			if (mysqlBase)
+				mysqlBase.insertCallback(docId, callback.href);
+		} else if (c_oAscServerStatus.Closed === status) {
+			// Удалить из базы
+			if (mysqlBase)
+				mysqlBase.deleteCallback(docId);
+			delete objServiceInfo[docId];
+		}
+	}
+
+	var sendData = JSON.stringify({'key': docId, 'status': status, 'url': '', 'users': participants});
+	sendServerRequest(callback.hostname, callback.port, callback.path, sendData);
+}
+
 exports.install = function (server, callbackFunction) {
     'use strict';
     var sockjs_opts = {sockjs_url:"http://cdn.sockjs.org/sockjs-0.3.min.js"},
         sockjs_echo = sockjs.createServer(sockjs_opts),
-        connections = [],
 		indexuser = {},
         locks = {},
 		arrsavelock = {},
 		saveTimers = {},// Таймеры сохранения, после выхода всех пользователей
         dataHandler,
-        urlParse = new RegExp("^/doc/([0-9-.a-zA-Z_=]*)/c.+", 'i'),
-		defaultServerPort = 80;
+        urlParse = new RegExp("^/doc/([0-9-.a-zA-Z_=]*)/c.+", 'i');
 
     sockjs_echo.on('connection', function (conn) {
 		if (null == conn) {
@@ -281,9 +356,10 @@ exports.install = function (server, callbackFunction) {
 						}, c_oAscSaveTimeOutDelay);
 					} else {
 						// Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
-						sendStatusDocument(conn.serverHost, conn.serverPort, conn.serverPath, conn.docId, 0/*false*/);
+						sendStatusDocument(conn.docId, true);
 					}
-				}
+				} else
+					sendStatusDocument(conn.docId, false);
 				
                 //Давайдосвиданья!
                 //Release locks
@@ -342,40 +418,10 @@ exports.install = function (server, callbackFunction) {
         });
     }
 
-    function getParticipants(docId, exludeuserId) {
-        return _.filter(connections, function (el) {
-            return el.connection.docId === docId && el.connection.userId !== exludeuserId;
-        });
-    }
-
-	function sendServerRequest (serverHost, serverPort, serverPath, sendData) {
-		if (!serverHost || !serverPath)
-			return;
-		// Пошлем пока только информацию о том, что нужно сбросить кеш
-		var options = {
-			host: serverHost,
-			port: serverPort ? serverPort : defaultServerPort,
-			path: serverPath,
-			method: 'POST'
-		};
-
-		var req = http.request(options, function(res) {
-			res.setEncoding('utf8');
-			res.on('data', function(replyData) {
-				logger.info('replyData: ' + replyData);
-			});
-			res.on('end', function() {
-				logger.info('end');
-			});
+	function getParticipants(docId, excludeUserId) {
+		return _.filter(connections, function (el) {
+			return el.connection.docId === docId && el.connection.userId !== excludeUserId;
 		});
-
-		req.on('error', function(e) {
-			logger.warn('problem with request on server: ' + e.message);
-		});
-
-		// write data to request body
-		req.write(sendData);
-		req.end();
 	}
 	
 	function sendChangesToServer(serverHost, serverPort, serverPath, docId, documentFormatSave) {
@@ -383,12 +429,6 @@ exports.install = function (server, callbackFunction) {
 			'outputformat': documentFormatSave,
 			'data': c_oAscSaveTimeOutDelay
 		});
-		sendServerRequest(serverHost, serverPort, serverPath, sendData);
-	}
-
-	// Отправка статуса, чтобы знать когда документ начал редактироваться, а когда закончился
-	function sendStatusDocument (serverHost, serverPort, serverPath, docId, status) {
-		var sendData = JSON.stringify({'id': docId, 'c': 'editstatus', 'status': status});
 		sendServerRequest(serverHost, serverPort, serverPath, sendData);
 	}
 
@@ -588,10 +628,7 @@ exports.install = function (server, callbackFunction) {
 				if (mysqlBase)
 					mysqlBase.insertUser(conn.docId, conn.userIdOriginal, conn.userId);
 
-				if (1 === participants.length) {
-					// Отправляем, что мы начали редактировать, когда зашел первый пользователь (на сервере нужно обновить статус)
-					sendStatusDocument(conn.serverHost, conn.serverPort, conn.serverPath, conn.docId, 1/*true*/);
-				}
+				sendStatusDocument(conn.docId, false);
 				
                 sendData(conn,
                     {
@@ -1009,4 +1046,24 @@ exports.install = function (server, callbackFunction) {
 // Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
 exports.removechanges = function (id) {
 	removeSaveChanges(id, /*isDeleteMessages*/true);
+};
+// Команда с сервера (в частности teamlab)
+exports.commandFromServer = function (query) {
+	// Ключ id-документа
+	var docId = query.key;
+	if (null == docId)
+		return;
+
+	objServiceInfo[docId] = url.parse(query.callback);
+	switch(query.c) {
+		case "info":
+			// Подписка на эвенты:
+			// - если пользователей нет и изменений нет, то отсылаем стату "закрыто" и в базу не добавляем
+			// - если пользователей нет, а изменения есть, то отсылаем статус "редактируем" без пользователей, но добавляем в базу
+			// - если есть пользователи, то просто добавляем в базу
+			sendStatusDocument(docId, true);
+			break;
+		case "drop":
+			break;
+	}
 };

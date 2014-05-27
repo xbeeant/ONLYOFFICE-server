@@ -41,4 +41,9 @@ docsCoServer.install(server, function() {
 		docsCoServer.removechanges(req.query.id);
 		res.send('Remove success');
 	});
+
+	app.get('/CommandService.ashx', function(req, res) {
+		docsCoServer.removechanges(req.query);
+		res.send('Command success');
+	});
 });
