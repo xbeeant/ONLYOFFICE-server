@@ -426,6 +426,7 @@ exports.install = function (server, callbackFunction) {
 	
 	function sendChangesToServer(serverHost, serverPort, serverPath, docId, documentFormatSave) {
 		var sendData = JSON.stringify({'id': docId, 'c': 'sfc',
+			'url': '/RemoveChanges.ashx?id=' + docId,
 			'outputformat': documentFormatSave,
 			'data': c_oAscSaveTimeOutDelay
 		});
