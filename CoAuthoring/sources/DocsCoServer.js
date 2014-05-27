@@ -1047,6 +1047,11 @@ exports.install = function (server, callbackFunction) {
 // Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
 exports.removechanges = function (id) {
 	removeSaveChanges(id, /*isDeleteMessages*/true);
+
+	// Нужно удалить из базы callback-ов
+	if (mysqlBase)
+		mysqlBase.deleteCallback(id);
+	delete objServiceInfo[id];
 };
 // Команда с сервера (в частности teamlab)
 exports.commandFromServer = function (query) {
