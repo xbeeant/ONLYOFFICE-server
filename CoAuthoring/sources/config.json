@@ -15,7 +15,6 @@
 		"pass"				: "canvas_usr",
 		"charset"			: "utf8",
 		"tableChangesName"	: "docschanges",
-		"tableUsersName"	: "docsusers",
 		"tableCallbacks"	: "doccallbacks"
 	}
 }
