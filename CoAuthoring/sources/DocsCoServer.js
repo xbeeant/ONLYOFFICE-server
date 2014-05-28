@@ -218,11 +218,11 @@ function removeSaveChanges(id, deleteMessages) {
 }
 
 function getOriginalParticipantsId(docId) {
-	var result = [], tmpObject = {}, element;
+	var result = [], tmpObject = {}, elConnection;
 	for (var i = 0, length = connections.length; i < length; ++i) {
-		element = connections[i];
-		if (element.connection.docId === docId)
-			tmpObject[element.connection.userIdOriginal] = 1;
+		elConnection = connections[i].connection;
+		if (elConnection.docId === docId && false === elConnection.isViewer)
+			tmpObject[elConnection.userIdOriginal] = 1;
 	}
 	for(var name in tmpObject) if (tmpObject.hasOwnProperty(name))
 		result.push(name);
@@ -341,10 +341,6 @@ exports.install = function (server, callbackFunction) {
 						clearTimeout(arrsavelock[conn.docId].saveLockTimeOutId);
 					arrsavelock[conn.docId] = undefined;
 				}
-
-				// Удаляем данного пользователя из базы данных
-				if (mysqlBase)
-					mysqlBase.deleteUser(conn.docId, conn.userId);
 
 				// Если у нас нет пользователей, то удаляем все сообщения
 				if (0 >= participants.length) {
@@ -620,10 +616,7 @@ exports.install = function (server, callbackFunction) {
 
                     //Kill previous connections
                     connections = _.reject(connections, function (el) {
-                        var res = el.connection.sessionId === data.sessionId;//Delete this connection
-						if (res && mysqlBase)
-							mysqlBase.deleteUser(el.connection.docId, el.connection.userId);
-						return res;
+                        return el.connection.sessionId === data.sessionId;//Delete this connection
                     });
                     conn.sessionId = data.sessionId;//restore old
 
@@ -635,10 +628,6 @@ exports.install = function (server, callbackFunction) {
 				var participantsMap = _.map(participants, function (conn) {
 					return {id: conn.connection.userId,
 						username: conn.connection.userName, color: conn.connection.userColor};});
-
-				// Добавляем данного пользователя в базу данных
-				if (mysqlBase)
-					mysqlBase.insertUser(conn.docId, conn.userIdOriginal, conn.userId);
 
 				sendStatusDocument(conn.docId, false);
 				
@@ -1007,12 +996,6 @@ exports.install = function (server, callbackFunction) {
 		callbackFunction ();
 	};
 
-	var callbackClearAllUsersMySql = function () {
-		if (mysqlBase)
-			mysqlBase.loadChanges(callbackLoadChangesMySql);
-		else
-			callbackLoadMessages(null);
-	};
 	var callbackLoadChangesMySql = function (arrayElements){
 		var createTimer = function (id, objProp) {
 			return setTimeout(function () {
@@ -1051,7 +1034,7 @@ exports.install = function (server, callbackFunction) {
 	if (dataBase)
 		dataBase.load("messages", callbackLoadMessages);
 	else if (mysqlBase)
-		mysqlBase.clearAllUsers(callbackClearAllUsersMySql);
+		mysqlBase.loadChanges(callbackLoadChangesMySql);
 	else
 		callbackLoadMessages(null);
 };
