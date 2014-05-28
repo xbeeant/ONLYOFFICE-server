@@ -342,29 +342,32 @@ exports.install = function (server, callbackFunction) {
 					arrsavelock[conn.docId] = undefined;
 				}
 
-				// Если у нас нет пользователей, то удаляем все сообщения
-				if (0 >= participants.length) {
-					// Очищаем предыдущий таймер
-					if (null != arrsavelock[conn.docId] && null != arrsavelock[conn.docId].saveLockTimeOutId)
-						clearTimeout(arrsavelock[conn.docId].saveLockTimeOutId);
-					// На всякий случай снимаем lock
-					arrsavelock[conn.docId] = undefined;
+				// Только если редактируем
+				if (false === connection.isViewer) {
+					// Если у нас нет пользователей, то удаляем все сообщения
+					if (!hasEditors(conn.docId)) {
+						// Очищаем предыдущий таймер
+						if (null != arrsavelock[conn.docId] && null != arrsavelock[conn.docId].saveLockTimeOutId)
+							clearTimeout(arrsavelock[conn.docId].saveLockTimeOutId);
+						// На всякий случай снимаем lock
+						arrsavelock[conn.docId] = undefined;
 
-					// Send changes to save server
-					curChanges = objchanges[conn.docId];
-					if (curChanges && 0 < curChanges.length) {
-						for (var i = 0; i < curChanges.length; ++i) {
-							delete curChanges[i].skipChange;
+						// Send changes to save server
+						curChanges = objchanges[conn.docId];
+						if (curChanges && 0 < curChanges.length) {
+							for (var i = 0; i < curChanges.length; ++i) {
+								delete curChanges[i].skipChange;
+							}
+							saveTimers[conn.docId] = setTimeout(function () {
+								sendChangesToServer(conn.server, conn.docId, conn.documentFormatSave);
+							}, c_oAscSaveTimeOutDelay);
+						} else {
+							// Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
+							sendStatusDocument(conn.docId, true);
 						}
-						saveTimers[conn.docId] = setTimeout(function () {
-							sendChangesToServer(conn.server, conn.docId, conn.documentFormatSave);
-						}, c_oAscSaveTimeOutDelay);
-					} else {
-						// Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
-						sendStatusDocument(conn.docId, true);
-					}
-				} else
-					sendStatusDocument(conn.docId, false);
+					} else
+						sendStatusDocument(conn.docId, false);
+				}
 				
                 //Давайдосвиданья!
                 //Release locks
@@ -427,6 +430,17 @@ exports.install = function (server, callbackFunction) {
 		return _.filter(connections, function (el) {
 			return el.connection.docId === docId && el.connection.userId !== excludeUserId;
 		});
+	}
+	function hasEditors(docId) {
+		var result = false, elConnection;
+		for (var i = 0, length = connections.length; i < length; ++i) {
+			elConnection = connections[i].connection;
+			if (elConnection.docId === docId && false === elConnection.isViewer) {
+				result = true;
+				break;
+			}
+		}
+		return result;
 	}
 	
 	function sendChangesToServer(server, docId, documentFormatSave) {
@@ -589,7 +603,7 @@ exports.install = function (server, callbackFunction) {
                 }
 
 				// Очищаем таймер сохранения
-				if (saveTimers[conn.docId])
+				if (false === data.isViewer && saveTimers[conn.docId])
 					clearTimeout(saveTimers[conn.docId]);
 
 				// Увеличиваем индекс обращения к документу
@@ -629,7 +643,9 @@ exports.install = function (server, callbackFunction) {
 					return {id: conn.connection.userId,
 						username: conn.connection.userName, color: conn.connection.userColor};});
 
-				sendStatusDocument(conn.docId, false);
+				// Отправляем только для тех, кто редактирует
+				if (false === conn.isViewer)
+					sendStatusDocument(conn.docId, false);
 				
                 sendData(conn,
                     {
