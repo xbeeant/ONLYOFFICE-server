@@ -361,7 +361,7 @@ exports.install = function (server, callbackFunction) {
 							delete curChanges[i].skipChange;
 						}
 						saveTimers[conn.docId] = setTimeout(function () {
-							sendChangesToServer(conn.serverHost, conn.serverPort, conn.serverPath,  conn.docId, conn.documentFormatSave);
+							sendChangesToServer(conn.server, conn.docId, conn.documentFormatSave);
 						}, c_oAscSaveTimeOutDelay);
 					} else {
 						// Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
@@ -433,13 +433,13 @@ exports.install = function (server, callbackFunction) {
 		});
 	}
 	
-	function sendChangesToServer(serverHost, serverPort, serverPath, docId, documentFormatSave) {
+	function sendChangesToServer(server, docId, documentFormatSave) {
 		var sendData = JSON.stringify({'id': docId, 'c': 'sfc',
 			'url': '/RemoveChanges.ashx?id=' + docId,
 			'outputformat': documentFormatSave,
 			'data': c_oAscSaveTimeOutDelay
 		});
-		sendServerRequest(serverHost, serverPort, serverPath, sendData);
+		sendServerRequest(server.host, server.port, server.path, sendData);
 	}
 
 	// Пересчет только для чужих Lock при сохранении на клиенте, который добавлял/удалял строки или столбцы
@@ -608,9 +608,11 @@ exports.install = function (server, callbackFunction) {
 				conn.userIdOriginal = user.id;
 				conn.userName = user.name;
 				conn.userColor = user.color;
-				conn.serverHost = data.serverHost;
-				conn.serverPort = data.serverPort ? data.serverPort : '';
-				conn.serverPath = data.serverPath;
+				conn.isViewer = data.isViewer;
+
+				conn.server = data.server;
+				if (!conn.server.port) conn.server.port = '';
+
 				conn.documentFormatSave = data.documentFormatSave;
                 //Set the unique ID
                 if (data.sessionId !== null && _.isString(data.sessionId) && data.sessionId !== "") {
@@ -871,8 +873,8 @@ exports.install = function (server, callbackFunction) {
 			if (dataBase)
 				dataBase.insert("changes", objchange);
 			if (mysqlBase)
-				mysqlBase.insertChanges(conn.docId, conn.userId, conn.userIdOriginal, data.changes, conn.serverHost,
-					conn.serverPort, conn.serverPath, conn.documentFormatSave);
+				mysqlBase.insertChanges(conn.docId, conn.userId, conn.userIdOriginal, data.changes, conn.server,
+					conn.documentFormatSave);
 			
 			if (!data.endSaveChanges) {
 				sendData(conn, {type:"savePartChanges"});
@@ -1014,8 +1016,7 @@ exports.install = function (server, callbackFunction) {
 	var callbackLoadChangesMySql = function (arrayElements){
 		var createTimer = function (id, objProp) {
 			return setTimeout(function () {
-				sendChangesToServer(objProp.serverHost, objProp.serverPort, objProp.serverPath,
-					id, objProp.documentFormatSave);
+				sendChangesToServer(objProp.server,	id, objProp.documentFormatSave);
 			}, c_oAscSaveTimeOutDelay);
 		};
 		if (null != arrayElements) {
@@ -1029,8 +1030,9 @@ exports.install = function (server, callbackFunction) {
 						useridoriginal: element.useridoriginal}; // Пишем пока без времени (это не особо нужно)
 					if (!objchanges.hasOwnProperty(docId)) {
 						objchanges[docId] = [objchange];
-						objProps[docId] = {serverHost: element.serverHost, serverPort: element.serverPort,
-							serverPath: element.serverPath, documentFormatSave: element.documentFormatSave};
+						objProps[docId] = {server: {
+							host: element.serverHost, port: element.serverPort, path: element.serverPath
+						}, documentFormatSave: element.documentFormatSave};
 					} else
 						objchanges[docId].push(objchange);
 				} catch (e) {}
