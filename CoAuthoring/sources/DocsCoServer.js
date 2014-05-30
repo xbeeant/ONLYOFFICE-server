@@ -217,6 +217,10 @@ function removeSaveChanges(id, deleteMessages) {
 	delete objchanges[id];
 }
 
+function sendData(conn, data) {
+	conn.write(JSON.stringify(data));
+}
+
 function getOriginalParticipantsId(docId) {
 	var result = [], tmpObject = {}, elConnection;
 	for (var i = 0, length = connections.length; i < length; ++i) {
@@ -285,6 +289,20 @@ function sendStatusDocument (docId, bChangeBase) {
 
 	var sendData = JSON.stringify({'key': docId, 'status': status, 'url': '', 'users': participants});
 	sendServerRequest(callback.hostname, callback.port, callback.path, sendData);
+}
+
+function dropUserFromDocument (docId, userId, description) {
+	var elConnection;
+	for (var i = 0, length = connections.length; i < length; ++i) {
+		elConnection = connections[i].connection;
+		if (elConnection.docId === docId && userId === elConnection.userIdOriginal) {
+			sendData(elConnection,
+				{
+					type			: "drop",
+					description		: description
+				});//Or 0 if fails
+		}
+	}
 }
 
 exports.install = function (server, callbackFunction) {
@@ -406,10 +424,6 @@ exports.install = function (server, callbackFunction) {
             }
         });
     });
-
-    function sendData(conn, data) {
-        conn.write(JSON.stringify(data));
-    }
 
     function sendParticipantsState(participants, stateConnect, _userId, _userName, _userColor) {
         _.each(participants, function (participant) {
@@ -1084,6 +1098,7 @@ exports.commandFromServer = function (query) {
 			sendStatusDocument(docId, true);
 			break;
 		case "drop":
+			dropUserFromDocument(docId, query.userid, query.description);
 			break;
 		default:
 			result = c_oAscServerCommandErrors.CommandError;
