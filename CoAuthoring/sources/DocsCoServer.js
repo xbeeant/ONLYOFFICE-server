@@ -1084,10 +1084,6 @@ exports.commandFromServer = function (query) {
 	if (null == docId)
 		return c_oAscServerCommandErrors.DocumentIdError;
 
-	try {
-		objServiceInfo[docId] = url.parse(decodeURIComponent(query.callback));
-	} catch (e) {return c_oAscServerCommandErrors.ParseError;}
-
 	var result = c_oAscServerCommandErrors.NoError;
 	switch(query.c) {
 		case "info":
@@ -1095,6 +1091,11 @@ exports.commandFromServer = function (query) {
 			// - если пользователей нет и изменений нет, то отсылаем стату "закрыто" и в базу не добавляем
 			// - если пользователей нет, а изменения есть, то отсылаем статус "редактируем" без пользователей, но добавляем в базу
 			// - если есть пользователи, то просто добавляем в базу
+			if (!objServiceInfo[docId]) {
+				try {
+					objServiceInfo[docId] = url.parse(decodeURIComponent(query.callback));
+				} catch (e) {return c_oAscServerCommandErrors.ParseError;}
+			}
 			sendStatusDocument(docId, true);
 			break;
 		case "drop":
