@@ -2,6 +2,7 @@
     _ = require('underscore'),
 	dataBase  = null,
 	mysqlBase = null,
+	https = require('https'),
 	http = require('http'),
 	url = require('url'),
 	logger = require('./../../Common/sources/logger'),
@@ -11,7 +12,8 @@ if (config["mongodb"])
 if (config["mysql"])
 	mysqlBase = require('./mySqlBase');
 
-var objchanges = {}, messages = {}, connections = [], defaultServerPort = 80, objServiceInfo = {};
+var defaultServerPort = 80, httpsPort = 443;
+var objchanges = {}, messages = {}, connections = [], objServiceInfo = {};
 
 var c_oAscServerStatus = {
 	NotFound	: 0,
@@ -243,7 +245,9 @@ function sendServerRequest (serverHost, serverPort, serverPath, sendData) {
 		method: 'POST'
 	};
 
-	var req = http.request(options, function(res) {
+	var requestFunction = httpsPort === serverPort ? https.request : http.request;
+
+	var req = requestFunction(options, function(res) {
 		res.setEncoding('utf8');
 		res.on('data', function(replyData) {
 			logger.info('replyData: ' + replyData);
@@ -1096,7 +1100,7 @@ exports.commandFromServer = function (query) {
 					var parseObject = url.parse(decodeURIComponent(query.callback));
 					var port = parseObject.port;
 					if (!port)
-						port = 'https:' === parseObject.protocol ? 443 : defaultServerPort;
+						port = 'https:' === parseObject.protocol ? httpsPort : defaultServerPort;
 					objServiceInfo[docId] = {
 						'href'		: parseObject.href,
 						'hostname'	: parseObject.hostname,
