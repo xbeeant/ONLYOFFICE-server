@@ -1093,7 +1093,16 @@ exports.commandFromServer = function (query) {
 			// - если есть пользователи, то просто добавляем в базу
 			if (!objServiceInfo[docId]) {
 				try {
-					objServiceInfo[docId] = url.parse(decodeURIComponent(query.callback));
+					var parseObject = url.parse(decodeURIComponent(query.callback));
+					var port = parseObject.port;
+					if (!port)
+						port = 'https:' === parseObject.protocol ? 443 : defaultServerPort;
+					objServiceInfo[docId] = {
+						'href'		: parseObject.href,
+						'hostname'	: parseObject.hostname,
+						'port'		: port,
+						'path'		: parseObject.path
+					};
 				} catch (e) {return c_oAscServerCommandErrors.ParseError;}
 			}
 			sendStatusDocument(docId, true);
