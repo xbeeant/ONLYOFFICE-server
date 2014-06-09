@@ -13,7 +13,7 @@ if (config["mysql"])
 	mysqlBase = require('./mySqlBase');
 
 var defaultServerPort = 80, httpsPort = 443;
-var objchanges = {}, messages = {}, connections = [], objServiceInfo = {};
+var objChanges = {}, objChangesTmp = {}, messages = {}, connections = [], objServiceInfo = {};
 
 var c_oAscServerStatus = {
 	NotFound	: 0,
@@ -35,6 +35,18 @@ var c_oAscSaveTimeOutDelay = 5000;	// Время ожидания для сох�
 var c_oAscRecalcIndexTypes = {
 	RecalcIndexAdd:		1,
 	RecalcIndexRemove:	2
+};
+
+/**
+ * lock types
+ * @const
+ */
+var c_oAscLockTypes = {
+	kLockTypeNone	: 1, // никто не залочил данный объект
+	kLockTypeMine	: 2, // данный объект залочен текущим пользователем
+	kLockTypeOther	: 3, // данный объект залочен другим(не текущим) пользователем
+	kLockTypeOther2	: 4, // данный объект залочен другим(не текущим) пользователем (обновления уже пришли)
+	kLockTypeOther3	: 5  // данный объект был залочен (обновления пришли) и снова стал залочен
 };
 
 var c_oAscLockTypeElem = {
@@ -216,7 +228,7 @@ function removeSaveChanges(id, deleteMessages) {
 	if (dataBase)
 		dataBase.remove ("changes", {docid:id});
 	// remove changes from memory
-	delete objchanges[id];
+	delete objChanges[id];
 }
 
 function sendData(conn, data) {
@@ -275,7 +287,7 @@ function sendStatusDocument (docId, bChangeBase) {
 	var status = c_oAscServerStatus.Editing;
 	var participants = getOriginalParticipantsId(docId);
 	var docChanges;
-	if (0 === participants.length && !((docChanges = objchanges[docId]) && 0 < docChanges.length))
+	if (0 === participants.length && !((docChanges = objChanges[docId]) && 0 < docChanges.length))
 		status = c_oAscServerStatus.Closed;
 
 	if (bChangeBase) {
@@ -313,11 +325,10 @@ exports.install = function (server, callbackFunction) {
     'use strict';
     var sockjs_opts = {sockjs_url:"http://cdn.sockjs.org/sockjs-0.3.min.js"},
         sockjs_echo = sockjs.createServer(sockjs_opts),
-		indexuser = {},
+		indexUser = {},
         locks = {},
-		arrsavelock = {},
+		arrSaveLock = {},
 		saveTimers = {},// Таймеры сохранения, после выхода всех пользователей
-        dataHandler,
         urlParse = new RegExp("^/doc/([0-9-.a-zA-Z_=]*)/c.+", 'i');
 
     sockjs_echo.on('connection', function (conn) {
@@ -328,7 +339,17 @@ exports.install = function (server, callbackFunction) {
         conn.on('data', function (message) {
             try {
                 var data = JSON.parse(message);
-                dataHandler[data.type](conn, data);
+				switch (data.type) {
+					case 'auth'					: auth(conn, data); break;
+					case 'message'				: onMessage(conn, data); break;
+					case 'getlock'				: getLock(conn, data); break;
+					case 'getlockrange'			: getLockRange(conn, data); break;
+					case 'getlockpresentation'	: getLockPresentation(conn, data); break;
+					case 'savechanges'			: saveChanges(conn, data); break;
+					case 'issavelock'			: isSaveLock(conn, data); break;
+					case 'unsavelock'			: unSaveLock(conn, data); break;
+					case 'getmessages'			: getMessages(conn, data); break;
+				}
             } catch (e) {
                 logger.error("error receiving response:" + e);
             }
@@ -357,11 +378,11 @@ exports.install = function (server, callbackFunction) {
 
             if (!reconected) {
 				// Для данного пользователя снимаем лок с сохранения
-				if (undefined != arrsavelock[conn.docId] && connection.userId == arrsavelock[conn.docId].user) {
+				if (undefined != arrSaveLock[conn.docId] && connection.userId == arrSaveLock[conn.docId].user) {
 					// Очищаем предыдущий таймер
-					if (null != arrsavelock[conn.docId].saveLockTimeOutId)
-						clearTimeout(arrsavelock[conn.docId].saveLockTimeOutId);
-					arrsavelock[conn.docId] = undefined;
+					if (null != arrSaveLock[conn.docId].saveLockTimeOutId)
+						clearTimeout(arrSaveLock[conn.docId].saveLockTimeOutId);
+					arrSaveLock[conn.docId] = undefined;
 				}
 
 				// Только если редактируем
@@ -369,13 +390,13 @@ exports.install = function (server, callbackFunction) {
 					// Если у нас нет пользователей, то удаляем все сообщения
 					if (!hasEditors(conn.docId)) {
 						// Очищаем предыдущий таймер
-						if (null != arrsavelock[conn.docId] && null != arrsavelock[conn.docId].saveLockTimeOutId)
-							clearTimeout(arrsavelock[conn.docId].saveLockTimeOutId);
+						if (null != arrSaveLock[conn.docId] && null != arrSaveLock[conn.docId].saveLockTimeOutId)
+							clearTimeout(arrSaveLock[conn.docId].saveLockTimeOutId);
 						// На всякий случай снимаем lock
-						arrsavelock[conn.docId] = undefined;
+						arrSaveLock[conn.docId] = undefined;
 
 						// Send changes to save server
-						curChanges = objchanges[conn.docId];
+						curChanges = objChanges[conn.docId];
 						if (curChanges && 0 < curChanges.length) {
 							for (var i = 0; i < curChanges.length; ++i) {
 								delete curChanges[i].skipChange;
@@ -406,7 +427,7 @@ exports.install = function (server, callbackFunction) {
 							}
 						}
 					} else {
-						for (var keyLockElem in docLock) {
+						for (var keyLockElem in docLock) if (docLock.hasOwnProperty(keyLockElem)) {
 							if (docLock[keyLockElem].sessionId === connection.sessionId) {
 								userLocks.push(docLock[keyLockElem]);
 								delete docLock[keyLockElem];
@@ -504,7 +525,6 @@ exports.install = function (server, callbackFunction) {
 			}
 		}
 	}
-
 	function _addRecalcIndex (oRecalcIndex) {
 		var nIndex = 0;
 		var nRecalcType = c_oAscRecalcIndexTypes.RecalcIndexAdd;
@@ -567,7 +587,6 @@ exports.install = function (server, callbackFunction) {
 		}
 		return resultLock;
 	}
-	
 	function isInterSection(range1, range2) {
 		if (range2.c1 > range1.c2 || range2.c2 < range1.c1 || range2.r1 > range1.r2 || range2.r2 < range1.r1)
 			return false;
@@ -580,7 +599,6 @@ exports.install = function (server, callbackFunction) {
 		if (obj === null) {return "null";}
 		return Object.prototype.toString.call(obj).slice(8, -1).toLowerCase();
 	}
-
 	// Сравнение для презентаций
 	function comparePresentationBlock(newBlock, oldBlock) {
 		var resultLock = false;
@@ -606,399 +624,414 @@ exports.install = function (server, callbackFunction) {
 		return resultLock;
 	}
 
+	function auth(conn, data) {
+		//TODO: Do authorization etc. check md5 or query db
+		if (data.token && data.user) {
+			var user = data.user;
+			//Parse docId
+			var parsed = urlParse.exec(conn.url);
+			if (parsed.length > 1) {
+				conn.docId = parsed[1];
+			} else {
+				//TODO: Send some shit back
+			}
 
-    dataHandler = (function () {
-        function auth(conn, data) {
-            //TODO: Do authorization etc. check md5 or query db
-            if (data.token && data.user) {
-				var user = data.user;
-                //Parse docId
-                var parsed = urlParse.exec(conn.url);
-                if (parsed.length > 1) {
-                    conn.docId = parsed[1];
-                } else {
-                    //TODO: Send some shit back
-                }
+			// Очищаем таймер сохранения
+			if (false === data.isViewer && saveTimers[conn.docId])
+				clearTimeout(saveTimers[conn.docId]);
 
-				// Очищаем таймер сохранения
-				if (false === data.isViewer && saveTimers[conn.docId])
-					clearTimeout(saveTimers[conn.docId]);
+			// Увеличиваем индекс обращения к документу
+			if (!indexUser.hasOwnProperty(conn.docId)) {
+				indexUser[conn.docId] = 1;
+			} else {
+				indexUser[conn.docId] += 1;
+			}
 
-				// Увеличиваем индекс обращения к документу
-				if (!indexuser.hasOwnProperty(conn.docId)) {
-					indexuser[conn.docId] = 1;
-				} else {
-					indexuser[conn.docId] += 1;
-				}
+			conn.sessionState = 1;
+			conn.userId = user.id + indexUser[conn.docId];
+			conn.userIdOriginal = user.id;
+			conn.userName = user.name;
+			conn.userColor = user.color;
+			conn.isViewer = data.isViewer;
 
-                conn.sessionState = 1;
-                conn.userId = user.id + indexuser[conn.docId];
-				conn.userIdOriginal = user.id;
-				conn.userName = user.name;
-				conn.userColor = user.color;
-				conn.isViewer = data.isViewer;
+			conn.server = data.server;
+			if (!conn.server.port) conn.server.port = '';
 
-				conn.server = data.server;
-				if (!conn.server.port) conn.server.port = '';
+			conn.documentFormatSave = data.documentFormatSave;
+			//Set the unique ID
+			if (data.sessionId !== null && _.isString(data.sessionId) && data.sessionId !== "") {
+				logger.info("restored old session id=" + data.sessionId);
 
-				conn.documentFormatSave = data.documentFormatSave;
-                //Set the unique ID
-                if (data.sessionId !== null && _.isString(data.sessionId) && data.sessionId !== "") {
-                    logger.info("restored old session id=" + data.sessionId);
+				//Kill previous connections
+				connections = _.reject(connections, function (el) {
+					return el.connection.sessionId === data.sessionId;//Delete this connection
+				});
+				conn.sessionId = data.sessionId;//restore old
 
-                    //Kill previous connections
-                    connections = _.reject(connections, function (el) {
-                        return el.connection.sessionId === data.sessionId;//Delete this connection
-                    });
-                    conn.sessionId = data.sessionId;//restore old
+			} else {
+				conn.sessionId = conn.id;
+			}
+			connections.push({connection:conn});
+			var participants = getParticipants(conn.docId);
+			var participantsMap = _.map(participants, function (conn) {
+				return {id: conn.connection.userId,
+					username: conn.connection.userName, color: conn.connection.userColor};});
 
-                } else {
-                    conn.sessionId = conn.id;
-                }
-                connections.push({connection:conn});
-                var participants = getParticipants(conn.docId);
-				var participantsMap = _.map(participants, function (conn) {
-					return {id: conn.connection.userId,
-						username: conn.connection.userName, color: conn.connection.userColor};});
+			// Отправляем только для тех, кто редактирует
+			if (false === conn.isViewer)
+				sendStatusDocument(conn.docId, false);
 
-				// Отправляем только для тех, кто редактирует
-				if (false === conn.isViewer)
-					sendStatusDocument(conn.docId, false);
-				
-                sendData(conn,
-                    {
-                        type			: "auth",
-                        result			: 1,
-                        sessionId		: conn.sessionId,
-                        participants	: participantsMap,
-                        messages		: messages[conn.docid],
-                        locks			: locks[conn.docId],
-                        changes			: objchanges[conn.docId],
-						indexuser		: indexuser[conn.docId]
-                    });//Or 0 if fails
-                sendParticipantsState(participants, true, conn.userId, conn.userName, conn.userColor);
-            }
-        }
+			sendData(conn,
+				{
+					type			: "auth",
+					result			: 1,
+					sessionId		: conn.sessionId,
+					participants	: participantsMap,
+					messages		: messages[conn.docid],
+					locks			: locks[conn.docId],
+					changes			: objChanges[conn.docId],
+					indexUser		: indexUser[conn.docId]
+				});//Or 0 if fails
+			sendParticipantsState(participants, true, conn.userId, conn.userName, conn.userColor);
+		}
+	}
+	function onMessage(conn, data) {
+		var participants = getParticipants(conn.docId),
+			msg = {docid:conn.docId, message:data.message, time:Date.now(), user:conn.userId, username:conn.userName};
 
-        function message(conn, data) {
-            var participants = getParticipants(conn.docId),
-                msg = {docid:conn.docId, message:data.message, time:Date.now(), user:conn.userId, username:conn.userName};
+		if (!messages.hasOwnProperty(conn.docId)) {
+			messages[conn.docId] = [msg];
+		} else {
+			messages[conn.docId].push(msg);
+		}
 
-            if (!messages.hasOwnProperty(conn.docId)) {
-                messages[conn.docId] = [msg];
-            } else {
-                messages[conn.docId].push(msg);
-            }
-			
-			// insert in dataBase
-			logger.info("database insert message: " + JSON.stringify(msg));
-			if (dataBase)
-				dataBase.insert ("messages", msg);
+		// insert in dataBase
+		logger.info("database insert message: " + JSON.stringify(msg));
+		if (dataBase)
+			dataBase.insert ("messages", msg);
 
-            _.each(participants, function (participant) {
-                sendData(participant.connection, {type:"message", messages:[msg]});
-            });
-        }
+		_.each(participants, function (participant) {
+			sendData(participant.connection, {type:"message", messages:[msg]});
+		});
+	}
+	function getLock(conn, data) {
+		var participants = getParticipants(conn.docId), documentLocks;
+		if (!locks.hasOwnProperty(conn.docId)) {
+			locks[conn.docId] = {};
+		}
+		documentLocks = locks[conn.docId];
 
-        function getlock(conn, data) {
-            var participants = getParticipants(conn.docId), documentLocks;
-            if (!locks.hasOwnProperty(conn.docId)) {
-                locks[conn.docId] = {};
-            }
-            documentLocks = locks[conn.docId];
-			
-			// Data is array now
-			var arrayBlocks = data.block;
-			var isLock = false;
-			var i = 0;
-			var lengthArray = (arrayBlocks) ? arrayBlocks.length : 0;
-			for (; i < lengthArray; ++i) {
-				logger.info("getLock id: " + arrayBlocks[i]);
-				if (documentLocks.hasOwnProperty(arrayBlocks[i]) && documentLocks[arrayBlocks[i]] !== null) {
-					isLock = true;
+		// Data is array now
+		var arrayBlocks = data.block;
+		var isLock = false;
+		var i = 0;
+		var lengthArray = (arrayBlocks) ? arrayBlocks.length : 0;
+		for (; i < lengthArray; ++i) {
+			logger.info("getLock id: " + arrayBlocks[i]);
+			if (documentLocks.hasOwnProperty(arrayBlocks[i]) && documentLocks[arrayBlocks[i]] !== null) {
+				isLock = true;
+				break;
+			}
+		}
+		if (0 === lengthArray)
+			isLock = true;
+
+		if (!isLock) {
+			//Ok. take lock
+			for (i = 0; i < lengthArray; ++i) {
+				documentLocks[arrayBlocks[i]] = {time:Date.now(), user:conn.userId, block:arrayBlocks[i], sessionId:conn.sessionId};
+			}
+		}
+
+		_.each(participants, function (participant) {
+			sendData(participant.connection, {type:"getlock", locks:locks[conn.docId]});
+		});
+	}
+	// Для Excel block теперь это объект { sheetId, type, rangeOrObjectId, guid }
+	function getLockRange(conn, data) {
+		var participants = getParticipants(conn.docId), documentLocks, documentLock;
+		if (!locks.hasOwnProperty(conn.docId)) {
+			locks[conn.docId] = [];
+		}
+		documentLocks = locks[conn.docId];
+
+		// Data is array now
+		var arrayBlocks = data.block;
+		var isLock = false;
+		var isExistInArray = false;
+		var i = 0, blockRange = null;
+		var lengthArray = (arrayBlocks) ? arrayBlocks.length : 0;
+		for (; i < lengthArray && false === isLock; ++i) {
+			blockRange = arrayBlocks[i];
+			for (var keyLockInArray in documentLocks) {
+				if (true === isLock)
+					break;
+				if (!documentLocks.hasOwnProperty(keyLockInArray))
+					continue;
+				documentLock = documentLocks[keyLockInArray];
+				// Проверка вхождения объекта в массив (текущий пользователь еще раз прислал lock)
+				if (documentLock.user === conn.userId &&
+					blockRange.sheetId === documentLock.block.sheetId &&
+					blockRange.type === c_oAscLockTypeElem.Object &&
+					documentLock.block.type === c_oAscLockTypeElem.Object &&
+					documentLock.block.rangeOrObjectId === blockRange.rangeOrObjectId) {
+					isExistInArray = true;
 					break;
 				}
-			}
-			if (0 === lengthArray)
-				isLock = true;
-			
-			if (!isLock) {
-				//Ok. take lock
-				for (i = 0; i < lengthArray; ++i) {
-					documentLocks[arrayBlocks[i]] = {time:Date.now(), user:conn.userId, block:arrayBlocks[i], sessionId:conn.sessionId};
-				}
-			}
 
-            _.each(participants, function (participant) {
-                sendData(participant.connection, {type:"getlock", locks:locks[conn.docId]});
-            });
-        }
-		
-		// Для Excel block теперь это объект { sheetId, type, rangeOrObjectId, guid }
-		function getlockrange(conn, data) {
-			var participants = getParticipants(conn.docId), documentLocks, documentLock;
-            if (!locks.hasOwnProperty(conn.docId)) {
-                locks[conn.docId] = [];
-            }
-            documentLocks = locks[conn.docId];
-			
-			// Data is array now
-			var arrayBlocks = data.block;
-			var isLock = false;
-			var isExistInArray = false;
-			var i = 0, blockRange = null;
-			var lengthArray = (arrayBlocks) ? arrayBlocks.length : 0;
-			for (; i < lengthArray && false === isLock; ++i) {
-				blockRange = arrayBlocks[i];
-				for (var keyLockInArray in documentLocks) {
-					if (true === isLock)
-						break;
-					if (!documentLocks.hasOwnProperty(keyLockInArray))
-						continue;
-					documentLock = documentLocks[keyLockInArray];
-					// Проверка вхождения объекта в массив (текущий пользователь еще раз прислал lock)
-					if (documentLock.user === conn.userId &&
-						blockRange.sheetId === documentLock.block.sheetId &&
-						blockRange.type === c_oAscLockTypeElem.Object &&
-						documentLock.block.type === c_oAscLockTypeElem.Object &&
-						documentLock.block.rangeOrObjectId === blockRange.rangeOrObjectId) {
-						isExistInArray = true;
-						break;
-					}
-					
-					if (c_oAscLockTypeElem.Sheet === blockRange.type &&
-						c_oAscLockTypeElem.Sheet === documentLock.block.type) {
-						// Если текущий пользователь прислал lock текущего листа, то не заносим в массив, а если нового, то заносим
-						if (documentLock.user === conn.userId) {
-							if (blockRange.sheetId === documentLock.block.sheetId) {
-								// уже есть в массиве
-								isExistInArray = true;
-								break;
-							} else {
-								// новый лист
-								continue;
-							}
-						} else {
-							// Если кто-то залочил sheet, то больше никто не может лочить sheet-ы (иначе можно удалить все листы)
-							isLock = true;
+				if (c_oAscLockTypeElem.Sheet === blockRange.type &&
+					c_oAscLockTypeElem.Sheet === documentLock.block.type) {
+					// Если текущий пользователь прислал lock текущего листа, то не заносим в массив, а если нового, то заносим
+					if (documentLock.user === conn.userId) {
+						if (blockRange.sheetId === documentLock.block.sheetId) {
+							// уже есть в массиве
+							isExistInArray = true;
 							break;
-						}
-					}
-					
-					if (documentLock.user === conn.userId || !(documentLock.block) ||
-						blockRange.sheetId !== documentLock.block.sheetId)
-						continue;
-					isLock = compareExcelBlock(blockRange, documentLock.block);
-				}
-			}
-			if (0 === lengthArray)
-				isLock = true;
-			
-			if (!isLock && !isExistInArray) {
-				//Ok. take lock
-				for (i = 0; i < lengthArray; ++i) {
-					blockRange = arrayBlocks[i];
-					documentLocks.push({time:Date.now(), user:conn.userId, block:blockRange, sessionId:conn.sessionId});
-				}
-			}
-
-            _.each(participants, function (participant) {
-                sendData(participant.connection, {type:"getlock", locks:locks[conn.docId]});
-            });
-		}
-
-		// Для презентаций это объект { type, val } или { type, slideId, objId }
-		function getlockpresentation(conn, data) {
-			var participants = getParticipants(conn.docId), documentLocks, documentLock;
-			if (!locks.hasOwnProperty(conn.docId)) {
-				locks[conn.docId] = [];
-			}
-			documentLocks = locks[conn.docId];
-
-			// Data is array now
-			var arrayBlocks = data.block;
-			var isLock = false;
-			var isExistInArray = false;
-			var i = 0, blockRange = null;
-			var lengthArray = (arrayBlocks) ? arrayBlocks.length : 0;
-			for (; i < lengthArray && false === isLock; ++i) {
-				blockRange = arrayBlocks[i];
-				for (var keyLockInArray in documentLocks) {
-					if (true === isLock)
-						break;
-					if (!documentLocks.hasOwnProperty(keyLockInArray))
-						continue;
-					documentLock = documentLocks[keyLockInArray];
-
-					if (documentLock.user === conn.userId || !(documentLock.block))
-						continue;
-					isLock = comparePresentationBlock(blockRange, documentLock.block);
-				}
-			}
-			if (0 === lengthArray)
-				isLock = true;
-
-			if (!isLock && !isExistInArray) {
-				//Ok. take lock
-				for (i = 0; i < lengthArray; ++i) {
-					blockRange = arrayBlocks[i];
-					documentLocks.push({time:Date.now(), user:conn.userId, block:blockRange, sessionId:conn.sessionId});
-				}
-			}
-
-			_.each(participants, function (participant) {
-				sendData(participant.connection, {type:"getlock", locks:locks[conn.docId]});
-			});
-		}
-
-		// Для Excel необходимо делать пересчет lock-ов при добавлении/удалении строк/столбцов
-		function savechanges(conn, data) {
-			var docLock, userLocks, participants;
-			//Release locks
-			if (data.endSaveChanges && false !== data.isCoAuthoring) {
-				docLock = locks[conn.docId];
-				if (docLock) {
-					if ("array" === typeOf (docLock)) {
-						userLocks = [];
-						for (var nIndex = 0; nIndex < docLock.length; ++nIndex) {
-							if (null !== docLock[nIndex] && docLock[nIndex].sessionId === conn.sessionId) {
-								userLocks.push(docLock[nIndex]);
-								docLock.splice(nIndex, 1);
-								--nIndex;
-							}
+						} else {
+							// новый лист
+							continue;
 						}
 					} else {
-						userLocks = _.filter(docLock, function (el) {
-							return el !== null && el.sessionId === conn.sessionId;
-						});
-						for (var i = 0; i < userLocks.length; i++) {
-							delete docLock[userLocks[i].block];
-						}
+						// Если кто-то залочил sheet, то больше никто не может лочить sheet-ы (иначе можно удалить все листы)
+						isLock = true;
+						break;
 					}
 				}
+
+				if (documentLock.user === conn.userId || !(documentLock.block) ||
+					blockRange.sheetId !== documentLock.block.sheetId)
+					continue;
+				isLock = compareExcelBlock(blockRange, documentLock.block);
+			}
+		}
+		if (0 === lengthArray)
+			isLock = true;
+
+		if (!isLock && !isExistInArray) {
+			//Ok. take lock
+			for (i = 0; i < lengthArray; ++i) {
+				blockRange = arrayBlocks[i];
+				documentLocks.push({time:Date.now(), user:conn.userId, block:blockRange, sessionId:conn.sessionId});
+			}
+		}
+
+		_.each(participants, function (participant) {
+			sendData(participant.connection, {type:"getlock", locks:locks[conn.docId]});
+		});
+	}
+	// Для презентаций это объект { type, val } или { type, slideId, objId }
+	function getLockPresentation(conn, data) {
+		var participants = getParticipants(conn.docId), documentLocks, documentLock;
+		if (!locks.hasOwnProperty(conn.docId)) {
+			locks[conn.docId] = [];
+		}
+		documentLocks = locks[conn.docId];
+
+		// Data is array now
+		var arrayBlocks = data.block;
+		var isLock = false;
+		var isExistInArray = false;
+		var i = 0, blockRange = null;
+		var lengthArray = (arrayBlocks) ? arrayBlocks.length : 0;
+		for (; i < lengthArray && false === isLock; ++i) {
+			blockRange = arrayBlocks[i];
+			for (var keyLockInArray in documentLocks) {
+				if (true === isLock)
+					break;
+				if (!documentLocks.hasOwnProperty(keyLockInArray))
+					continue;
+				documentLock = documentLocks[keyLockInArray];
+
+				if (documentLock.user === conn.userId || !(documentLock.block))
+					continue;
+				isLock = comparePresentationBlock(blockRange, documentLock.block);
+			}
+		}
+		if (0 === lengthArray)
+			isLock = true;
+
+		if (!isLock && !isExistInArray) {
+			//Ok. take lock
+			for (i = 0; i < lengthArray; ++i) {
+				blockRange = arrayBlocks[i];
+				documentLocks.push({time:Date.now(), user:conn.userId, block:blockRange, sessionId:conn.sessionId});
+			}
+		}
+
+		_.each(participants, function (participant) {
+			sendData(participant.connection, {type:"getlock", locks:locks[conn.docId]});
+		});
+	}
+	// Для Excel необходимо делать пересчет lock-ов при добавлении/удалении строк/столбцов
+	function saveChanges(conn, data) {
+		var docId = conn.docId;
+
+		//if (false === data.isCoAuthoring && data.startSaveChanges) {
+		//	// Мы еще не в совместном редактировании, нужно удалить старые изменения
+		//	removeSaveChanges(docId, /*deleteMessages*/false);
+		//}
+
+		var deleteIndex = (null != data.deleteIndex) ? data.deleteIndex : -1;
+		var objChange, bUpdate = false;
+		if (data.startSaveChanges) {
+			if (!objChangesTmp.hasOwnProperty(docId))
+				delete objChangesTmp[docId];
+
+			// Пользователь один и ему нужно сместить свои изменения
+			if (-1 != deleteIndex) {
+				objChange = objChanges[docId].pop();
+				bUpdate = true;
+			} else
+				objChange = {docid: docId, changes: data.changes, time: Date.now(),
+					user: conn.userId, useridoriginal: conn.userIdOriginal, insertId: -1};
+		} else {
+			objChange = objChangesTmp[docId];
+			bUpdate = true;
+		}
+
+		if (bUpdate) {
+			// Обновляем время, и соединяем массив (ToDo подумать, может как-то улучшить это?)
+			objChange.time = Date.now();
+			var newChanges = JSON.parse(data.changes);
+			var oldChanges = JSON.parse(objChange.changes);
+			// Нужно начать не с самого начала (пользователь один)
+			if (-1 != deleteIndex && data.startSaveChanges) {
+				oldChanges.splice(data.deleteIndex, oldChanges.length - data.deleteIndex);
+			}
+
+			newChanges = oldChanges.concat(newChanges);
+			objChange.changes =	JSON.stringify(newChanges);
+		}
+
+		if (!data.endSaveChanges) {
+			objChangesTmp[docId] = objChange;
+			sendData(conn, {type:"savePartChanges"});
+		} else {
+			// Только когда пришли все изменения, то пишем в базу и добавляем изменения
+			if (!objChanges.hasOwnProperty(docId)) {
+				objChanges[docId] = [objChange];
 			} else {
-				userLocks = [];
+				objChanges[docId].push(objChange);
 			}
-			if (false === data.isCoAuthoring && data.startSaveChanges) {
-				// Мы еще не в совместном редактировании, нужно удалить старые изменения
-				removeSaveChanges(conn.docId, /*deleteMessages*/false);
-			}
-			
-			var objchange = {docid:conn.docId, changes:data.changes, time:Date.now(),
-				user:conn.userId, useridoriginal: conn.userIdOriginal, skipChange: !data.isCoAuthoring};
-			if (!objchanges.hasOwnProperty(conn.docId)) {
-                objchanges[conn.docId] = [objchange];
-            } else {
-                objchanges[conn.docId].push(objchange);
-            }
 			// insert in dataBase
-			logger.info("database insert changes: " + JSON.stringify(objchange));
+			logger.info("database insert changes: " + JSON.stringify(objChange));
 			if (dataBase)
-				dataBase.insert("changes", objchange);
-			if (mysqlBase)
-				mysqlBase.insertChanges(conn.docId, conn.userId, conn.userIdOriginal, data.changes, conn.server,
-					conn.documentFormatSave);
-			
-			if (!data.endSaveChanges) {
-				sendData(conn, {type:"savePartChanges"});
-			} else {
-				if (data.isExcel && false !== data.isCoAuthoring) {
-					var oElement = null;
-					var oRecalcIndexColumns = null, oRecalcIndexRows = null;
-					var oChanges = JSON.parse(data.changes);
-					var nCount = oChanges.length;
-					var nIndexChanges = 0;
-					for (; nIndexChanges < nCount; ++nIndexChanges) {
-						oElement = oChanges[nIndexChanges];
-						if ("object" === typeof oElement) {
-							if ("0" === oElement["type"]) {
-								// Это мы получили recalcIndexColumns
-								oRecalcIndexColumns = _addRecalcIndex(oElement["index"]);
-							} else if ("1" === oElement["type"]) {
-								// Это мы получили recalcIndexRows
-								oRecalcIndexRows = _addRecalcIndex(oElement["index"]);
-							}
-						}
+				dataBase.insert("changes", objChange);
+			if (mysqlBase) {
+				if (-1 != deleteIndex)
+					mysqlBase.updateChanges(objChange);
+				else
+					mysqlBase.insertChanges(objChange, conn.server, conn.documentFormatSave);
+			}
 
-						// Теперь нужно пересчитать индексы для lock-элементов
-						if (null !== oRecalcIndexColumns && null !== oRecalcIndexRows) {
-							_recalcLockArray(conn.userId, locks[conn.docId], oRecalcIndexColumns, oRecalcIndexRows);
-
-							oRecalcIndexColumns = null;
-							oRecalcIndexRows = null;
-							break;
+			if (data.isExcel && false !== data.isCoAuthoring) {
+				var oElement = null;
+				var oRecalcIndexColumns = null, oRecalcIndexRows = null;
+				var oChanges = JSON.parse(objChange.changes);
+				var nCount = oChanges.length;
+				var nIndexChanges = 0;
+				for (; nIndexChanges < nCount; ++nIndexChanges) {
+					oElement = oChanges[nIndexChanges];
+					if ("object" === typeof oElement) {
+						if ("0" === oElement["type"]) {
+							// Это мы получили recalcIndexColumns
+							oRecalcIndexColumns = _addRecalcIndex(oElement["index"]);
+						} else if ("1" === oElement["type"]) {
+							// Это мы получили recalcIndexRows
+							oRecalcIndexRows = _addRecalcIndex(oElement["index"]);
 						}
+					}
+
+					// Теперь нужно пересчитать индексы для lock-элементов
+					if (null !== oRecalcIndexColumns && null !== oRecalcIndexRows) {
+						_recalcLockArray(conn.userId, locks[docId], oRecalcIndexColumns, oRecalcIndexRows);
+
+						oRecalcIndexColumns = null;
+						oRecalcIndexRows = null;
+						break;
 					}
 				}
 			}
-			
-			participants = getParticipants(conn.docId, conn.userId);
-            _.each(participants, function (participant) {
-                sendData(participant.connection, {type:"savechanges", changes:data.changes, user:conn.userId, locks:_.map(userLocks, function (e) {
-                    return {
-                        block:e.block,
-                        user:e.user,
-                        time:Date.now(),
-                        changes:null
-                    };
-                })});
-            });
-		}
-		
-		// Можем ли мы сохранять ?
-		function issavelock(conn) {
-			var _docId = conn.docId;
-			var _userId = conn.userId;
-			var _time = Date.now();
-			var isSaveLock = (undefined === arrsavelock[_docId]) ? false : arrsavelock[_docId].savelock;
-			if (false === isSaveLock) {
-				arrsavelock[conn.docId] = {docid:_docId, savelock:true, time:Date.now(), user:conn.userId};
-				var _tmpSaveLock = arrsavelock[_docId];
-				// Вдруг не придет unlock,  пустим timeout на lock 60 секунд
-				arrsavelock[conn.docId].saveLockTimeOutId = setTimeout(function () {
-					if (_tmpSaveLock && _userId == _tmpSaveLock.user && _time == _tmpSaveLock.time) {
-						// Снимаем лок с сохранения
-						arrsavelock[_docId] = undefined;
+
+			if (!objChangesTmp.hasOwnProperty(docId))
+				delete objChangesTmp[docId];
+
+			//Release locks
+			var userLocks;
+			var docLock = locks[docId];
+			if (docLock) {
+				if ("array" === typeOf (docLock)) {
+					userLocks = [];
+					for (var nIndex = 0; nIndex < docLock.length; ++nIndex) {
+						if (null !== docLock[nIndex] && docLock[nIndex].sessionId === conn.sessionId) {
+							userLocks.push(docLock[nIndex]);
+							docLock.splice(nIndex, 1);
+							--nIndex;
+						}
 					}
-				}, 60000);
+				} else {
+					userLocks = _.filter(docLock, function (el) {
+						return el !== null && el.sessionId === conn.sessionId;
+					});
+					for (var i = 0; i < userLocks.length; i++) {
+						delete docLock[userLocks[i].block];
+					}
+				}
 			}
 
-			// Отправляем только тому, кто спрашивал (всем отправлять нельзя)
-			sendData(conn, {type:"savelock", savelock:isSaveLock});
+			var participants = getParticipants(docId, conn.userId);
+			_.each(participants, function (participant) {
+				sendData(participant.connection, {type:"savechanges", changes:objChange.changes, user:conn.userId, locks:_.map(userLocks, function (e) {
+					return {
+						block:e.block,
+						user:e.user,
+						time:Date.now(),
+						changes:null
+					};
+				})});
+			});
 		}
-		// Снимаем лок с сохранения
-		function unsavelock(conn) {
-			if (undefined != arrsavelock[conn.docId] && conn.userId != arrsavelock[conn.docId].user) {
-				// Не можем удалять не свой лок
-				return;
-			}
-			// Очищаем предыдущий таймер
-			if (arrsavelock[conn.docId] && null != arrsavelock[conn.docId].saveLockTimeOutId)
-				clearTimeout(arrsavelock[conn.docId].saveLockTimeOutId);
-
-			arrsavelock[conn.docId] = undefined;
-
-			// Отправляем только тому, кто спрашивал (всем отправлять нельзя)
-			sendData(conn, {type:"unsavelock"});
+	}
+	// Можем ли мы сохранять ?
+	function isSaveLock(conn) {
+		var _docId = conn.docId;
+		var _userId = conn.userId;
+		var _time = Date.now();
+		var isSaveLock = (undefined === arrSaveLock[_docId]) ? false : arrSaveLock[_docId].savelock;
+		if (false === isSaveLock) {
+			arrSaveLock[conn.docId] = {docid:_docId, savelock:true, time:Date.now(), user:conn.userId};
+			var _tmpSaveLock = arrSaveLock[_docId];
+			// Вдруг не придет unlock,  пустим timeout на lock 60 секунд
+			arrSaveLock[conn.docId].saveLockTimeOutId = setTimeout(function () {
+				if (_tmpSaveLock && _userId == _tmpSaveLock.user && _time == _tmpSaveLock.time) {
+					// Снимаем лок с сохранения
+					arrSaveLock[_docId] = undefined;
+				}
+			}, 60000);
 		}
-		// Возвращаем все сообщения для документа
-		function getmessages(conn) {
-			sendData(conn, {type:"message", messages:messages[conn.docId]});
+
+		// Отправляем только тому, кто спрашивал (всем отправлять нельзя)
+		sendData(conn, {type:"savelock", savelock:isSaveLock});
+	}
+	// Снимаем лок с сохранения
+	function unSaveLock(conn) {
+		if (undefined != arrSaveLock[conn.docId] && conn.userId != arrSaveLock[conn.docId].user) {
+			// Не можем удалять не свой лок
+			return;
 		}
+		// Очищаем предыдущий таймер
+		if (arrSaveLock[conn.docId] && null != arrSaveLock[conn.docId].saveLockTimeOutId)
+			clearTimeout(arrSaveLock[conn.docId].saveLockTimeOutId);
 
-        return {
-            auth:auth,
-            message:message,
-            getlock:getlock,
-			getlockrange:getlockrange,
-			getlockpresentation: getlockpresentation,
-			savechanges:savechanges,
-			issavelock:issavelock,
-			unsavelock:unsavelock,
-			getmessages:getmessages
-        };
-    }());
+		arrSaveLock[conn.docId] = undefined;
 
+		// Отправляем только тому, кто спрашивал (всем отправлять нельзя)
+		sendData(conn, {type:"unsavelock"});
+	}
+	// Возвращаем все сообщения для документа
+	function getMessages(conn) {
+		sendData(conn, {type:"message", messages:messages[conn.docId]});
+	}
 
     sockjs_echo.installHandlers(server, {prefix:'/doc/[0-9-.a-zA-Z_=]*/c', log:function (severity, message) {
 		//TODO: handle severity
@@ -1038,26 +1071,26 @@ exports.install = function (server, callbackFunction) {
 		};
 		if (null != arrayElements) {
 			// add elements
-			var docId, objchange, i, element, objProps = {};
+			var docId, objChange, i, element, objProps = {};
 			for (i = 0; i < arrayElements.length; ++i) {
 				element = arrayElements[i];
 				docId = element.docid;
 				try {
-					objchange = {docid:docId, changes:element.data, user:element.userid,
+					objChange = {docid:docId, changes:element.data, user:element.userid,
 						useridoriginal: element.useridoriginal}; // Пишем пока без времени (это не особо нужно)
-					if (!objchanges.hasOwnProperty(docId)) {
-						objchanges[docId] = [objchange];
+					if (!objChanges.hasOwnProperty(docId)) {
+						objChanges[docId] = [objChange];
 						objProps[docId] = {server: {
 							host: element.serverHost, port: element.serverPort, path: element.serverPath
 						}, documentFormatSave: element.documentFormatSave};
 					} else
-						objchanges[docId].push(objchange);
+						objChanges[docId].push(objChange);
 				} catch (e) {}
 			}
 			// Send to server
-			for (i in objchanges) if (objchanges.hasOwnProperty(i)) {
+			for (i in objChanges) if (objChanges.hasOwnProperty(i)) {
 				// Send changes to save server
-				if (objchanges[i] && 0 < objchanges[i].length) {
+				if (objChanges[i] && 0 < objChanges[i].length) {
 					saveTimers[i] = createTimer(i, objProps[i]);
 				}
 			}
@@ -1073,7 +1106,7 @@ exports.install = function (server, callbackFunction) {
 		callbackLoadMessages(null);
 };
 // Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
-exports.removechanges = function (id) {
+exports.removeChanges = function (id) {
 	removeSaveChanges(id, /*isDeleteMessages*/true);
 
 	// Нужно удалить из базы callback-ов

@@ -38,7 +38,7 @@ docsCoServer.install(server, function() {
 	});
 	
 	app.post('/RemoveChanges.ashx', function(req, res) {
-		docsCoServer.removechanges(req.query.id);
+		docsCoServer.removeChanges(req.query.id);
 		res.send('Remove success');
 	});
 
