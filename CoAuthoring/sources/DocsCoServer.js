@@ -880,6 +880,10 @@ exports.install = function (server, callbackFunction) {
 			// Пользователь один и ему нужно сместить свои изменения
 			if (-1 !== deleteIndex) {
 				objChange = objChanges[docId].pop();
+				if (!objChange) {
+					logger.error("old sdk used");
+					return;
+				}
 				bUpdate = true;
 			} else
 				objChange = {docid: docId, changes: data.changes, time: Date.now(),
