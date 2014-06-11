@@ -878,7 +878,7 @@ exports.install = function (server, callbackFunction) {
 				delete objChangesTmp[docId];
 
 			// Пользователь один и ему нужно сместить свои изменения
-			if (-1 != deleteIndex) {
+			if (-1 !== deleteIndex) {
 				objChange = objChanges[docId].pop();
 				bUpdate = true;
 			} else
@@ -895,7 +895,7 @@ exports.install = function (server, callbackFunction) {
 			var newChanges = JSON.parse(data.changes);
 			var oldChanges = JSON.parse(objChange.changes);
 			// Нужно начать не с самого начала (пользователь один)
-			if (-1 != deleteIndex && data.startSaveChanges) {
+			if (-1 !== deleteIndex && data.startSaveChanges) {
 				oldChanges.splice(data.deleteIndex, oldChanges.length - data.deleteIndex);
 			}
 
@@ -918,7 +918,7 @@ exports.install = function (server, callbackFunction) {
 			if (dataBase)
 				dataBase.insert("changes", objChange);
 			if (mysqlBase) {
-				if (-1 != deleteIndex)
+				if (-1 !== deleteIndex)
 					mysqlBase.updateChanges(objChange);
 				else
 					mysqlBase.insertChanges(objChange, conn.server, conn.documentFormatSave);
