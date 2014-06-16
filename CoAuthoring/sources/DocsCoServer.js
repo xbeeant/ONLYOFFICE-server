@@ -327,6 +327,7 @@ exports.install = function (server, callbackFunction) {
         sockjs_echo = sockjs.createServer(sockjs_opts),
 		indexUser = {},
         locks = {},
+		lockDocuments = {},
 		arrSaveLock = {},
 		saveTimers = {},// Таймеры сохранения, после выхода всех пользователей
         urlParse = new RegExp("^/doc/([0-9-.a-zA-Z_=]*)/c.+", 'i');
@@ -342,13 +343,14 @@ exports.install = function (server, callbackFunction) {
 				switch (data.type) {
 					case 'auth'					: auth(conn, data); break;
 					case 'message'				: onMessage(conn, data); break;
-					case 'getlock'				: getLock(conn, data); break;
-					case 'getlockrange'			: getLockRange(conn, data); break;
-					case 'getlockpresentation'	: getLockPresentation(conn, data); break;
-					case 'savechanges'			: saveChanges(conn, data); break;
-					case 'issavelock'			: isSaveLock(conn, data); break;
-					case 'unsavelock'			: unSaveLock(conn, data); break;
-					case 'getmessages'			: getMessages(conn, data); break;
+					case 'getLock'				: getLock(conn, data); break;
+					case 'getLockRange'			: getLockRange(conn, data); break;
+					case 'getLockPresentation'	: getLockPresentation(conn, data); break;
+					case 'saveChanges'			: saveChanges(conn, data); break;
+					case 'isSaveLock'			: isSaveLock(conn, data); break;
+					case 'unSaveLock'			: unSaveLock(conn, data); break;
+					case 'getMessages'			: getMessages(conn, data); break;
+					case 'unLockDocument'		: sendEndAuthLock(conn.docId); break;
 				}
             } catch (e) {
                 logger.error("error receiving response:" + e);
@@ -360,6 +362,7 @@ exports.install = function (server, callbackFunction) {
         });
         conn.on('close', function () {
             var connection = this, docLock, userLocks, participants, reconected, curChanges;
+			var docId = conn.docId;
 
             logger.info("Connection closed or timed out");
             //Check if it's not already reconnected
@@ -373,48 +376,45 @@ exports.install = function (server, callbackFunction) {
             });
 
 			var state = (false == reconected) ? false : undefined;
-			participants = getParticipants(conn.docId);
+			participants = getParticipants(docId);
             sendParticipantsState(participants, state, connection.userId, connection.userName, connection.userColor);
 
             if (!reconected) {
 				// Для данного пользователя снимаем лок с сохранения
-				if (undefined != arrSaveLock[conn.docId] && connection.userId == arrSaveLock[conn.docId].user) {
+				if (undefined != arrSaveLock[docId] && connection.userId == arrSaveLock[docId].user) {
 					// Очищаем предыдущий таймер
-					if (null != arrSaveLock[conn.docId].saveLockTimeOutId)
-						clearTimeout(arrSaveLock[conn.docId].saveLockTimeOutId);
-					arrSaveLock[conn.docId] = undefined;
+					if (null != arrSaveLock[docId].saveLockTimeOutId)
+						clearTimeout(arrSaveLock[docId].saveLockTimeOutId);
+					arrSaveLock[docId] = undefined;
 				}
 
 				// Только если редактируем
 				if (false === connection.isViewer) {
 					// Если у нас нет пользователей, то удаляем все сообщения
-					if (!hasEditors(conn.docId)) {
+					if (!hasEditors(docId)) {
 						// Очищаем предыдущий таймер
-						if (null != arrSaveLock[conn.docId] && null != arrSaveLock[conn.docId].saveLockTimeOutId)
-							clearTimeout(arrSaveLock[conn.docId].saveLockTimeOutId);
+						if (null != arrSaveLock[docId] && null != arrSaveLock[docId].saveLockTimeOutId)
+							clearTimeout(arrSaveLock[docId].saveLockTimeOutId);
 						// На всякий случай снимаем lock
-						arrSaveLock[conn.docId] = undefined;
+						arrSaveLock[docId] = undefined;
 
 						// Send changes to save server
-						curChanges = objChanges[conn.docId];
+						curChanges = objChanges[docId];
 						if (curChanges && 0 < curChanges.length) {
-							for (var i = 0; i < curChanges.length; ++i) {
-								delete curChanges[i].skipChange;
-							}
-							saveTimers[conn.docId] = setTimeout(function () {
-								sendChangesToServer(conn.server, conn.docId, conn.documentFormatSave);
+							saveTimers[docId] = setTimeout(function () {
+								sendChangesToServer(conn.server, docId, conn.documentFormatSave);
 							}, c_oAscSaveTimeOutDelay);
 						} else {
 							// Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
-							sendStatusDocument(conn.docId, true);
+							sendStatusDocument(docId, true);
 						}
 					} else
-						sendStatusDocument(conn.docId, false);
+						sendStatusDocument(docId, false);
 				}
 				
                 //Давайдосвиданья!
                 //Release locks
-                docLock = locks[connection.docId];
+                docLock = locks[docId];
                 if (docLock) {
 					userLocks = [];
 					
@@ -436,7 +436,7 @@ exports.install = function (server, callbackFunction) {
 					}
 					
                     _.each(participants, function (participant) {
-                        sendData(participant.connection, {type:"releaselock", locks:_.map(userLocks, function (e) {
+                        sendData(participant.connection, {type:"releaseLock", locks:_.map(userLocks, function (e) {
                             return {
                                 block:e.block,
                                 user:e.user,
@@ -446,16 +446,47 @@ exports.install = function (server, callbackFunction) {
                         })});
                     });
                 }
+
+				// Для данного пользователя снимаем Lock с документа
+				if (lockDocuments.hasOwnProperty(docId) && connection.userId === lockDocuments[docId].id) {
+					delete lockDocuments[docId];
+					sendEndAuthLock(docId, participants);
+				}
             }
         });
     });
+
+	function sendEndAuthLock (docId, participants) {
+		if (!participants) {
+			participants = getParticipants(docId);
+		}
+
+		var conn;
+		var participantsMap = _.map(participants, function (conn) {
+			return {id: conn.connection.userId,
+				username: conn.connection.userName, color: conn.connection.userColor};});
+
+		_.each(participants, function (participant) {
+			conn = participant.connection;
+			sendData(conn, {
+				type			: "auth",
+				result			: 1,
+				sessionId		: conn.sessionId,
+				participants	: participantsMap,
+				messages		: messages[conn.docid],
+				locks			: locks[conn.docId],
+				changes			: objChanges[conn.docId],
+				indexUser		: indexUser[conn.docId]
+			});
+		});
+	}
 
     function sendParticipantsState(participants, stateConnect, _userId, _userName, _userColor) {
         _.each(participants, function (participant) {
 			if (participant.connection.userId !== _userId) {
 				sendData(participant.connection,
 					{
-						type		: "connectstate",
+						type		: "connectState",
 						state		: stateConnect,
 						id			: _userId,
 						username	: _userName,
@@ -625,6 +656,7 @@ exports.install = function (server, callbackFunction) {
 	}
 
 	function auth(conn, data) {
+		var bIsRestore = false;
 		//TODO: Do authorization etc. check md5 or query db
 		if (data.token && data.user) {
 			var user = data.user;
@@ -660,6 +692,7 @@ exports.install = function (server, callbackFunction) {
 			conn.documentFormatSave = data.documentFormatSave;
 			//Set the unique ID
 			if (data.sessionId !== null && _.isString(data.sessionId) && data.sessionId !== "") {
+				bIsRestore = true;
 				logger.info("restored old session id=" + data.sessionId);
 
 				//Kill previous connections
@@ -681,17 +714,27 @@ exports.install = function (server, callbackFunction) {
 			if (false === conn.isViewer)
 				sendStatusDocument(conn.docId, false);
 
-			sendData(conn,
-				{
-					type			: "auth",
-					result			: 1,
-					sessionId		: conn.sessionId,
-					participants	: participantsMap,
-					messages		: messages[conn.docid],
-					locks			: locks[conn.docId],
-					changes			: objChanges[conn.docId],
-					indexUser		: indexUser[conn.docId]
-				});//Or 0 if fails
+			if (!bIsRestore && 2 === participantsMap.length) {
+				// Ставим lock на документ
+				lockDocuments[conn.docId] = participantsMap[0];
+			}
+
+			var sendObject = lockDocuments[conn.docId] ? {
+				type			: "waitAuth",
+				lockDocument	: lockDocuments[conn.docId]
+			} : {
+				type			: "auth",
+				result			: 1,
+				sessionId		: conn.sessionId,
+				participants	: participantsMap,
+				messages		: messages[conn.docid],
+				locks			: locks[conn.docId],
+				changes			: objChanges[conn.docId],
+				indexUser		: indexUser[conn.docId]
+			};
+
+			sendData(conn, sendObject);//Or 0 if fails
+
 			sendParticipantsState(participants, true, conn.userId, conn.userName, conn.userColor);
 		}
 	}
@@ -744,7 +787,7 @@ exports.install = function (server, callbackFunction) {
 		}
 
 		_.each(participants, function (participant) {
-			sendData(participant.connection, {type:"getlock", locks:locks[conn.docId]});
+			sendData(participant.connection, {type:"getLock", locks:locks[conn.docId]});
 		});
 	}
 	// Для Excel block теперь это объект { sheetId, type, rangeOrObjectId, guid }
@@ -816,7 +859,7 @@ exports.install = function (server, callbackFunction) {
 		}
 
 		_.each(participants, function (participant) {
-			sendData(participant.connection, {type:"getlock", locks:locks[conn.docId]});
+			sendData(participant.connection, {type:"getLock", locks:locks[conn.docId]});
 		});
 	}
 	// Для презентаций это объект { type, val } или { type, slideId, objId }
@@ -859,7 +902,7 @@ exports.install = function (server, callbackFunction) {
 		}
 
 		_.each(participants, function (participant) {
-			sendData(participant.connection, {type:"getlock", locks:locks[conn.docId]});
+			sendData(participant.connection, {type:"getLock", locks:locks[conn.docId]});
 		});
 	}
 	// Для Excel необходимо делать пересчет lock-ов при добавлении/удалении строк/столбцов
@@ -984,16 +1027,23 @@ exports.install = function (server, callbackFunction) {
 			}
 
 			var participants = getParticipants(docId, conn.userId);
-			_.each(participants, function (participant) {
-				sendData(participant.connection, {type:"savechanges", changes:objChange.changes, user:conn.userId, locks:_.map(userLocks, function (e) {
+			// Для данного пользователя снимаем Lock с документа
+			if (lockDocuments.hasOwnProperty(docId) && conn.userId === lockDocuments[docId].id) {
+				delete lockDocuments[docId];
+				sendEndAuthLock(docId, participants);
+			} else {
+				var arrLocks = _.map(userLocks, function (e) {
 					return {
 						block:e.block,
 						user:e.user,
 						time:Date.now(),
 						changes:null
 					};
-				})});
-			});
+				});
+				_.each(participants, function (participant) {
+					sendData(participant.connection, {type:"saveChanges", changes:objChange.changes, user:conn.userId, locks:arrLocks});
+				});
+			}
 		}
 	}
 	// Можем ли мы сохранять ?
@@ -1015,7 +1065,7 @@ exports.install = function (server, callbackFunction) {
 		}
 
 		// Отправляем только тому, кто спрашивал (всем отправлять нельзя)
-		sendData(conn, {type:"savelock", savelock:isSaveLock});
+		sendData(conn, {type:"saveLock", saveLock:isSaveLock});
 	}
 	// Снимаем лок с сохранения
 	function unSaveLock(conn) {
@@ -1030,7 +1080,7 @@ exports.install = function (server, callbackFunction) {
 		arrSaveLock[conn.docId] = undefined;
 
 		// Отправляем только тому, кто спрашивал (всем отправлять нельзя)
-		sendData(conn, {type:"unsavelock"});
+		sendData(conn, {type:"unSaveLock"});
 	}
 	// Возвращаем все сообщения для документа
 	function getMessages(conn) {
