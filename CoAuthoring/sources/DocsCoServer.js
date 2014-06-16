@@ -900,7 +900,7 @@ exports.install = function (server, callbackFunction) {
 			var oldChanges = JSON.parse(objChange.changes);
 			// Нужно начать не с самого начала (пользователь один)
 			if (-1 !== deleteIndex && data.startSaveChanges) {
-				oldChanges.splice(data.deleteIndex, oldChanges.length - data.deleteIndex);
+				oldChanges.splice(deleteIndex, oldChanges.length - deleteIndex);
 			}
 
 			newChanges = oldChanges.concat(newChanges);
