@@ -544,12 +544,12 @@ exports.install = function (server, callbackFunction) {
 
 			oRangeOrObjectId = element["rangeOrObjectId"];
 
-			if (oRecalcIndexColumns.hasOwnProperty(sheetId)) {
+			if (oRecalcIndexColumns && oRecalcIndexColumns.hasOwnProperty(sheetId)) {
 				// Пересчет колонок
 				oRangeOrObjectId["c1"] = oRecalcIndexColumns[sheetId].getLockMe2(oRangeOrObjectId["c1"]);
 				oRangeOrObjectId["c2"] = oRecalcIndexColumns[sheetId].getLockMe2(oRangeOrObjectId["c2"]);
 			}
-			if (oRecalcIndexRows.hasOwnProperty(sheetId)) {
+			if (oRecalcIndexRows && oRecalcIndexRows.hasOwnProperty(sheetId)) {
 				// Пересчет строк
 				oRangeOrObjectId["r1"] = oRecalcIndexRows[sheetId].getLockMe2(oRangeOrObjectId["r1"]);
 				oRangeOrObjectId["r2"] = oRecalcIndexRows[sheetId].getLockMe2(oRangeOrObjectId["r2"]);
@@ -988,15 +988,11 @@ exports.install = function (server, callbackFunction) {
 							oRecalcIndexRows = _addRecalcIndex(oElement["index"]);
 						}
 					}
+				}
 
-					// Теперь нужно пересчитать индексы для lock-элементов
-					if (null !== oRecalcIndexColumns && null !== oRecalcIndexRows) {
-						_recalcLockArray(conn.userId, locks[docId], oRecalcIndexColumns, oRecalcIndexRows);
-
-						oRecalcIndexColumns = null;
-						oRecalcIndexRows = null;
-						break;
-					}
+				// Теперь нужно пересчитать индексы для lock-элементов
+				if (null !== oRecalcIndexColumns || null !== oRecalcIndexRows) {
+					_recalcLockArray(conn.userId, locks[docId], oRecalcIndexColumns, oRecalcIndexRows);
 				}
 			}
 
