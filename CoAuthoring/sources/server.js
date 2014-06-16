@@ -44,6 +44,7 @@ docsCoServer.install(server, function() {
 
 	app.get('/CommandService.ashx', function(req, res) {
 		var result = docsCoServer.commandFromServer(req.query);
-		res.send('Command result: ' + result);
+
+		res.send(JSON.stringify({'key': req.query.key, 'error': result}));
 	});
 });
