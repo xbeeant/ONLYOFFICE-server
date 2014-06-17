@@ -350,7 +350,7 @@ exports.install = function (server, callbackFunction) {
 					case 'isSaveLock'			: isSaveLock(conn, data); break;
 					case 'unSaveLock'			: unSaveLock(conn, data); break;
 					case 'getMessages'			: getMessages(conn, data); break;
-					case 'unLockDocument'		: sendEndAuthLock(conn.docId); break;
+					case 'unLockDocument'		: checkEndAuthLock(conn.docId, conn.userId); break;
 				}
             } catch (e) {
                 logger.error("error receiving response:" + e);
@@ -448,37 +448,42 @@ exports.install = function (server, callbackFunction) {
                 }
 
 				// Для данного пользователя снимаем Lock с документа
-				if (lockDocuments.hasOwnProperty(docId) && connection.userId === lockDocuments[docId].id) {
-					delete lockDocuments[docId];
-					sendEndAuthLock(docId, participants);
-				}
+				checkEndAuthLock(docId, connection.userId, participants);
             }
         });
     });
 
-	function sendEndAuthLock (docId, participants) {
-		if (!participants) {
-			participants = getParticipants(docId);
-		}
+	function checkEndAuthLock (docId, userId, participants) {
+		var result = false;
+		if (lockDocuments.hasOwnProperty(docId) && userId === lockDocuments[docId].id) {
+			delete lockDocuments[docId];
 
-		var conn;
-		var participantsMap = _.map(participants, function (conn) {
-			return {id: conn.connection.userId,
-				username: conn.connection.userName, color: conn.connection.userColor};});
+			if (!participants) {
+				participants = getParticipants(docId);
+			}
 
-		_.each(participants, function (participant) {
-			conn = participant.connection;
-			sendData(conn, {
-				type			: "auth",
-				result			: 1,
-				sessionId		: conn.sessionId,
-				participants	: participantsMap,
-				messages		: messages[conn.docid],
-				locks			: locks[conn.docId],
-				changes			: objChanges[conn.docId],
-				indexUser		: indexUser[conn.docId]
+			var conn;
+			var participantsMap = _.map(participants, function (conn) {
+				return {id: conn.connection.userId,
+					username: conn.connection.userName, color: conn.connection.userColor};});
+
+			_.each(participants, function (participant) {
+				conn = participant.connection;
+				sendData(conn, {
+					type			: "auth",
+					result			: 1,
+					sessionId		: conn.sessionId,
+					participants	: participantsMap,
+					messages		: messages[conn.docid],
+					locks			: locks[conn.docId],
+					changes			: objChanges[conn.docId],
+					indexUser		: indexUser[conn.docId]
+				});
 			});
-		});
+
+			result = true;
+		}
+		return result;
 	}
 
     function sendParticipantsState(participants, stateConnect, _userId, _userName, _userColor) {
@@ -907,7 +912,7 @@ exports.install = function (server, callbackFunction) {
 	}
 	// Для Excel необходимо делать пересчет lock-ов при добавлении/удалении строк/столбцов
 	function saveChanges(conn, data) {
-		var docId = conn.docId;
+		var docId = conn.docId, userId = conn.userId;
 
 		//if (false === data.isCoAuthoring && data.startSaveChanges) {
 		//	// Мы еще не в совместном редактировании, нужно удалить старые изменения
@@ -930,7 +935,7 @@ exports.install = function (server, callbackFunction) {
 				bUpdate = true;
 			} else
 				objChange = {docid: docId, changes: data.changes, time: Date.now(),
-					user: conn.userId, useridoriginal: conn.userIdOriginal, insertId: -1};
+					user: userId, useridoriginal: conn.userIdOriginal, insertId: -1};
 		} else {
 			objChange = objChangesTmp[docId];
 			bUpdate = true;
@@ -992,7 +997,7 @@ exports.install = function (server, callbackFunction) {
 
 				// Теперь нужно пересчитать индексы для lock-элементов
 				if (null !== oRecalcIndexColumns || null !== oRecalcIndexRows) {
-					_recalcLockArray(conn.userId, locks[docId], oRecalcIndexColumns, oRecalcIndexRows);
+					_recalcLockArray(userId, locks[docId], oRecalcIndexColumns, oRecalcIndexRows);
 				}
 			}
 
@@ -1022,12 +1027,9 @@ exports.install = function (server, callbackFunction) {
 				}
 			}
 
-			var participants = getParticipants(docId, conn.userId);
+			var participants = getParticipants(docId, userId);
 			// Для данного пользователя снимаем Lock с документа
-			if (lockDocuments.hasOwnProperty(docId) && conn.userId === lockDocuments[docId].id) {
-				delete lockDocuments[docId];
-				sendEndAuthLock(docId, participants);
-			} else {
+			if (!checkEndAuthLock(docId, userId, participants)) {
 				var arrLocks = _.map(userLocks, function (e) {
 					return {
 						block:e.block,
@@ -1037,7 +1039,7 @@ exports.install = function (server, callbackFunction) {
 					};
 				});
 				_.each(participants, function (participant) {
-					sendData(participant.connection, {type:"saveChanges", changes:objChange.changes, user:conn.userId, locks:arrLocks});
+					sendData(participant.connection, {type:"saveChanges", changes:objChange.changes, user:userId, locks:arrLocks});
 				});
 			}
 		}
