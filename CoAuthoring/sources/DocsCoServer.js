@@ -462,23 +462,25 @@ exports.install = function (server, callbackFunction) {
 				participants = getParticipants(docId);
 			}
 
-			var conn;
+			var connection;
 			var participantsMap = _.map(participants, function (conn) {
 				return {id: conn.connection.userId,
 					username: conn.connection.userName, color: conn.connection.userColor};});
 
 			_.each(participants, function (participant) {
-				conn = participant.connection;
-				sendData(conn, {
-					type			: "auth",
-					result			: 1,
-					sessionId		: conn.sessionId,
-					participants	: participantsMap,
-					messages		: messages[conn.docid],
-					locks			: locks[conn.docId],
-					changes			: objChanges[conn.docId],
-					indexUser		: indexUser[conn.docId]
-				});
+				connection = participant.connection;
+				if (userId !== connection.userId) {
+					sendData(connection, {
+						type: "auth",
+						result: 1,
+						sessionId: connection.sessionId,
+						participants: participantsMap,
+						messages: messages[connection.docid],
+						locks: locks[connection.docId],
+						changes: objChanges[connection.docId],
+						indexUser: indexUser[connection.docId]
+					});
+				}
 			});
 
 			result = true;
@@ -1029,7 +1031,7 @@ exports.install = function (server, callbackFunction) {
 
 			var participants = getParticipants(docId, userId);
 			// Для данного пользователя снимаем Lock с документа
-			if (!checkEndAuthLock(docId, userId, participants)) {
+			if (!checkEndAuthLock(docId, userId)) {
 				var arrLocks = _.map(userLocks, function (e) {
 					return {
 						block:e.block,
