@@ -362,8 +362,10 @@ exports.install = function (server, callbackFunction) {
             logger.error("On error");
         });
         conn.on('close', function () {
-            var connection = this, docLock, userLocks, participants, reconected, curChanges;
+            var connection = this, docLock, userLocks, participants, reconnected, curChanges;
 			var docId = conn.docId;
+			if (null == docId)
+				return;
 
             logger.info("Connection closed or timed out");
             //Check if it's not already reconnected
@@ -372,15 +374,15 @@ exports.install = function (server, callbackFunction) {
             connections = _.reject(connections, function (el) {
                 return el.connection.id === connection.id;//Delete this connection
             });
-            reconected = _.any(connections, function (el) {
-                return el.connection.sessionId === connection.sessionId;//This means that client is reconected
+			reconnected = _.any(connections, function (el) {
+                return el.connection.sessionId === connection.sessionId;//This means that client is reconnected
             });
 
-			var state = (false == reconected) ? false : undefined;
+			var state = (false == reconnected) ? false : undefined;
 			participants = getParticipants(docId);
             sendParticipantsState(participants, state, connection.userId, connection.userName, connection.userColor);
 
-            if (!reconected) {
+            if (!reconnected) {
 				// Для данного пользователя снимаем лок с сохранения
 				if (undefined != arrSaveLock[docId] && connection.userId == arrSaveLock[docId].user) {
 					// Очищаем предыдущий таймер
