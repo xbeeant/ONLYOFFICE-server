@@ -331,6 +331,7 @@ exports.install = function (server, callbackFunction) {
 		arrSaveLock = {},
 		saveTimers = {},// Таймеры сохранения, после выхода всех пользователей
         urlParse = new RegExp("^/doc/([0-9-.a-zA-Z_=]*)/c.+", 'i');
+	var asc_coAuthV	= '3.0.0';
 
     sockjs_echo.on('connection', function (conn) {
 		if (null == conn) {
@@ -663,6 +664,12 @@ exports.install = function (server, callbackFunction) {
 	}
 
 	function auth(conn, data) {
+		// Проверка версий
+		if (data.version !== asc_coAuthV) {
+			sendData(conn, {type : 'error', description: 'old Version Sdk'});
+			return;
+		}
+
 		var bIsRestore = false;
 		//TODO: Do authorization etc. check md5 or query db
 		if (data.token && data.user) {
