@@ -1,4 +1,22 @@
-﻿var sockjs = require('sockjs'),
+﻿/*
+* 1) Для view-режима обновляем страницу (без быстрого перехода), чтобы пользователь не считался за редактируемого и не
+* 	держал документ для сборки (если не ждать, то непонятен быстрый переход из view в edit, когда документ уже собрался)
+* 2) Если пользователь во view-режиме, то он не участвует в редактировании (только в chat-е). При открытии он получает
+* 	все актуальные изменения в документе на момент открытия. Для view-режима не принимаем изменения и не отправляем их
+* 	view-пользователям (т.к. непонятно что делать в ситуации, когда 1-пользователь наделал изменений,
+* 	сохранил и сделал undo).
+*
+* Схема сохранения:
+* а) Один пользователь - первый раз приходят изменения без индекса, затем изменения приходят с индексом, можно делать
+* 	undo-redo (история не трется). Если автосохранение включено, то оно на любое действие (не чаще 5-ти секунд).
+* b) Как только заходит второй пользователь, начинается совместное редактирование. На документ ставится lock, чтобы
+* 	первый пользователь успел сохранить документ (либо прислать unlock)
+* c) Когда пользователей 2 или больше, каждое сохранение трет историю и присылается целиком (без индекса). Если
+* 	автосохранение включено, то сохраняется не чаще раз в 10-минут.
+* d) Когда пользователь остается один, после принятия чужих изменений начинается пункт 'а'
+* */
+
+var sockjs = require('sockjs'),
     _ = require('underscore'),
 	dataBase  = null,
 	mysqlBase = null,
@@ -380,7 +398,8 @@ exports.install = function (server, callbackFunction) {
 
 			var state = (false == reconnected) ? false : undefined;
 			participants = getParticipants(docId);
-            sendParticipantsState(participants, state, connection.userId, connection.userName, connection.userColor);
+            sendParticipantsState(participants, state, connection.userId, connection.userName,
+				connection.userColor, connection.isViewer);
 
             if (!reconnected) {
 				// Для данного пользователя снимаем лок с сохранения
@@ -413,45 +432,47 @@ exports.install = function (server, callbackFunction) {
 						}
 					} else
 						sendStatusDocument(docId, false);
-				}
-				
-                //Давайдосвиданья!
-                //Release locks
-                docLock = locks[docId];
-                if (docLock) {
-					userLocks = [];
-					
-					if ("array" === typeOf (docLock)) {
-						for (var nIndex = 0; nIndex < docLock.length; ++nIndex) {
-							if (docLock[nIndex].sessionId === connection.sessionId) {
-								userLocks.push(docLock[nIndex]);
-								docLock.splice(nIndex, 1);
-								--nIndex;
-							}
-						}
-					} else {
-						for (var keyLockElem in docLock) if (docLock.hasOwnProperty(keyLockElem)) {
-							if (docLock[keyLockElem].sessionId === connection.sessionId) {
-								userLocks.push(docLock[keyLockElem]);
-								delete docLock[keyLockElem];
-							}
-						}
-					}
-					
-                    _.each(participants, function (participant) {
-                        sendData(participant.connection, {type:"releaseLock", locks:_.map(userLocks, function (e) {
-                            return {
-                                block:e.block,
-                                user:e.user,
-                                time:Date.now(),
-                                changes:null
-                            };
-                        })});
-                    });
-                }
 
-				// Для данного пользователя снимаем Lock с документа
-				checkEndAuthLock(docId, connection.userId, participants);
+					//Давайдосвиданья!
+					//Release locks
+					docLock = locks[docId];
+					if (docLock) {
+						userLocks = [];
+
+						if ("array" === typeOf (docLock)) {
+							for (var nIndex = 0; nIndex < docLock.length; ++nIndex) {
+								if (docLock[nIndex].sessionId === connection.sessionId) {
+									userLocks.push(docLock[nIndex]);
+									docLock.splice(nIndex, 1);
+									--nIndex;
+								}
+							}
+						} else {
+							for (var keyLockElem in docLock) if (docLock.hasOwnProperty(keyLockElem)) {
+								if (docLock[keyLockElem].sessionId === connection.sessionId) {
+									userLocks.push(docLock[keyLockElem]);
+									delete docLock[keyLockElem];
+								}
+							}
+						}
+
+						_.each(participants, function (participant) {
+							if (!participant.connection.isViewer) {
+								sendData(participant.connection, {type: "releaseLock", locks: _.map(userLocks, function (e) {
+									return {
+										block: e.block,
+										user: e.user,
+										time: Date.now(),
+										changes: null
+									};
+								})});
+							}
+						});
+					}
+
+					// Для данного пользователя снимаем Lock с документа
+					checkEndAuthLock(docId, connection.userId, participants);
+				}
             }
         });
     });
@@ -461,18 +482,22 @@ exports.install = function (server, callbackFunction) {
 		if (lockDocuments.hasOwnProperty(docId) && userId === lockDocuments[docId].id) {
 			delete lockDocuments[docId];
 
-			if (!participants) {
+			if (!participants)
 				participants = getParticipants(docId);
-			}
 
 			var connection;
 			var participantsMap = _.map(participants, function (conn) {
-				return {id: conn.connection.userId,
-					username: conn.connection.userName, color: conn.connection.userColor};});
+				return {
+					id: conn.connection.userId,
+					username: conn.connection.userName,
+					color: conn.connection.userColor,
+					view: conn.connection.isViewer
+				};
+			});
 
 			_.each(participants, function (participant) {
 				connection = participant.connection;
-				if (userId !== connection.userId) {
+				if (userId !== connection.userId && !connection.isViewer) {
 					sendData(connection, {
 						type: "auth",
 						result: 1,
@@ -491,7 +516,7 @@ exports.install = function (server, callbackFunction) {
 		return result;
 	}
 
-    function sendParticipantsState(participants, stateConnect, _userId, _userName, _userColor) {
+    function sendParticipantsState(participants, stateConnect, _userId, _userName, _userColor, _userView) {
         _.each(participants, function (participant) {
 			if (participant.connection.userId !== _userId) {
 				sendData(participant.connection,
@@ -500,15 +525,17 @@ exports.install = function (server, callbackFunction) {
 						state		: stateConnect,
 						id			: _userId,
 						username	: _userName,
-						color		: _userColor
+						color		: _userColor,
+						view		: _userView
 					});
 			}
         });
     }
 
-	function getParticipants(docId, excludeUserId) {
+	function getParticipants(docId, excludeUserId, excludeViewer) {
 		return _.filter(connections, function (el) {
-			return el.connection.docId === docId && el.connection.userId !== excludeUserId;
+			return el.connection.docId === docId && el.connection.userId !== excludeUserId &&
+				el.connection.isViewer !== excludeViewer;
 		});
 	}
 	function hasEditors(docId) {
@@ -675,28 +702,28 @@ exports.install = function (server, callbackFunction) {
 		var bIsRestore = false;
 		//TODO: Do authorization etc. check md5 or query db
 		if (data.token && data.user) {
+			var docId;
 			var user = data.user;
 			//Parse docId
 			var parsed = urlParse.exec(conn.url);
 			if (parsed.length > 1) {
-				conn.docId = parsed[1];
+				docId = conn.docId = parsed[1];
 			} else {
 				//TODO: Send some shit back
 			}
 
 			// Очищаем таймер сохранения
-			if (false === data.isViewer && saveTimers[conn.docId])
-				clearTimeout(saveTimers[conn.docId]);
+			if (false === data.isViewer && saveTimers[docId])
+				clearTimeout(saveTimers[docId]);
 
 			// Увеличиваем индекс обращения к документу
-			if (!indexUser.hasOwnProperty(conn.docId)) {
-				indexUser[conn.docId] = 1;
-			} else {
-				indexUser[conn.docId] += 1;
-			}
+			if (!indexUser.hasOwnProperty(docId))
+				indexUser[docId] = 1;
+			else
+				indexUser[docId] += 1;
 
 			conn.sessionState = 1;
-			conn.userId = user.id + indexUser[conn.docId];
+			conn.userId = user.id + indexUser[docId];
 			conn.userIdOriginal = user.id;
 			conn.userName = user.name;
 			conn.userColor = user.color;
@@ -721,37 +748,50 @@ exports.install = function (server, callbackFunction) {
 				conn.sessionId = conn.id;
 			}
 			connections.push({connection:conn});
-			var participants = getParticipants(conn.docId);
-			var participantsMap = _.map(participants, function (conn) {
-				return {id: conn.connection.userId,
-					username: conn.connection.userName, color: conn.connection.userColor};});
-
-			// Отправляем только для тех, кто редактирует
-			if (false === conn.isViewer)
-				sendStatusDocument(conn.docId, false);
-
-			if (!bIsRestore && 2 === participantsMap.length) {
-				// Ставим lock на документ
-				lockDocuments[conn.docId] = participantsMap[0];
+			var participants = getParticipants(docId);
+			var tmpConnection, firstParticipantNoView, participantsMap = [], countNoView = 0;
+			for (var i = 0; i < participants.length; ++i) {
+				tmpConnection = participants[i].connection;
+				participantsMap.push({
+					id: tmpConnection.userId,
+					username: tmpConnection.userName,
+					color: tmpConnection.userColor,
+					view: tmpConnection.isViewer
+				});
+				if (!tmpConnection.isViewer) {
+					++countNoView;
+					if (!firstParticipantNoView)
+						firstParticipantNoView = participantsMap[participantsMap.length - 1];
+				}
 			}
 
-			var sendObject = lockDocuments[conn.docId] ? {
+			// Отправляем на внешний callback только для тех, кто редактирует
+			if (!conn.isViewer)
+				sendStatusDocument(docId, false);
+
+			if (!bIsRestore && 2 === countNoView && !conn.isViewer) {
+				// Ставим lock на документ
+				lockDocuments[docId] = firstParticipantNoView;
+			}
+
+			// Для view не ждем снятия lock-а
+			var sendObject = lockDocuments[docId] && !conn.isViewer ? {
 				type			: "waitAuth",
-				lockDocument	: lockDocuments[conn.docId]
+				lockDocument	: lockDocuments[docId]
 			} : {
 				type			: "auth",
 				result			: 1,
 				sessionId		: conn.sessionId,
 				participants	: participantsMap,
-				messages		: messages[conn.docid],
-				locks			: locks[conn.docId],
-				changes			: objChanges[conn.docId],
-				indexUser		: indexUser[conn.docId]
+				messages		: messages[docId],
+				locks			: locks[docId],
+				changes			: objChanges[docId],
+				indexUser		: indexUser[docId]
 			};
 
 			sendData(conn, sendObject);//Or 0 if fails
 
-			sendParticipantsState(participants, true, conn.userId, conn.userName, conn.userColor);
+			sendParticipantsState(participants, true, conn.userId, conn.userName, conn.userColor, conn.isViewer);
 		}
 	}
 	function onMessage(conn, data) {
@@ -774,7 +814,7 @@ exports.install = function (server, callbackFunction) {
 		});
 	}
 	function getLock(conn, data) {
-		var participants = getParticipants(conn.docId), documentLocks;
+		var participants = getParticipants(conn.docId, undefined, true), documentLocks;
 		if (!locks.hasOwnProperty(conn.docId)) {
 			locks[conn.docId] = {};
 		}
@@ -808,7 +848,7 @@ exports.install = function (server, callbackFunction) {
 	}
 	// Для Excel block теперь это объект { sheetId, type, rangeOrObjectId, guid }
 	function getLockRange(conn, data) {
-		var participants = getParticipants(conn.docId), documentLocks, documentLock;
+		var participants = getParticipants(conn.docId, undefined, true), documentLocks, documentLock;
 		if (!locks.hasOwnProperty(conn.docId)) {
 			locks[conn.docId] = [];
 		}
@@ -880,7 +920,7 @@ exports.install = function (server, callbackFunction) {
 	}
 	// Для презентаций это объект { type, val } или { type, slideId, objId }
 	function getLockPresentation(conn, data) {
-		var participants = getParticipants(conn.docId), documentLocks, documentLock;
+		var participants = getParticipants(conn.docId, undefined, true), documentLocks, documentLock;
 		if (!locks.hasOwnProperty(conn.docId)) {
 			locks[conn.docId] = [];
 		}
@@ -1038,7 +1078,7 @@ exports.install = function (server, callbackFunction) {
 				}
 			}
 
-			var participants = getParticipants(docId, userId);
+			var participants = getParticipants(docId, userId, true);
 			// Для данного пользователя снимаем Lock с документа
 			if (!checkEndAuthLock(docId, userId)) {
 				var arrLocks = _.map(userLocks, function (e) {
