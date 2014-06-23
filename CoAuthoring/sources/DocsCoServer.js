@@ -1035,7 +1035,7 @@ exports.install = function (server, callbackFunction) {
 				var nIndexChanges = 0;
 				for (; nIndexChanges < nCount; ++nIndexChanges) {
 					oElement = oChanges[nIndexChanges];
-					if ("object" === typeof oElement) {
+					if (oElement.hasOwnProperty("type")) {
 						if ("0" === oElement["type"]) {
 							// Это мы получили recalcIndexColumns
 							oRecalcIndexColumns = _addRecalcIndex(oElement["index"]);
