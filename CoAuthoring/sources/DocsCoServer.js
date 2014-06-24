@@ -18,20 +18,18 @@
 
 var sockjs = require('sockjs'),
     _ = require('underscore'),
-	dataBase  = null,
-	mysqlBase = null,
 	https = require('https'),
 	http = require('http'),
 	url = require('url'),
 	logger = require('./../../Common/sources/logger'),
-	config = require('./config.json');
-if (config["mongodb"])
-	dataBase = require('./database');
-if (config["mysql"])
+	config = require('./config.json'),
 	mysqlBase = require('./mySqlBase');
 
 var defaultServerPort = 80, httpsPort = 443;
-var objChanges = {}, objChangesTmp = {}, messages = {}, connections = [], objServiceInfo = {};
+var objChanges = {}, messages = {}, connections = [], objServiceInfo = {};
+
+// Максимальное число изменений, посылаемое на сервер (не может быть нечетным, т.к. пересчет обоих индексов должен быть)
+var maxCountSaveChanges = 20000;
 
 var c_oAscServerStatus = {
 	NotFound	: 0,
@@ -233,22 +231,6 @@ CRecalcIndex.prototype = {
 	}
 };
 
-function removeSaveChanges(id, deleteMessages) {
-	if (deleteMessages) {
-		// remove messages from dataBase
-		if (dataBase)
-			dataBase.remove ("messages", {docid:id});
-		// remove messages from memory
-		delete messages[id];
-	}
-
-	// remove changes from dataBase
-	if (dataBase)
-		dataBase.remove ("changes", {docid:id});
-	// remove changes from memory
-	delete objChanges[id];
-}
-
 function sendData(conn, data) {
 	conn.write(JSON.stringify(data));
 }
@@ -311,12 +293,10 @@ function sendStatusDocument (docId, bChangeBase) {
 	if (bChangeBase) {
 		if (c_oAscServerStatus.Editing === status) {
 			// Добавить в базу
-			if (mysqlBase)
-				mysqlBase.insertCallback(docId, callback.href);
+			mysqlBase.insertCallback(docId, callback.href);
 		} else if (c_oAscServerStatus.Closed === status) {
 			// Удалить из базы
-			if (mysqlBase)
-				mysqlBase.deleteCallback(docId);
+			mysqlBase.deleteCallback(docId);
 			delete objServiceInfo[docId];
 		}
 	}
@@ -349,7 +329,7 @@ exports.install = function (server, callbackFunction) {
 		arrSaveLock = {},
 		saveTimers = {},// Таймеры сохранения, после выхода всех пользователей
         urlParse = new RegExp("^/doc/([0-9-.a-zA-Z_=]*)/c.+", 'i');
-	var asc_coAuthV	= '3.0.0';
+	var asc_coAuthV	= '3.0.1';
 
     sockjs_echo.on('connection', function (conn) {
 		if (null == conn) {
@@ -804,10 +784,8 @@ exports.install = function (server, callbackFunction) {
 			messages[conn.docId].push(msg);
 		}
 
-		// insert in dataBase
-		logger.info("database insert message: " + JSON.stringify(msg));
-		if (dataBase)
-			dataBase.insert ("messages", msg);
+		// insert
+		logger.info("insert message: " + JSON.stringify(msg));
 
 		_.each(participants, function (participant) {
 			sendData(participant.connection, {type:"message", messages:[msg]});
@@ -964,97 +942,96 @@ exports.install = function (server, callbackFunction) {
 	// Для Excel необходимо делать пересчет lock-ов при добавлении/удалении строк/столбцов
 	function saveChanges(conn, data) {
 		var docId = conn.docId, userId = conn.userId;
+		var participants = getParticipants(docId, userId, true);
 
-		//if (false === data.isCoAuthoring && data.startSaveChanges) {
-		//	// Мы еще не в совместном редактировании, нужно удалить старые изменения
-		//	removeSaveChanges(docId, /*deleteMessages*/false);
-		//}
+		if (!objChanges.hasOwnProperty(docId))
+			objChanges[docId] = [];
 
 		var deleteIndex = (null != data.deleteIndex) ? data.deleteIndex : -1;
+		var startIndex = data.startIndex + (-1 !== deleteIndex ? deleteIndex : 0);
 		var objChange, bUpdate = false;
-		if (data.startSaveChanges) {
-			if (!objChangesTmp.hasOwnProperty(docId))
-				delete objChangesTmp[docId];
-
-			// Пользователь один и ему нужно сместить свои изменения
-			if (-1 !== deleteIndex) {
+		if (data.startSaveChanges && -1 !== deleteIndex) {
+			while (true) {
+				// Пользователь один и ему нужно сместить свои изменения
 				objChange = objChanges[docId].pop();
 				if (!objChange) {
 					logger.error("old sdk used");
 					return;
 				}
-				bUpdate = true;
-			} else
-				objChange = {docid: docId, changes: data.changes, time: Date.now(),
-					user: userId, useridoriginal: conn.userIdOriginal, insertId: -1};
-		} else {
-			objChange = objChangesTmp[docId];
-			bUpdate = true;
+
+				if (objChange.startIndex === deleteIndex) {
+					// Удаляем запись и все
+					mysqlBase.deleteChanges(objChange);
+					break;
+				} else if (objChange.startIndex > deleteIndex) {
+					// Удаляем запись и продолжаем
+					mysqlBase.deleteChanges(objChange);
+				} else {
+					// Нужно удалить часть изменений из массива и добавить новые
+					// Обновляем время, и соединяем массив (если он не превышает размеры)
+					objChange.time = Date.now();
+
+					// ToDo подумать, может как-то улучшить это?
+					var oldChanges = JSON.parse(objChange.changes);
+					var sliceChanges = oldChanges.slice(0, deleteIndex - objChange.startIndex);
+					var newChanges = JSON.parse(data.changes);
+					if (maxCountSaveChanges < newChanges.length + sliceChanges.length) {
+						objChange.changes =	JSON.stringify(sliceChanges);
+						mysqlBase.updateChanges(objChange);
+						_.each(participants, function (participant) {
+							sendData(participant.connection, {type:"saveChanges", changes:objChange.changes, user:userId, locks:[]});
+						});
+						objChanges[docId].push(objChange);
+					} else {
+						newChanges = sliceChanges.concat(newChanges);
+						objChange.changes =	JSON.stringify(newChanges);
+						bUpdate = true;
+					}
+					break;
+				}
+			}
 		}
 
+		if (!bUpdate) {
+			objChange = {docid: docId, changes: data.changes, time: Date.now(), user: userId,
+				useridoriginal: conn.userIdOriginal, insertId: -1, startIndex: startIndex};
+		}
+
+		// Изменения пишем частями, т.к. в базу нельзя писать большими порциями
 		if (bUpdate) {
-			// Обновляем время, и соединяем массив (ToDo подумать, может как-то улучшить это?)
-			objChange.time = Date.now();
-			var newChanges = JSON.parse(data.changes);
-			var oldChanges = JSON.parse(objChange.changes);
-			// Нужно начать не с самого начала (пользователь один)
-			if (-1 !== deleteIndex && data.startSaveChanges) {
-				oldChanges.splice(deleteIndex, oldChanges.length - deleteIndex);
-			}
-
-			newChanges = oldChanges.concat(newChanges);
-			objChange.changes =	JSON.stringify(newChanges);
-		}
-
-		if (!data.endSaveChanges) {
-			objChangesTmp[docId] = objChange;
-			sendData(conn, {type:"savePartChanges"});
+			logger.info("updateChanges");
+			mysqlBase.updateChanges(objChange);
 		} else {
-			// Только когда пришли все изменения, то пишем в базу и добавляем изменения
-			if (!objChanges.hasOwnProperty(docId)) {
-				objChanges[docId] = [objChange];
-			} else {
-				objChanges[docId].push(objChange);
-			}
-			// insert in dataBase
-			logger.info("database insert changes: " + JSON.stringify(objChange));
-			if (dataBase)
-				dataBase.insert("changes", objChange);
-			if (mysqlBase) {
-				if (-1 !== deleteIndex)
-					mysqlBase.updateChanges(objChange);
-				else
-					mysqlBase.insertChanges(objChange, conn.server, conn.documentFormatSave);
-			}
+			logger.info("insertChanges");
+			mysqlBase.insertChanges(objChange, conn.server, conn.documentFormatSave);
+		}
+		objChanges[docId].push(objChange);
 
-			if (data.isExcel && false !== data.isCoAuthoring) {
-				var oElement = null;
-				var oRecalcIndexColumns = null, oRecalcIndexRows = null;
-				var oChanges = JSON.parse(objChange.changes);
-				var nCount = oChanges.length;
-				var nIndexChanges = 0;
-				for (; nIndexChanges < nCount; ++nIndexChanges) {
-					oElement = oChanges[nIndexChanges];
-					if (oElement.hasOwnProperty("type")) {
-						if ("0" === oElement["type"]) {
-							// Это мы получили recalcIndexColumns
-							oRecalcIndexColumns = _addRecalcIndex(oElement["index"]);
-						} else if ("1" === oElement["type"]) {
-							// Это мы получили recalcIndexRows
-							oRecalcIndexRows = _addRecalcIndex(oElement["index"]);
-						}
+		// Для Excel нужно пересчитать индексы для lock-ов
+		if (data.isExcel && false !== data.isCoAuthoring) {
+			var oElement = null;
+			var oRecalcIndexColumns = null, oRecalcIndexRows = null;
+			var oChanges = JSON.parse(objChange.changes);
+			for (var nIndexChanges = 0; nIndexChanges < oChanges.length; ++nIndexChanges) {
+				oElement = oChanges[nIndexChanges];
+				if (oElement.hasOwnProperty("type")) {
+					if ("0" === oElement["type"]) {
+						// Это мы получили recalcIndexColumns
+						oRecalcIndexColumns = _addRecalcIndex(oElement["index"]);
+					} else if ("1" === oElement["type"]) {
+						// Это мы получили recalcIndexRows
+						oRecalcIndexRows = _addRecalcIndex(oElement["index"]);
 					}
 				}
-
-				// Теперь нужно пересчитать индексы для lock-элементов
-				if (null !== oRecalcIndexColumns || null !== oRecalcIndexRows) {
-					_recalcLockArray(userId, locks[docId], oRecalcIndexColumns, oRecalcIndexRows);
-				}
 			}
 
-			if (!objChangesTmp.hasOwnProperty(docId))
-				delete objChangesTmp[docId];
+			// Теперь нужно пересчитать индексы для lock-элементов
+			if (null !== oRecalcIndexColumns || null !== oRecalcIndexRows) {
+				_recalcLockArray(userId, locks[docId], oRecalcIndexColumns, oRecalcIndexRows);
+			}
+		}
 
+		if (data.endSaveChanges) {
 			//Release locks
 			var userLocks;
 			var docLock = locks[docId];
@@ -1077,8 +1054,6 @@ exports.install = function (server, callbackFunction) {
 					}
 				}
 			}
-
-			var participants = getParticipants(docId, userId, true);
 			// Для данного пользователя снимаем Lock с документа
 			if (!checkEndAuthLock(docId, userId)) {
 				var arrLocks = _.map(userLocks, function (e) {
@@ -1093,6 +1068,11 @@ exports.install = function (server, callbackFunction) {
 					sendData(participant.connection, {type:"saveChanges", changes:objChange.changes, user:userId, locks:arrLocks});
 				});
 			}
+		} else {
+			_.each(participants, function (participant) {
+				sendData(participant.connection, {type:"saveChanges", changes:objChange.changes, user:userId, locks:[]});
+			});
+			sendData(conn, {type: "savePartChanges"});
 		}
 	}
 	// Можем ли мы сохранять ?
@@ -1140,31 +1120,6 @@ exports.install = function (server, callbackFunction) {
 		//TODO: handle severity
 		logger.info(message);
     }});
-	
-	var callbackLoadMessages = function (arrayElements){
-		if (null != arrayElements) {
-			messages = arrayElements;
-			
-			// remove all messages from dataBase
-			if (dataBase)
-				dataBase.remove ("messages", {});
-		}
-		if (dataBase)
-			dataBase.load ("changes", callbackLoadChanges);
-		else
-			callbackLoadChanges(null);
-	};
-	
-	var callbackLoadChanges = function (arrayElements){
-		if (null != arrayElements) {
-			// ToDo Send changes to save server
-			
-			// remove all changes from dataBase
-			if (dataBase)
-				dataBase.remove ("changes", {});
-		}
-		callbackFunction ();
-	};
 
 	var callbackLoadChangesMySql = function (arrayElements){
 		var createTimer = function (id, objProp) {
@@ -1180,7 +1135,7 @@ exports.install = function (server, callbackFunction) {
 				docId = element.docid;
 				try {
 					objChange = {docid:docId, changes:element.data, user:element.userid,
-						useridoriginal: element.useridoriginal}; // Пишем пока без времени (это не особо нужно)
+						useridoriginal: element.useridoriginal, insertId: -1}; // Пишем пока без времени (это не особо нужно)
 					if (!objChanges.hasOwnProperty(docId)) {
 						objChanges[docId] = [objChange];
 						objProps[docId] = {server: {
@@ -1200,21 +1155,18 @@ exports.install = function (server, callbackFunction) {
 		}
 		callbackFunction ();
 	};
-	
-	if (dataBase)
-		dataBase.load("messages", callbackLoadMessages);
-	else if (mysqlBase)
-		mysqlBase.loadChanges(callbackLoadChangesMySql);
-	else
-		callbackLoadMessages(null);
+
+	mysqlBase.loadChanges(callbackLoadChangesMySql);
 };
 // Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
 exports.removeChanges = function (id) {
-	removeSaveChanges(id, /*isDeleteMessages*/true);
+	// remove messages from memory
+	delete messages[id];
+	// remove changes from memory
+	delete objChanges[id];
 
 	// Нужно удалить из базы callback-ов
-	if (mysqlBase)
-		mysqlBase.deleteCallback(id);
+	mysqlBase.deleteCallback(id);
 	delete objServiceInfo[id];
 };
 // Команда с сервера (в частности teamlab)
