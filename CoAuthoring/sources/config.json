@@ -15,6 +15,7 @@
 		"pass"				: "canvas_usr",
 		"charset"			: "utf8",
 		"tableChangesName"	: "docschanges",
-		"tableCallbacks"	: "doccallbacks"
+		"tableCallbacks"	: "doccallbacks",
+		"tableResult"		: "tast_result"
 	}
 }
