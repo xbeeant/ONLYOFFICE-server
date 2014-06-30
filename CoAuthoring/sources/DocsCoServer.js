@@ -53,6 +53,18 @@ var c_oAscRecalcIndexTypes = {
 	RecalcIndexRemove:	2
 };
 
+var FileStatus  = {
+	None			: 0,
+	Ok				: 1,
+	WaitQueue		: 2,
+	NeedParams		: 3,
+	Convert			: 4,
+	Err				: 5,
+	ErrToReload		: 6,
+	SaveVersion		: 7,
+	UpdateVersion	: 8
+};
+
 /**
  * lock types
  * @const
@@ -499,18 +511,21 @@ exports.install = function (server, callbackFunction) {
     function sendParticipantsState(participants, stateConnect, _userId, _userName, _userColor, _userView) {
         _.each(participants, function (participant) {
 			if (participant.connection.userId !== _userId) {
-				sendData(participant.connection,
-					{
-						type		: "connectState",
-						state		: stateConnect,
-						id			: _userId,
-						username	: _userName,
-						color		: _userColor,
-						view		: _userView
-					});
+				sendData(participant.connection, {
+					type		: "connectState",
+					state		: stateConnect,
+					id			: _userId,
+					username	: _userName,
+					color		: _userColor,
+					view		: _userView
+				});
 			}
         });
     }
+
+	function sendFileError(conn, errorId) {
+		sendData(conn, {type : 'error', description: errorId});
+	}
 
 	function getParticipants(docId, excludeUserId, excludeViewer) {
 		return _.filter(connections, function (el) {
@@ -675,11 +690,10 @@ exports.install = function (server, callbackFunction) {
 	function auth(conn, data) {
 		// Проверка версий
 		if (data.version !== asc_coAuthV) {
-			sendData(conn, {type : 'error', description: 'old Version Sdk'});
+			sendFileError(conn, 'Old Version Sdk');
 			return;
 		}
 
-		var bIsRestore = false;
 		//TODO: Do authorization etc. check md5 or query db
 		if (data.token && data.user) {
 			var docId;
@@ -715,64 +729,95 @@ exports.install = function (server, callbackFunction) {
 			conn.documentFormatSave = data.documentFormatSave;
 			//Set the unique ID
 			if (data.sessionId !== null && _.isString(data.sessionId) && data.sessionId !== "") {
-				bIsRestore = true;
 				logger.info("restored old session id=" + data.sessionId);
 
-				//Kill previous connections
-				connections = _.reject(connections, function (el) {
-					return el.connection.sessionId === data.sessionId;//Delete this connection
+				// Останавливаем сборку (вдруг она началась)
+				// Когда переподсоединение, нам нужна проверка на сборку файла
+				mysqlBase.checkStatusFile(docId, function (err, result) {
+					if (null !== err) {
+						// error database
+						sendFileError(conn, 'DataBase error');
+						return;
+					}
+
+					var status = result[0]['tr_status'];
+					if (FileStatus.Ok === status) {
+						// Все хорошо, статус обновлять не нужно
+					} else if (FileStatus.SaveVersion === status) {
+						// Обновим статус файла (идет сборка, нужно ее остановить)
+						mysqlBase.updateStatusFile(docId);
+					} else if (FileStatus.UpdateVersion === status) {
+						// error version
+						sendFileError(conn, 'Update Version error');
+						return;
+					} else {
+						// Other error
+						sendFileError(conn, 'Other error');
+						return;
+					}
+
+					//Kill previous connections
+					connections = _.reject(connections, function (el) {
+						return el.connection.sessionId === data.sessionId;//Delete this connection
+					});
+					conn.sessionId = data.sessionId;//restore old
+
+					endAuth(conn, true);
 				});
-				conn.sessionId = data.sessionId;//restore old
 
 			} else {
 				conn.sessionId = conn.id;
+				endAuth(conn, false);
 			}
-			connections.push({connection:conn});
-			var participants = getParticipants(docId);
-			var tmpConnection, firstParticipantNoView, participantsMap = [], countNoView = 0;
-			for (var i = 0; i < participants.length; ++i) {
-				tmpConnection = participants[i].connection;
-				participantsMap.push({
-					id: tmpConnection.userId,
-					username: tmpConnection.userName,
-					color: tmpConnection.userColor,
-					view: tmpConnection.isViewer
-				});
-				if (!tmpConnection.isViewer) {
-					++countNoView;
-					if (!firstParticipantNoView)
-						firstParticipantNoView = participantsMap[participantsMap.length - 1];
-				}
-			}
-
-			// Отправляем на внешний callback только для тех, кто редактирует
-			if (!conn.isViewer)
-				sendStatusDocument(docId, false);
-
-			if (!bIsRestore && 2 === countNoView && !conn.isViewer) {
-				// Ставим lock на документ
-				lockDocuments[docId] = firstParticipantNoView;
-			}
-
-			// Для view не ждем снятия lock-а
-			var sendObject = lockDocuments[docId] && !conn.isViewer ? {
-				type			: "waitAuth",
-				lockDocument	: lockDocuments[docId]
-			} : {
-				type			: "auth",
-				result			: 1,
-				sessionId		: conn.sessionId,
-				participants	: participantsMap,
-				messages		: messages[docId],
-				locks			: locks[docId],
-				changes			: objChanges[docId],
-				indexUser		: indexUser[docId]
-			};
-
-			sendData(conn, sendObject);//Or 0 if fails
-
-			sendParticipantsState(participants, true, conn.userId, conn.userName, conn.userColor, conn.isViewer);
 		}
+	}
+	function endAuth(conn, bIsRestore) {
+		var docId = conn.docId;
+		connections.push({connection:conn});
+		var participants = getParticipants(docId);
+		var tmpConnection, firstParticipantNoView, participantsMap = [], countNoView = 0;
+		for (var i = 0; i < participants.length; ++i) {
+			tmpConnection = participants[i].connection;
+			participantsMap.push({
+				id: tmpConnection.userId,
+				username: tmpConnection.userName,
+				color: tmpConnection.userColor,
+				view: tmpConnection.isViewer
+			});
+			if (!tmpConnection.isViewer) {
+				++countNoView;
+				if (!firstParticipantNoView)
+					firstParticipantNoView = participantsMap[participantsMap.length - 1];
+			}
+		}
+
+		// Отправляем на внешний callback только для тех, кто редактирует
+		if (!conn.isViewer)
+			sendStatusDocument(docId, false);
+
+		if (!bIsRestore && 2 === countNoView && !conn.isViewer) {
+			// Ставим lock на документ
+			lockDocuments[docId] = firstParticipantNoView;
+		}
+
+		// Для view не ждем снятия lock-а
+		var sendObject = lockDocuments[docId] && !conn.isViewer ? {
+			type			: "waitAuth",
+			lockDocument	: lockDocuments[docId]
+		} : {
+			type			: "auth",
+			result			: 1,
+			sessionId		: conn.sessionId,
+			participants	: participantsMap,
+			messages		: messages[docId],
+			locks			: locks[docId],
+			changes			: objChanges[docId],
+			indexUser		: indexUser[docId]
+		};
+
+		sendData(conn, sendObject);//Or 0 if fails
+
+		sendParticipantsState(participants, true, conn.userId, conn.userName, conn.userColor, conn.isViewer);
 	}
 	function onMessage(conn, data) {
 		var participants = getParticipants(conn.docId),
