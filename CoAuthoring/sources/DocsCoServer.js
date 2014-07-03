@@ -427,27 +427,8 @@ exports.install = function (server, callbackFunction) {
 
 					//Давайдосвиданья!
 					//Release locks
-					docLock = locks[docId];
-					if (docLock) {
-						userLocks = [];
-
-						if ("array" === typeOf (docLock)) {
-							for (var nIndex = 0; nIndex < docLock.length; ++nIndex) {
-								if (docLock[nIndex].sessionId === connection.sessionId) {
-									userLocks.push(docLock[nIndex]);
-									docLock.splice(nIndex, 1);
-									--nIndex;
-								}
-							}
-						} else {
-							for (var keyLockElem in docLock) if (docLock.hasOwnProperty(keyLockElem)) {
-								if (docLock[keyLockElem].sessionId === connection.sessionId) {
-									userLocks.push(docLock[keyLockElem]);
-									delete docLock[keyLockElem];
-								}
-							}
-						}
-
+					userLocks = getUserLocks(docId, connection.sessionId);
+					if (0 < userLocks.length) {
 						_.each(participants, function (participant) {
 							if (!participant.connection.isViewer) {
 								sendData(participant.connection, {type: "releaseLock", locks: _.map(userLocks, function (e) {
@@ -468,6 +449,30 @@ exports.install = function (server, callbackFunction) {
             }
         });
     });
+
+	function getUserLocks (docId, sessionId) {
+		var userLocks = [], i;
+		var docLock = locks[docId];
+		if (docLock) {
+			if ("array" === typeOf (docLock)) {
+				for (i = 0; i < docLock.length; ++i) {
+					if (docLock[i].sessionId === sessionId) {
+						userLocks.push(docLock[i]);
+						docLock.splice(i, 1);
+						--i;
+					}
+				}
+			} else {
+				for (i in docLock) {
+					if (docLock[i].sessionId === sessionId) {
+						userLocks.push(docLock[i]);
+						delete docLock[i];
+					}
+				}
+			}
+		}
+		return userLocks;
+	}
 
 	function checkEndAuthLock (docId, userId, participants) {
 		var result = false;
@@ -1078,27 +1083,7 @@ exports.install = function (server, callbackFunction) {
 
 		if (data.endSaveChanges) {
 			//Release locks
-			var userLocks;
-			var docLock = locks[docId];
-			if (docLock) {
-				if ("array" === typeOf (docLock)) {
-					userLocks = [];
-					for (var nIndex = 0; nIndex < docLock.length; ++nIndex) {
-						if (null !== docLock[nIndex] && docLock[nIndex].sessionId === conn.sessionId) {
-							userLocks.push(docLock[nIndex]);
-							docLock.splice(nIndex, 1);
-							--nIndex;
-						}
-					}
-				} else {
-					userLocks = _.filter(docLock, function (el) {
-						return el !== null && el.sessionId === conn.sessionId;
-					});
-					for (var i = 0; i < userLocks.length; i++) {
-						delete docLock[userLocks[i].block];
-					}
-				}
-			}
+			var userLocks = getUserLocks(docId, conn.sessionId);
 			// Для данного пользователя снимаем Lock с документа
 			if (!checkEndAuthLock(docId, userId)) {
 				var arrLocks = _.map(userLocks, function (e) {
