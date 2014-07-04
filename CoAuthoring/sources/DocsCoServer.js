@@ -361,7 +361,7 @@ exports.install = function (server, callbackFunction) {
 					case 'isSaveLock'			: isSaveLock(conn, data); break;
 					case 'unSaveLock'			: unSaveLock(conn, data); break;
 					case 'getMessages'			: getMessages(conn, data); break;
-					case 'unLockDocument'		: checkEndAuthLock(conn.docId, conn.userId); break;
+					case 'unLockDocument'		: checkEndAuthLock(data.isSave, conn.docId, conn.userId, null, conn.sessionId); break;
 				}
             } catch (e) {
                 logger.error("error receiving response:" + e);
@@ -372,7 +372,7 @@ exports.install = function (server, callbackFunction) {
             logger.error("On error");
         });
         conn.on('close', function () {
-            var connection = this, docLock, userLocks, participants, reconnected, curChanges;
+            var connection = this, userLocks, participants, reconnected, curChanges;
 			var docId = conn.docId;
 			if (null == docId)
 				return;
@@ -444,7 +444,7 @@ exports.install = function (server, callbackFunction) {
 					}
 
 					// Для данного пользователя снимаем Lock с документа
-					checkEndAuthLock(docId, connection.userId, participants);
+					checkEndAuthLock(false, docId, connection.userId, participants);
 				}
             }
         });
@@ -474,15 +474,14 @@ exports.install = function (server, callbackFunction) {
 		return userLocks;
 	}
 
-	function checkEndAuthLock (docId, userId, participants) {
-		var result = false;
+	function checkEndAuthLock (isSave, docId, userId, participants, sessionId) {
+		var result = false, connection;
 		if (lockDocuments.hasOwnProperty(docId) && userId === lockDocuments[docId].id) {
 			delete lockDocuments[docId];
 
 			if (!participants)
 				participants = getParticipants(docId);
 
-			var connection;
 			var participantsMap = _.map(participants, function (conn) {
 				return {
 					id: conn.connection.userId,
@@ -509,6 +508,28 @@ exports.install = function (server, callbackFunction) {
 			});
 
 			result = true;
+		} else if (isSave) {
+			//Release locks
+			var userLocks = getUserLocks(docId, sessionId);
+			//Release locks
+			if (0 < userLocks.length) {
+				if (!participants)
+					participants = getParticipants(docId);
+
+				_.each(participants, function (participant) {
+					connection = participant.connection;
+					if (userId !== connection.userId && !connection.isViewer) {
+						sendData(connection, {type: "releaseLock", locks: _.map(userLocks, function (e) {
+							return {
+								block: e.block,
+								user: e.user,
+								time: Date.now(),
+								changes: null
+							};
+						})});
+					}
+				});
+			}
 		}
 		return result;
 	}
@@ -1085,7 +1106,7 @@ exports.install = function (server, callbackFunction) {
 			//Release locks
 			var userLocks = getUserLocks(docId, conn.sessionId);
 			// Для данного пользователя снимаем Lock с документа
-			if (!checkEndAuthLock(docId, userId)) {
+			if (!checkEndAuthLock(false, docId, userId)) {
 				var arrLocks = _.map(userLocks, function (e) {
 					return {
 						block:e.block,
