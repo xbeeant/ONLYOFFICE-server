@@ -760,7 +760,7 @@ exports.install = function (server, callbackFunction) {
 				// Останавливаем сборку (вдруг она началась)
 				// Когда переподсоединение, нам нужна проверка на сборку файла
 				mysqlBase.checkStatusFile(docId, function (err, result) {
-					if (null !== err) {
+					if (null !== err || 0 === result.length) {
 						// error database
 						sendFileError(conn, 'DataBase error');
 						return;
