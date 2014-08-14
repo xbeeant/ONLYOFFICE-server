@@ -259,7 +259,7 @@ function getOriginalParticipantsId(docId) {
 	return result;
 }
 
-function sendServerRequest (serverHost, serverPort, serverPath, sendData) {
+function sendServerRequest (serverHost, serverPort, serverPath, postData) {
 	if (!serverHost || !serverPath)
 		return;
 	var options = {
@@ -268,7 +268,8 @@ function sendServerRequest (serverHost, serverPort, serverPath, sendData) {
 		path: serverPath,
 		method: 'POST',
 		headers: {
-			'Content-Type': 'application/json'
+			'Content-Type': 'application/json',
+			'Content-Length': postData.length
 		}
 	};
 
@@ -289,7 +290,7 @@ function sendServerRequest (serverHost, serverPort, serverPath, sendData) {
 	});
 
 	// write data to request body
-	req.write(sendData);
+	req.write(postData);
 	req.end();
 }
 
