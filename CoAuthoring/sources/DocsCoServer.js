@@ -266,7 +266,10 @@ function sendServerRequest (serverHost, serverPort, serverPath, sendData) {
 		host: serverHost,
 		port: serverPort ? serverPort : defaultServerPort,
 		path: serverPath,
-		method: 'POST'
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		}
 	};
 
 	var requestFunction = httpsPort === serverPort ? https.request : http.request;
