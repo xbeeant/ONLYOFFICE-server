@@ -275,6 +275,7 @@ function sendServerRequest (serverHost, serverPort, serverPath, postData) {
 
 	var requestFunction = httpsPort === serverPort ? https.request : http.request;
 
+	logger.info('postData: ' + postData);
 	var req = requestFunction(options, function(res) {
 		res.setEncoding('utf8');
 		res.on('data', function(replyData) {
@@ -1215,6 +1216,7 @@ exports.install = function (server, callbackFunction) {
 };
 // Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
 exports.removeChanges = function (id) {
+	logger.info('removeChanges: ' + id);
 	// remove messages from memory
 	delete messages[id];
 	// remove changes from memory
@@ -1231,6 +1233,7 @@ exports.commandFromServer = function (query) {
 	if (null == docId)
 		return c_oAscServerCommandErrors.DocumentIdError;
 
+	logger.info('commandFromServer: ' + query.c);
 	var result = c_oAscServerCommandErrors.NoError;
 	switch(query.c) {
 		case "info":
