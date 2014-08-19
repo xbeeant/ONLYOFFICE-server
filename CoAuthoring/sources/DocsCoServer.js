@@ -25,7 +25,7 @@ var sockjs = require('sockjs'),
 	config = require('./config.json'),
 	mysqlBase = require('./mySqlBase');
 
-var defaultServerPort = 80, httpsPort = 443;
+var defaultHttpPort = 80, defaultHttpsPort = 443;
 var objChanges = {}, messages = {}, connections = [], objServiceInfo = {};
 
 // Максимальное число изменений, посылаемое на сервер (не может быть нечетным, т.к. пересчет обоих индексов должен быть)
@@ -259,21 +259,22 @@ function getOriginalParticipantsId(docId) {
 	return result;
 }
 
-function sendServerRequest (serverHost, serverPort, serverPath, postData) {
-	if (!serverHost || !serverPath)
+function sendServerRequest (server, postData) {
+	if (!server.host || !server.path)
 		return;
 	var options = {
-		host: serverHost,
-		port: serverPort ? serverPort : defaultServerPort,
-		path: serverPath,
+		host: server.host,
+		path: server.path,
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 			'Content-Length': postData.length
 		}
 	};
+	if (server.port)
+		options.port = server.port;
 
-	var requestFunction = httpsPort === serverPort ? https.request : http.request;
+	var requestFunction = server.https ? https.request : http.request;
 
 	logger.info('postData: ' + postData);
 	var req = requestFunction(options, function(res) {
@@ -319,7 +320,7 @@ function sendStatusDocument (docId, bChangeBase) {
 	}
 
 	var sendData = JSON.stringify({'key': docId, 'status': status, 'url': '', 'users': participants});
-	sendServerRequest(callback.hostname, callback.port, callback.path, sendData);
+	sendServerRequest(callback, sendData);
 }
 
 function dropUserFromDocument (docId, userId, description) {
@@ -582,7 +583,7 @@ exports.install = function (server, callbackFunction) {
 			'outputformat': documentFormatSave,
 			'data': c_oAscSaveTimeOutDelay
 		});
-		sendServerRequest(server.host, server.port, server.path, sendData);
+		sendServerRequest(server, sendData);
 	}
 
 	// Пересчет только для чужих Lock при сохранении на клиенте, который добавлял/удалял строки или столбцы
@@ -1244,14 +1245,16 @@ exports.commandFromServer = function (query) {
 			if (!objServiceInfo[docId]) {
 				try {
 					var parseObject = url.parse(decodeURIComponent(query.callback));
+					var isHttps = 'https:' === parseObject.protocol;
 					var port = parseObject.port;
 					if (!port)
-						port = 'https:' === parseObject.protocol ? httpsPort : defaultServerPort;
+						port = isHttps ? defaultHttpsPort : defaultHttpPort;
 					objServiceInfo[docId] = {
-						'href'		: parseObject.href,
-						'hostname'	: parseObject.hostname,
+						'https'		: isHttps,
+						'host'		: parseObject.hostname,
 						'port'		: port,
-						'path'		: parseObject.path
+						'path'		: parseObject.path,
+						'href'		: parseObject.href
 					};
 				} catch (e) {return c_oAscServerCommandErrors.ParseError;}
 			}
