@@ -396,8 +396,7 @@ exports.install = function (server, callbackFunction) {
 
 			var state = (false == reconnected) ? false : undefined;
 			participants = getParticipants(docId);
-            sendParticipantsState(participants, state, connection.userId, connection.userName,
-				connection.userColor, connection.isViewer);
+            sendParticipantsState(participants, state, connection);
 
             if (!reconnected) {
 				// Для данного пользователя снимаем лок с сохранения
@@ -540,16 +539,16 @@ exports.install = function (server, callbackFunction) {
 		return result;
 	}
 
-    function sendParticipantsState(participants, stateConnect, _userId, _userName, _userColor, _userView) {
+    function sendParticipantsState(participants, stateConnect, oConnection) {
         _.each(participants, function (participant) {
-			if (participant.connection.userId !== _userId) {
+			if (participant.connection.userId !== oConnection.userId) {
 				sendData(participant.connection, {
 					type		: "connectState",
 					state		: stateConnect,
-					id			: _userId,
-					username	: _userName,
-					color		: _userColor,
-					view		: _userView
+					id			: oConnection.userId,
+					username	: oConnection.userName,
+					color		: oConnection.userColor,
+					view		: oConnection.isViewer
 				});
 			}
         });
@@ -849,7 +848,7 @@ exports.install = function (server, callbackFunction) {
 
 		sendData(conn, sendObject);//Or 0 if fails
 
-		sendParticipantsState(participants, true, conn.userId, conn.userName, conn.userColor, conn.isViewer);
+		sendParticipantsState(participants, true, conn);
 	}
 	function onMessage(conn, data) {
 		var participants = getParticipants(conn.docId),
@@ -1237,7 +1236,7 @@ exports.commandFromServer = function (query) {
 	logger.info('commandFromServer: ' + query.c);
 	var result = c_oAscServerCommandErrors.NoError;
 	switch(query.c) {
-		case "info":
+		case 'info':
 			// Подписка на эвенты:
 			// - если пользователей нет и изменений нет, то отсылаем стату "закрыто" и в базу не добавляем
 			// - если пользователей нет, а изменения есть, то отсылаем статус "редактируем" без пользователей, но добавляем в базу
@@ -1260,8 +1259,11 @@ exports.commandFromServer = function (query) {
 			}
 			sendStatusDocument(docId, true);
 			break;
-		case "drop":
+		case 'drop':
 			dropUserFromDocument(docId, query.userid, query.description);
+			break;
+		case 'saved':
+			// Результат от менеджера документов о статусе обработки сохранения файла после сборки
 			break;
 		default:
 			result = c_oAscServerCommandErrors.CommandError;
