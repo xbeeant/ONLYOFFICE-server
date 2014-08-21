@@ -252,7 +252,7 @@ function getOriginalParticipantsId(docId) {
 	for (var i = 0, length = connections.length; i < length; ++i) {
 		elConnection = connections[i].connection;
 		if (elConnection.docId === docId && false === elConnection.isViewer)
-			tmpObject[elConnection.userIdOriginal] = 1;
+			tmpObject[elConnection.user.idOriginal] = 1;
 	}
 	for(var name in tmpObject) if (tmpObject.hasOwnProperty(name))
 		result.push(name);
@@ -327,7 +327,7 @@ function dropUserFromDocument (docId, userId, description) {
 	var elConnection;
 	for (var i = 0, length = connections.length; i < length; ++i) {
 		elConnection = connections[i].connection;
-		if (elConnection.docId === docId && userId === elConnection.userIdOriginal) {
+		if (elConnection.docId === docId && userId === elConnection.user.idOriginal) {
 			sendData(elConnection,
 				{
 					type			: "drop",
@@ -367,7 +367,7 @@ exports.install = function (server, callbackFunction) {
 					case 'isSaveLock'			: isSaveLock(conn, data); break;
 					case 'unSaveLock'			: unSaveLock(conn, data); break;
 					case 'getMessages'			: getMessages(conn, data); break;
-					case 'unLockDocument'		: checkEndAuthLock(data.isSave, conn.docId, conn.userId, null, conn.sessionId); break;
+					case 'unLockDocument'		: checkEndAuthLock(data.isSave, conn.docId, conn.user.id, null, conn.sessionId); break;
 				}
             } catch (e) {
                 logger.error("error receiving response:" + e);
@@ -400,7 +400,7 @@ exports.install = function (server, callbackFunction) {
 
             if (!reconnected) {
 				// Для данного пользователя снимаем лок с сохранения
-				if (undefined != arrSaveLock[docId] && connection.userId == arrSaveLock[docId].user) {
+				if (undefined != arrSaveLock[docId] && connection.user.id == arrSaveLock[docId].user) {
 					// Очищаем предыдущий таймер
 					if (null != arrSaveLock[docId].saveLockTimeOutId)
 						clearTimeout(arrSaveLock[docId].saveLockTimeOutId);
@@ -449,7 +449,7 @@ exports.install = function (server, callbackFunction) {
 					}
 
 					// Для данного пользователя снимаем Lock с документа
-					checkEndAuthLock(false, docId, connection.userId, participants);
+					checkEndAuthLock(false, docId, connection.user.id, participants);
 				}
             }
         });
@@ -488,17 +488,18 @@ exports.install = function (server, callbackFunction) {
 				participants = getParticipants(docId);
 
 			var participantsMap = _.map(participants, function (conn) {
+				var tmpUser = conn.connection.user;
 				return {
-					id: conn.connection.userId,
-					username: conn.connection.userName,
-					color: conn.connection.userColor,
+					id: tmpUser.id,
+					username: tmpUser.name,
+					color: tmpUser.color,
 					view: conn.connection.isViewer
 				};
 			});
 
 			_.each(participants, function (participant) {
 				connection = participant.connection;
-				if (userId !== connection.userId && !connection.isViewer) {
+				if (userId !== connection.user.id && !connection.isViewer) {
 					sendData(connection, {
 						type: "auth",
 						result: 1,
@@ -523,7 +524,7 @@ exports.install = function (server, callbackFunction) {
 
 				_.each(participants, function (participant) {
 					connection = participant.connection;
-					if (userId !== connection.userId && !connection.isViewer) {
+					if (userId !== connection.user.id && !connection.isViewer) {
 						sendData(connection, {type: "releaseLock", locks: _.map(userLocks, function (e) {
 							return {
 								block: e.block,
@@ -540,14 +541,15 @@ exports.install = function (server, callbackFunction) {
 	}
 
     function sendParticipantsState(participants, stateConnect, oConnection) {
+		var tmpUser = oConnection.user;
         _.each(participants, function (participant) {
-			if (participant.connection.userId !== oConnection.userId) {
+			if (participant.connection.user.id !== tmpUser.id) {
 				sendData(participant.connection, {
 					type		: "connectState",
 					state		: stateConnect,
-					id			: oConnection.userId,
-					username	: oConnection.userName,
-					color		: oConnection.userColor,
+					id			: tmpUser.id,
+					username	: tmpUser.name,
+					color		: tmpUser.color,
 					view		: oConnection.isViewer
 				});
 			}
@@ -560,7 +562,7 @@ exports.install = function (server, callbackFunction) {
 
 	function getParticipants(docId, excludeUserId, excludeViewer) {
 		return _.filter(connections, function (el) {
-			return el.connection.docId === docId && el.connection.userId !== excludeUserId &&
+			return el.connection.docId === docId && el.connection.user.id !== excludeUserId &&
 				el.connection.isViewer !== excludeViewer;
 		});
 	}
@@ -748,10 +750,13 @@ exports.install = function (server, callbackFunction) {
 				indexUser[docId] += 1;
 
 			conn.sessionState = 1;
-			conn.userId = user.id + indexUser[docId];
-			conn.userIdOriginal = user.id;
-			conn.userName = user.name;
-			conn.userColor = user.color;
+			conn.user = {
+				id			: user.id + indexUser[docId],
+				idOriginal	: user.id,
+				name		: user.name,
+				color		: user.color,
+				index		: indexUser[docId]
+			};
 			conn.isViewer = data.isViewer;
 
 			conn.server = data.server;
@@ -806,13 +811,14 @@ exports.install = function (server, callbackFunction) {
 		var docId = conn.docId;
 		connections.push({connection:conn});
 		var participants = getParticipants(docId);
-		var tmpConnection, firstParticipantNoView, participantsMap = [], countNoView = 0;
+		var tmpConnection, tmpUser, firstParticipantNoView, participantsMap = [], countNoView = 0;
 		for (var i = 0; i < participants.length; ++i) {
 			tmpConnection = participants[i].connection;
+			tmpUser = tmpConnection.user;
 			participantsMap.push({
-				id: tmpConnection.userId,
-				username: tmpConnection.userName,
-				color: tmpConnection.userColor,
+				id: tmpUser.id,
+				username: tmpUser.name,
+				color: tmpUser.color,
 				view: tmpConnection.isViewer
 			});
 			if (!tmpConnection.isViewer) {
@@ -852,7 +858,7 @@ exports.install = function (server, callbackFunction) {
 	}
 	function onMessage(conn, data) {
 		var participants = getParticipants(conn.docId),
-			msg = {docid:conn.docId, message:data.message, time:Date.now(), user:conn.userId, username:conn.userName};
+			msg = {docid:conn.docId, message:data.message, time:Date.now(), user:conn.user.id, username:conn.user.name};
 
 		if (!messages.hasOwnProperty(conn.docId)) {
 			messages[conn.docId] = [msg];
@@ -892,7 +898,8 @@ exports.install = function (server, callbackFunction) {
 		if (!isLock) {
 			//Ok. take lock
 			for (i = 0; i < lengthArray; ++i) {
-				documentLocks[arrayBlocks[i]] = {time:Date.now(), user:conn.userId, block:arrayBlocks[i], sessionId:conn.sessionId};
+				documentLocks[arrayBlocks[i]] = {time:Date.now(), user:conn.user.id,
+					block:arrayBlocks[i], sessionId:conn.sessionId};
 			}
 		}
 
@@ -923,7 +930,7 @@ exports.install = function (server, callbackFunction) {
 					continue;
 				documentLock = documentLocks[keyLockInArray];
 				// Проверка вхождения объекта в массив (текущий пользователь еще раз прислал lock)
-				if (documentLock.user === conn.userId &&
+				if (documentLock.user === conn.user.id &&
 					blockRange.sheetId === documentLock.block.sheetId &&
 					blockRange.type === c_oAscLockTypeElem.Object &&
 					documentLock.block.type === c_oAscLockTypeElem.Object &&
@@ -935,7 +942,7 @@ exports.install = function (server, callbackFunction) {
 				if (c_oAscLockTypeElem.Sheet === blockRange.type &&
 					c_oAscLockTypeElem.Sheet === documentLock.block.type) {
 					// Если текущий пользователь прислал lock текущего листа, то не заносим в массив, а если нового, то заносим
-					if (documentLock.user === conn.userId) {
+					if (documentLock.user === conn.user.id) {
 						if (blockRange.sheetId === documentLock.block.sheetId) {
 							// уже есть в массиве
 							isExistInArray = true;
@@ -951,7 +958,7 @@ exports.install = function (server, callbackFunction) {
 					}
 				}
 
-				if (documentLock.user === conn.userId || !(documentLock.block) ||
+				if (documentLock.user === conn.user.id || !(documentLock.block) ||
 					blockRange.sheetId !== documentLock.block.sheetId)
 					continue;
 				isLock = compareExcelBlock(blockRange, documentLock.block);
@@ -964,7 +971,7 @@ exports.install = function (server, callbackFunction) {
 			//Ok. take lock
 			for (i = 0; i < lengthArray; ++i) {
 				blockRange = arrayBlocks[i];
-				documentLocks.push({time:Date.now(), user:conn.userId, block:blockRange, sessionId:conn.sessionId});
+				documentLocks.push({time:Date.now(), user:conn.user.id, block:blockRange, sessionId:conn.sessionId});
 			}
 		}
 
@@ -995,7 +1002,7 @@ exports.install = function (server, callbackFunction) {
 					continue;
 				documentLock = documentLocks[keyLockInArray];
 
-				if (documentLock.user === conn.userId || !(documentLock.block))
+				if (documentLock.user === conn.user.id || !(documentLock.block))
 					continue;
 				isLock = comparePresentationBlock(blockRange, documentLock.block);
 			}
@@ -1007,7 +1014,7 @@ exports.install = function (server, callbackFunction) {
 			//Ok. take lock
 			for (i = 0; i < lengthArray; ++i) {
 				blockRange = arrayBlocks[i];
-				documentLocks.push({time:Date.now(), user:conn.userId, block:blockRange, sessionId:conn.sessionId});
+				documentLocks.push({time:Date.now(), user:conn.user.id, block:blockRange, sessionId:conn.sessionId});
 			}
 		}
 
@@ -1017,7 +1024,7 @@ exports.install = function (server, callbackFunction) {
 	}
 	// Для Excel необходимо делать пересчет lock-ов при добавлении/удалении строк/столбцов
 	function saveChanges(conn, data) {
-		var docId = conn.docId, userId = conn.userId;
+		var docId = conn.docId, userId = conn.user.id;
 		var participants = getParticipants(docId, userId, true);
 
 		if (!objChanges.hasOwnProperty(docId))
@@ -1070,7 +1077,7 @@ exports.install = function (server, callbackFunction) {
 
 		if (!bUpdate) {
 			objChange = {docid: docId, changes: data.changes, time: Date.now(), user: userId,
-				useridoriginal: conn.userIdOriginal, insertId: -1, startIndex: startIndex};
+				useridoriginal: conn.user.idOriginal, insertId: -1, startIndex: startIndex};
 		}
 
 		// Изменения пишем частями, т.к. в базу нельзя писать большими порциями
@@ -1134,11 +1141,11 @@ exports.install = function (server, callbackFunction) {
 	// Можем ли мы сохранять ?
 	function isSaveLock(conn) {
 		var _docId = conn.docId;
-		var _userId = conn.userId;
+		var _userId = conn.user.id;
 		var _time = Date.now();
 		var isSaveLock = (undefined === arrSaveLock[_docId]) ? false : arrSaveLock[_docId].savelock;
 		if (false === isSaveLock) {
-			arrSaveLock[conn.docId] = {docid:_docId, savelock:true, time:Date.now(), user:conn.userId};
+			arrSaveLock[conn.docId] = {docid:_docId, savelock:true, time:Date.now(), user:conn.user.id};
 			var _tmpSaveLock = arrSaveLock[_docId];
 			// Вдруг не придет unlock,  пустим timeout на lock 60 секунд
 			arrSaveLock[conn.docId].saveLockTimeOutId = setTimeout(function () {
@@ -1154,7 +1161,7 @@ exports.install = function (server, callbackFunction) {
 	}
 	// Снимаем лок с сохранения
 	function unSaveLock(conn) {
-		if (undefined != arrSaveLock[conn.docId] && conn.userId != arrSaveLock[conn.docId].user) {
+		if (undefined != arrSaveLock[conn.docId] && conn.user.id != arrSaveLock[conn.docId].user) {
 			// Не можем удалять не свой лок
 			return;
 		}
