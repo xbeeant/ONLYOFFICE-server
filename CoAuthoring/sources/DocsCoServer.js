@@ -347,7 +347,7 @@ exports.install = function (server, callbackFunction) {
 		arrSaveLock = {},
 		saveTimers = {},// Таймеры сохранения, после выхода всех пользователей
         urlParse = new RegExp("^/doc/([0-9-.a-zA-Z_=]*)/c.+", 'i');
-	var asc_coAuthV	= '3.0.1';
+	var asc_coAuthV	= '3.0.2';
 
     sockjs_echo.on('connection', function (conn) {
 		if (null == conn) {
@@ -490,10 +490,10 @@ exports.install = function (server, callbackFunction) {
 			var participantsMap = _.map(participants, function (conn) {
 				var tmpUser = conn.connection.user;
 				return {
-					id: tmpUser.id,
-					username: tmpUser.name,
-					color: tmpUser.color,
-					view: conn.connection.isViewer
+					id			: tmpUser.id,
+					username	: tmpUser.name,
+					indexUser	: tmpUser.indexUser,
+					view		: conn.connection.isViewer
 				};
 			});
 
@@ -549,7 +549,7 @@ exports.install = function (server, callbackFunction) {
 					state		: stateConnect,
 					id			: tmpUser.id,
 					username	: tmpUser.name,
-					color		: tmpUser.color,
+					indexUser	: tmpUser.indexUser,
 					view		: oConnection.isViewer
 				});
 			}
@@ -745,7 +745,7 @@ exports.install = function (server, callbackFunction) {
 
 			// Увеличиваем индекс обращения к документу
 			if (!indexUser.hasOwnProperty(docId))
-				indexUser[docId] = 1;
+				indexUser[docId] = 0;
 			else
 				indexUser[docId] += 1;
 
@@ -754,8 +754,7 @@ exports.install = function (server, callbackFunction) {
 				id			: user.id + indexUser[docId],
 				idOriginal	: user.id,
 				name		: user.name,
-				color		: user.color,
-				index		: indexUser[docId]
+				indexUser	: indexUser[docId]
 			};
 			conn.isViewer = data.isViewer;
 
@@ -816,10 +815,10 @@ exports.install = function (server, callbackFunction) {
 			tmpConnection = participants[i].connection;
 			tmpUser = tmpConnection.user;
 			participantsMap.push({
-				id: tmpUser.id,
-				username: tmpUser.name,
-				color: tmpUser.color,
-				view: tmpConnection.isViewer
+				id			: tmpUser.id,
+				username	: tmpUser.name,
+				indexUser	: tmpUser.indexUser,
+				view		: tmpConnection.isViewer
 			});
 			if (!tmpConnection.isViewer) {
 				++countNoView;
