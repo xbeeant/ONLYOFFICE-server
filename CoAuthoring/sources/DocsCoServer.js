@@ -269,7 +269,8 @@ function sendServerRequest (server, postData) {
 		headers: {
 			'Content-Type': 'application/json',
 			'Content-Length': postData.length
-		}
+		},
+		rejectUnauthorized: false
 	};
 	if (server.port)
 		options.port = server.port;
