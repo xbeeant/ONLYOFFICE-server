@@ -348,6 +348,8 @@ function removeChanges (id) {
 
 	// Нужно удалить из базы callback-ов
 	mysqlBase.deleteCallback(id);
+	// Нужно удалить изменения из базы
+	mysqlBase.deleteChangesByDocId(id);
 	delete objServiceInfo[id];
 }
 
