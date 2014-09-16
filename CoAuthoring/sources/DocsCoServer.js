@@ -338,6 +338,19 @@ function dropUserFromDocument (docId, userId, description) {
 	}
 }
 
+// Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
+function removeChanges (id) {
+	logger.info('removeChanges: ' + id);
+	// remove messages from memory
+	delete messages[id];
+	// remove changes from memory
+	delete objChanges[id];
+
+	// Нужно удалить из базы callback-ов
+	mysqlBase.deleteCallback(id);
+	delete objServiceInfo[id];
+}
+
 exports.install = function (server, callbackFunction) {
     'use strict';
     var sockjs_opts = {sockjs_url:"http://cdn.sockjs.org/sockjs-0.3.min.js"},
@@ -581,7 +594,7 @@ exports.install = function (server, callbackFunction) {
 	
 	function sendChangesToServer(server, docId, documentFormatSave) {
 		var sendData = JSON.stringify({'id': docId, 'c': 'sfc',
-			'url': '/RemoveChanges.ashx?id=' + docId,
+			'url': '/CommandService.ashx?c=saved&status=1&key=' + docId,
 			'outputformat': documentFormatSave,
 			'data': c_oAscSaveTimeOutDelay
 		});
@@ -1221,18 +1234,6 @@ exports.install = function (server, callbackFunction) {
 
 	mysqlBase.loadChanges(callbackLoadChangesMySql);
 };
-// Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
-exports.removeChanges = function (id) {
-	logger.info('removeChanges: ' + id);
-	// remove messages from memory
-	delete messages[id];
-	// remove changes from memory
-	delete objChanges[id];
-
-	// Нужно удалить из базы callback-ов
-	mysqlBase.deleteCallback(id);
-	delete objServiceInfo[id];
-};
 // Команда с сервера (в частности teamlab)
 exports.commandFromServer = function (query) {
 	// Ключ id-документа
@@ -1271,6 +1272,8 @@ exports.commandFromServer = function (query) {
 			break;
 		case 'saved':
 			// Результат от менеджера документов о статусе обработки сохранения файла после сборки
+			if ('1' === query.status)
+				removeChanges(docId);
 			break;
 		default:
 			result = c_oAscServerCommandErrors.CommandError;
