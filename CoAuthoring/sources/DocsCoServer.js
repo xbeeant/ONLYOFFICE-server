@@ -1077,7 +1077,8 @@ exports.install = function (server, callbackFunction) {
 						objChange.changes =	JSON.stringify(sliceChanges);
 						mysqlBase.updateChanges(objChange);
 						_.each(participants, function (participant) {
-							sendData(participant.connection, {type:"saveChanges", changes:objChange.changes, user:userId, locks:[]});
+							sendData(participant.connection, {type: 'saveChanges', time: objChange.time,
+								changes: objChange.changes, user: userId, locks: []});
 						});
 						objChanges[docId].push(objChange);
 					} else {
@@ -1143,14 +1144,16 @@ exports.install = function (server, callbackFunction) {
 					};
 				});
 				_.each(participants, function (participant) {
-					sendData(participant.connection, {type:"saveChanges", changes:objChange.changes, user:userId, locks:arrLocks});
+					sendData(participant.connection, {type: 'saveChanges', time: objChange.time,
+						changes: objChange.changes, user: userId, locks: arrLocks});
 				});
 			}
 		} else {
 			_.each(participants, function (participant) {
-				sendData(participant.connection, {type:"saveChanges", changes:objChange.changes, user:userId, locks:[]});
+				sendData(participant.connection, {type: 'saveChanges', time: objChange.time,
+					changes: objChange.changes, user: userId, locks: []});
 			});
-			sendData(conn, {type: "savePartChanges"});
+			sendData(conn, {type: 'savePartChanges'});
 		}
 	}
 	// Можем ли мы сохранять ?
