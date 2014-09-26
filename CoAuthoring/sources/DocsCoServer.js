@@ -14,6 +14,16 @@
 * c) Когда пользователей 2 или больше, каждое сохранение трет историю и присылается целиком (без индекса). Если
 * 	автосохранение включено, то сохраняется не чаще раз в 10-минут.
 * d) Когда пользователь остается один, после принятия чужих изменений начинается пункт 'а'
+*
+* Схема работы с сервером:
+* а) Когда все уходят, спустя время c_oAscSaveTimeOutDelay на сервер документов шлется команда на сборку.
+* b) Если приходит статус '1' на CommandService.ashx, то удалось сохранить и поднять версию. Очищаем callback-и и
+* 	изменения из базы и из памяти.
+* с) Если приходит статус, отличный от '1', то трем callback-и, а изменения оставляем. Т.к. можно будет зайти в старую
+* 	версию и получить несобранные изменения.
+*
+* При поднятии сервера, если он упал, мы получаем callback-и из базы, и только для них запускаем сборку, если были
+* изменения.
 * */
 
 var sockjs = require('sockjs'),
@@ -339,18 +349,22 @@ function dropUserFromDocument (docId, userId, description) {
 }
 
 // Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
-function removeChanges (id) {
+function removeChanges (id, isCorrupted) {
 	logger.info('removeChanges: ' + id);
 	// remove messages from memory
 	delete messages[id];
-	// remove changes from memory
-	delete objChanges[id];
 
 	// Нужно удалить из базы callback-ов
 	mysqlBase.deleteCallback(id);
-	// Нужно удалить изменения из базы
-	mysqlBase.deleteChangesByDocId(id);
 	delete objServiceInfo[id];
+
+	if (!isCorrupted) {
+		// remove changes from memory
+		delete objChanges[id];
+		// Нужно удалить изменения из базы
+		mysqlBase.deleteChangesByDocId(id);
+	} else
+		logger.error('saved corrupted id = ' + id);
 }
 
 exports.install = function (server, callbackFunction) {
@@ -596,7 +610,7 @@ exports.install = function (server, callbackFunction) {
 	
 	function sendChangesToServer(server, docId, documentFormatSave) {
 		var sendData = JSON.stringify({'id': docId, 'c': 'sfc',
-			'url': '/CommandService.ashx?c=saved&status=1&key=' + docId,
+			'url': '/CommandService.ashx?c=saved&status=0&key=' + docId,
 			'outputformat': documentFormatSave,
 			'data': c_oAscSaveTimeOutDelay
 		});
@@ -1246,7 +1260,7 @@ exports.commandFromServer = function (query) {
 	if (null == docId)
 		return c_oAscServerCommandErrors.DocumentIdError;
 
-	logger.info('commandFromServer: ' + query.c);
+	logger.info('commandFromServer: docId = ' + docId + ' c = ' + query.c);
 	var result = c_oAscServerCommandErrors.NoError;
 	switch(query.c) {
 		case 'info':
@@ -1277,8 +1291,7 @@ exports.commandFromServer = function (query) {
 			break;
 		case 'saved':
 			// Результат от менеджера документов о статусе обработки сохранения файла после сборки
-			if ('1' === query.status)
-				removeChanges(docId);
+			removeChanges(docId, '1' !== query.status);
 			break;
 		default:
 			result = c_oAscServerCommandErrors.CommandError;
