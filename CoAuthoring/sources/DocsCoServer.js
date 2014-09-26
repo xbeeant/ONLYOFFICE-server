@@ -307,6 +307,27 @@ function sendServerRequest (server, postData) {
 	req.end();
 }
 
+// Парсинг ссылки callback-ов
+function parseCallbackUrl (docId, callbackUrl) {
+	var result = true;
+	try {
+		var parseObject = url.parse(decodeURIComponent(callbackUrl));
+		var isHttps = 'https:' === parseObject.protocol;
+		var port = parseObject.port;
+		if (!port)
+			port = isHttps ? defaultHttpsPort : defaultHttpPort;
+		objServiceInfo[docId] = {
+			'https'		: isHttps,
+			'host'		: parseObject.hostname,
+			'port'		: port,
+			'path'		: parseObject.path,
+			'href'		: parseObject.href
+		};
+	} catch (e) {result = false;}
+
+	return result;
+}
+
 // Отправка статуса, чтобы знать когда документ начал редактироваться, а когда закончился
 function sendStatusDocument (docId, bChangeBase) {
 	var callback = objServiceInfo[docId];
@@ -1216,6 +1237,18 @@ exports.install = function (server, callbackFunction) {
 		logger.info(message);
     }});
 
+	var callbackLoadCallbacksMySql = function (arrayElements) {
+		if (null != arrayElements) {
+			var i, element;
+			for (i = 0; i < arrayElements.length; ++i) {
+				element = arrayElements[i];
+				if (!parseCallbackUrl(element.docid, element.callback))
+					logger.error('error parse callback id =' + element.docid + ' callback = ' + element.callback);
+			}
+		}
+
+		mysqlBase.loadChanges(callbackLoadChangesMySql);
+	};
 	var callbackLoadChangesMySql = function (arrayElements){
 		var createTimer = function (id, objProp) {
 			return setTimeout(function () {
@@ -1243,7 +1276,7 @@ exports.install = function (server, callbackFunction) {
 			// Send to server
 			for (i in objChanges) if (objChanges.hasOwnProperty(i)) {
 				// Send changes to save server
-				if (objChanges[i] && 0 < objChanges[i].length) {
+				if (objChanges[i] && 0 < objChanges[i].length && objServiceInfo[i]) {
 					saveTimers[i] = createTimer(i, objProps[i]);
 				}
 			}
@@ -1251,7 +1284,7 @@ exports.install = function (server, callbackFunction) {
 		callbackFunction ();
 	};
 
-	mysqlBase.loadChanges(callbackLoadChangesMySql);
+	mysqlBase.loadCallbacks(callbackLoadCallbacksMySql);
 };
 // Команда с сервера (в частности teamlab)
 exports.commandFromServer = function (query) {
@@ -1268,22 +1301,8 @@ exports.commandFromServer = function (query) {
 			// - если пользователей нет и изменений нет, то отсылаем стату "закрыто" и в базу не добавляем
 			// - если пользователей нет, а изменения есть, то отсылаем статус "редактируем" без пользователей, но добавляем в базу
 			// - если есть пользователи, то просто добавляем в базу
-			if (!objServiceInfo[docId]) {
-				try {
-					var parseObject = url.parse(decodeURIComponent(query.callback));
-					var isHttps = 'https:' === parseObject.protocol;
-					var port = parseObject.port;
-					if (!port)
-						port = isHttps ? defaultHttpsPort : defaultHttpPort;
-					objServiceInfo[docId] = {
-						'https'		: isHttps,
-						'host'		: parseObject.hostname,
-						'port'		: port,
-						'path'		: parseObject.path,
-						'href'		: parseObject.href
-					};
-				} catch (e) {return c_oAscServerCommandErrors.ParseError;}
-			}
+			if (!objServiceInfo[docId] && !parseCallbackUrl(docId, query.callback))
+				return c_oAscServerCommandErrors.ParseError;
 			sendStatusDocument(docId, true);
 			break;
 		case 'drop':
