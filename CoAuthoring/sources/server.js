@@ -37,12 +37,15 @@ docsCoServer.install(server, function() {
 		res.send('Server is functioning normally');
 	});
 
-	app.get('/CommandService.ashx', function(req, res) {
+	app.get('/CommandService.ashx', onServiceCall);
+	app.post('/CommandService.ashx', onServiceCall);
+
+	function onServiceCall (req, res) {
 		var result = docsCoServer.commandFromServer(req.query);
 		result = JSON.stringify({'key': req.query.key, 'error': result});
 
 		res.setHeader('Content-Type', 'application/json');
 		res.setHeader('Content-Length', result.length);
 		res.send(result);
-	});
+	}
 });
