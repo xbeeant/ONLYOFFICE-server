@@ -398,7 +398,7 @@ exports.install = function (server, callbackFunction) {
 		arrSaveLock = {},
 		saveTimers = {},// Таймеры сохранения, после выхода всех пользователей
         urlParse = new RegExp("^/doc/([0-9-.a-zA-Z_=]*)/c.+", 'i');
-	var asc_coAuthV	= '3.0.2';
+	var asc_coAuthV	= '3.0.3';
 
     sockjs_echo.on('connection', function (conn) {
 		if (null == conn) {
@@ -408,6 +408,7 @@ exports.install = function (server, callbackFunction) {
         conn.on('data', function (message) {
             try {
                 var data = JSON.parse(message);
+				//logger.info('data.type = ' + data.type + ' id = ' + conn.docId);
 				switch (data.type) {
 					case 'auth'					: auth(conn, data); break;
 					case 'message'				: onMessage(conn, data); break;
@@ -416,9 +417,8 @@ exports.install = function (server, callbackFunction) {
 					case 'getLockPresentation'	: getLockPresentation(conn, data); break;
 					case 'saveChanges'			: saveChanges(conn, data); break;
 					case 'isSaveLock'			: isSaveLock(conn, data); break;
-					case 'unSaveLock'			: unSaveLock(conn, data); break;
 					case 'getMessages'			: getMessages(conn, data); break;
-					case 'unLockDocument'		: checkEndAuthLock(data.isSave, conn.docId, conn.user.id, null, conn.sessionId); break;
+					case 'unLockDocument'		: checkEndAuthLock(data.isSave, conn.docId, conn.user.id, null, conn); break;
 				}
             } catch (e) {
                 logger.error("error receiving response:" + e);
@@ -530,7 +530,7 @@ exports.install = function (server, callbackFunction) {
 		return userLocks;
 	}
 
-	function checkEndAuthLock (isSave, docId, userId, participants, sessionId) {
+	function checkEndAuthLock (isSave, docId, userId, participants, currentConnection) {
 		var result = false, connection;
 		if (lockDocuments.hasOwnProperty(docId) && userId === lockDocuments[docId].id) {
 			delete lockDocuments[docId];
@@ -567,7 +567,7 @@ exports.install = function (server, callbackFunction) {
 			result = true;
 		} else if (isSave) {
 			//Release locks
-			var userLocks = getUserLocks(docId, sessionId);
+			var userLocks = getUserLocks(docId, currentConnection.sessionId);
 			//Release locks
 			if (0 < userLocks.length) {
 				if (!participants)
@@ -587,6 +587,9 @@ exports.install = function (server, callbackFunction) {
 					}
 				});
 			}
+
+			// Автоматически снимаем lock сами
+			unSaveLock(currentConnection);
 		}
 		return result;
 	}
@@ -1183,6 +1186,8 @@ exports.install = function (server, callbackFunction) {
 						changes: objChange.changes, user: userId, locks: arrLocks});
 				});
 			}
+			// Автоматически снимаем lock сами
+			unSaveLock(conn);
 		} else {
 			_.each(participants, function (participant) {
 				sendData(participant.connection, {type: 'saveChanges', time: objChange.time,
