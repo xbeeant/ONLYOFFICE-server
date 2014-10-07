@@ -36,10 +36,28 @@ var sockjs = require('sockjs'),
 	mysqlBase = require('./mySqlBase');
 
 var defaultHttpPort = 80, defaultHttpsPort = 443;
-var objChanges = {}, messages = {}, connections = [], objServiceInfo = {};
+var objChanges = {}, messages = {}, connections = [], objServiceInfo = {}, objServicePucker = {};
 
-// Максимальное число изменений, посылаемое на сервер (не может быть нечетным, т.к. пересчет обоих индексов должен быть)
-var maxCountSaveChanges = 20000;
+function DocumentChanges () {
+	this.index = 0;
+	this.arrChanges = [];
+
+	return this;
+}
+DocumentChanges.prototype.push = function (change) {
+	++this.index;
+	this.arrChanges.push(change);
+};
+DocumentChanges.prototype.slice = function (start) {
+	var res = new DocumentChanges();
+	res.index = this.index;
+	res.arrChanges = this.arrChanges.slice(start);
+	return res;
+};
+DocumentChanges.prototype.splice = function (start, deleteCount) {
+	this.index -= deleteCount;
+	this.arrChanges.splice(start, deleteCount);
+};
 
 var c_oAscServerStatus = {
 	NotFound	: 0,
@@ -307,25 +325,31 @@ function sendServerRequest (server, postData) {
 	req.end();
 }
 
-// Парсинг ссылки callback-ов
-function parseCallbackUrl (docId, callbackUrl) {
-	var result = true;
+// Парсинг ссылки
+function parseUrl (callbackUrl) {
+	var result = null;
 	try {
 		var parseObject = url.parse(decodeURIComponent(callbackUrl));
 		var isHttps = 'https:' === parseObject.protocol;
 		var port = parseObject.port;
 		if (!port)
 			port = isHttps ? defaultHttpsPort : defaultHttpPort;
-		objServiceInfo[docId] = {
+		result = {
 			'https'		: isHttps,
 			'host'		: parseObject.hostname,
 			'port'		: port,
 			'path'		: parseObject.path,
 			'href'		: parseObject.href
 		};
-	} catch (e) {result = false;}
+	} catch (e) {result = null;}
 
 	return result;
+}
+
+function deleteCallback (id) {
+	// Нужно удалить из базы callback-ов
+	mysqlBase.deleteCallback(id);
+	delete objServiceInfo[id];
 }
 
 // Отправка статуса, чтобы знать когда документ начал редактироваться, а когда закончился
@@ -337,17 +361,17 @@ function sendStatusDocument (docId, bChangeBase) {
 	var status = c_oAscServerStatus.Editing;
 	var participants = getOriginalParticipantsId(docId);
 	var docChanges;
-	if (0 === participants.length && !((docChanges = objChanges[docId]) && 0 < docChanges.length))
+	// Проверка на наличие изменений
+	if (0 === participants.length && !((docChanges = objChanges[docId]) && 0 < docChanges.index))
 		status = c_oAscServerStatus.Closed;
 
 	if (bChangeBase) {
 		if (c_oAscServerStatus.Editing === status) {
 			// Добавить в базу
-			mysqlBase.insertCallback(docId, callback.href);
+			mysqlBase.insertInTable(mysqlBase.tableId.callbacks, docId, callback.href);
 		} else if (c_oAscServerStatus.Closed === status) {
 			// Удалить из базы
-			mysqlBase.deleteCallback(docId);
-			delete objServiceInfo[docId];
+			deleteCallback(docId);
 		}
 	}
 
@@ -375,17 +399,38 @@ function removeChanges (id, isCorrupted) {
 	// remove messages from memory
 	delete messages[id];
 
-	// Нужно удалить из базы callback-ов
-	mysqlBase.deleteCallback(id);
-	delete objServiceInfo[id];
+	deleteCallback(id);
+	deletePucker(id);
 
 	if (!isCorrupted) {
 		// remove changes from memory
 		delete objChanges[id];
 		// Нужно удалить изменения из базы
-		mysqlBase.deleteChangesByDocId(id);
+		mysqlBase.deleteChanges(id, null);
 	} else
 		logger.error('saved corrupted id = ' + id);
+}
+function deletePucker (docId) {
+	// Нужно удалить из базы сборщика
+	mysqlBase.deletePucker(docId);
+	delete objServicePucker[docId];
+}
+function updatePucker (bIsLoad, docId, url, documentFormatSave) {
+	if (!objServicePucker.hasOwnProperty(docId)) {
+		var serverUrl = parseUrl(url);
+		if (null === serverUrl) {
+			logger.error('Error server url = ' + url);
+			return;
+		}
+
+		objServicePucker[docId] = {
+			server: serverUrl,
+			documentFormatSave: documentFormatSave
+		};
+
+		if (!bIsLoad)
+			mysqlBase.insertInTable(mysqlBase.tableId.pucker, docId, url, documentFormatSave);
+	}
 }
 
 exports.install = function (server, callbackFunction) {
@@ -398,7 +443,7 @@ exports.install = function (server, callbackFunction) {
 		arrSaveLock = {},
 		saveTimers = {},// Таймеры сохранения, после выхода всех пользователей
         urlParse = new RegExp("^/doc/([0-9-.a-zA-Z_=]*)/c.+", 'i');
-	var asc_coAuthV	= '3.0.3';
+	var asc_coAuthV	= '3.0.4';
 
     sockjs_echo.on('connection', function (conn) {
 		if (null == conn) {
@@ -470,13 +515,14 @@ exports.install = function (server, callbackFunction) {
 
 						// Send changes to save server
 						curChanges = objChanges[docId];
-						if (curChanges && 0 < curChanges.length) {
+						if (curChanges && 0 < curChanges.index) {
 							saveTimers[docId] = setTimeout(function () {
-								sendChangesToServer(conn.server, docId, conn.documentFormatSave);
+								sendChangesToServer(docId);
 							}, c_oAscSaveTimeOutDelay);
 						} else {
 							// Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
 							sendStatusDocument(docId, true);
+							deletePucker(docId);
 						}
 					} else
 						sendStatusDocument(docId, false);
@@ -589,7 +635,7 @@ exports.install = function (server, callbackFunction) {
 			}
 
 			// Автоматически снимаем lock сами
-			unSaveLock(currentConnection);
+			unSaveLock(currentConnection, -1);
 		}
 		return result;
 	}
@@ -632,13 +678,15 @@ exports.install = function (server, callbackFunction) {
 		return result;
 	}
 	
-	function sendChangesToServer(server, docId, documentFormatSave) {
-		var sendData = JSON.stringify({'id': docId, 'c': 'sfc',
+	function sendChangesToServer(docId) {
+		var sendData = JSON.stringify({
+			'id': docId,
+			'c': 'sfc',
 			'url': '/CommandService.ashx?c=saved&status=0&key=' + docId,
-			'outputformat': documentFormatSave,
+			'outputformat': objServicePucker[docId].documentFormatSave,
 			'data': c_oAscSaveTimeOutDelay
 		});
-		sendServerRequest(server, sendData);
+		sendServerRequest(objServicePucker[docId].server, sendData);
 	}
 
 	// Пересчет только для чужих Lock при сохранении на клиенте, который добавлял/удалял строки или столбцы
@@ -676,6 +724,8 @@ exports.install = function (server, callbackFunction) {
 		}
 	}
 	function _addRecalcIndex (oRecalcIndex) {
+		if (null == oRecalcIndex)
+			return null;
 		var nIndex = 0;
 		var nRecalcType = c_oAscRecalcIndexTypes.RecalcIndexAdd;
 		var oRecalcIndexElement = null;
@@ -812,18 +862,17 @@ exports.install = function (server, callbackFunction) {
 			};
 			conn.isViewer = data.isViewer;
 
-			conn.server = data.server;
-			if (!conn.server.port) conn.server.port = '';
+			// Сохраняем информацию для сборки
+			updatePucker(false, docId, data.server, data.documentFormatSave);
 
-			conn.documentFormatSave = data.documentFormatSave;
 			//Set the unique ID
 			if (data.sessionId !== null && _.isString(data.sessionId) && data.sessionId !== "") {
 				logger.info("restored old session id=" + data.sessionId);
 
 				// Останавливаем сборку (вдруг она началась)
 				// Когда переподсоединение, нам нужна проверка на сборку файла
-				mysqlBase.checkStatusFile(docId, function (err, result) {
-					if (null !== err || 0 === result.length) {
+				mysqlBase.checkStatusFile(docId, function (error, result) {
+					if (null !== error || 0 === result.length) {
 						// error database
 						sendFileError(conn, 'DataBase error');
 						return;
@@ -1080,84 +1129,39 @@ exports.install = function (server, callbackFunction) {
 		var docId = conn.docId, userId = conn.user.id;
 		var participants = getParticipants(docId, userId, true);
 
-		if (!objChanges.hasOwnProperty(docId))
-			objChanges[docId] = [];
+		var objChangesDocument = objChanges[docId];
+		if (!objChangesDocument)
+			objChangesDocument = objChanges[docId] = new DocumentChanges();
 
-		var deleteIndex = (null != data.deleteIndex) ? data.deleteIndex : -1;
-		var startIndex = data.startIndex + (-1 !== deleteIndex ? deleteIndex : 0);
-		var objChange, bUpdate = false;
-		if (data.startSaveChanges && -1 !== deleteIndex) {
-			while (true) {
-				// Пользователь один и ему нужно сместить свои изменения
-				objChange = objChanges[docId].pop();
-				if (!objChange) {
-					logger.error("old sdk used");
-					return;
-				}
-
-				if (objChange.startIndex === deleteIndex) {
-					// Удаляем запись и все
-					mysqlBase.deleteChanges(objChange);
-					break;
-				} else if (objChange.startIndex > deleteIndex) {
-					// Удаляем запись и продолжаем
-					mysqlBase.deleteChanges(objChange);
-				} else {
-					// Нужно удалить часть изменений из массива и добавить новые
-					// Обновляем время, и соединяем массив (если он не превышает размеры)
-					objChange.time = Date.now();
-
-					// ToDo подумать, может как-то улучшить это?
-					var oldChanges = JSON.parse(objChange.changes);
-					var sliceChanges = oldChanges.slice(0, deleteIndex - objChange.startIndex);
-					var newChanges = JSON.parse(data.changes);
-					if (maxCountSaveChanges < newChanges.length + sliceChanges.length) {
-						objChange.changes =	JSON.stringify(sliceChanges);
-						mysqlBase.updateChanges(objChange);
-						_.each(participants, function (participant) {
-							sendData(participant.connection, {type: 'saveChanges', time: objChange.time,
-								changes: objChange.changes, user: userId, locks: []});
-						});
-						objChanges[docId].push(objChange);
-					} else {
-						newChanges = sliceChanges.concat(newChanges);
-						objChange.changes =	JSON.stringify(newChanges);
-						bUpdate = true;
-					}
-					break;
-				}
+		var deleteIndex = -1;
+		if (data.startSaveChanges && null != data.deleteIndex) {
+			deleteIndex = data.deleteIndex;
+			if (-1 !== deleteIndex) {
+				var deleteCount = objChangesDocument.index - deleteIndex;
+				objChangesDocument.splice(deleteIndex, deleteCount);
+				mysqlBase.deleteChanges(docId, deleteIndex);
 			}
 		}
 
-		if (!bUpdate) {
-			objChange = {docid: docId, changes: data.changes, time: Date.now(), user: userId,
-				useridoriginal: conn.user.idOriginal, insertId: -1, startIndex: startIndex};
-		}
+		// Стартовый индекс изменения при добавлении
+		var index = objChangesDocument.index;
 
-		// Изменения пишем частями, т.к. в базу нельзя писать большими порциями
-		if (bUpdate) {
-			logger.info("updateChanges");
-			mysqlBase.updateChanges(objChange);
-		} else {
-			logger.info("insertChanges");
-			mysqlBase.insertChanges(objChange, conn.server, conn.documentFormatSave);
-		}
-		objChanges[docId].push(objChange);
+		var newChanges = JSON.parse(data.changes);
+		if (0 < newChanges.length) {
+			// Для Excel нужно пересчитать индексы для lock-ов
+			var bIsRecalculate = (data.isExcel && false !== data.isCoAuthoring);
+			var oElement = null, oRecalcIndexColumns = null, oRecalcIndexRows = null;
 
-		// Для Excel нужно пересчитать индексы для lock-ов
-		if (data.isExcel && false !== data.isCoAuthoring) {
-			var oElement = null;
-			var oRecalcIndexColumns = null, oRecalcIndexRows = null;
-			var oChanges = JSON.parse(objChange.changes);
-			for (var nIndexChanges = 0; nIndexChanges < oChanges.length; ++nIndexChanges) {
-				oElement = oChanges[nIndexChanges];
-				if (oElement.hasOwnProperty("type")) {
-					if ("0" === oElement["type"]) {
-						// Это мы получили recalcIndexColumns
-						oRecalcIndexColumns = _addRecalcIndex(oElement["index"]);
-					} else if ("1" === oElement["type"]) {
-						// Это мы получили recalcIndexRows
-						oRecalcIndexRows = _addRecalcIndex(oElement["index"]);
+			for (var i = 0; i < newChanges.length; ++i) {
+				oElement = newChanges[i];
+				objChangesDocument.push({docid: docId, change: JSON.stringify(oElement), time: Date.now(),
+					user: userId, useridoriginal: conn.user.idOriginal});
+
+				if (bIsRecalculate) {
+					if (oElement.hasOwnProperty("type") && "10" === oElement["type"]) {
+						// Это мы получили recalcIndexColumns и recalcIndexRows
+						oRecalcIndexColumns = _addRecalcIndex(oElement["indexCols"]);
+						oRecalcIndexRows = _addRecalcIndex(oElement["indexRows"]);
 					}
 				}
 			}
@@ -1166,6 +1170,8 @@ exports.install = function (server, callbackFunction) {
 			if (null !== oRecalcIndexColumns || null !== oRecalcIndexRows) {
 				_recalcLockArray(userId, locks[docId], oRecalcIndexColumns, oRecalcIndexRows);
 			}
+
+			mysqlBase.insertChanges(newChanges, docId, index, userId, conn.user.idOriginal);
 		}
 
 		if (data.endSaveChanges) {
@@ -1182,16 +1188,16 @@ exports.install = function (server, callbackFunction) {
 					};
 				});
 				_.each(participants, function (participant) {
-					sendData(participant.connection, {type: 'saveChanges', time: objChange.time,
-						changes: objChange.changes, user: userId, locks: arrLocks});
+					sendData(participant.connection, {type: 'saveChanges', changes: objChangesDocument.slice(index),
+						locks: arrLocks});
 				});
 			}
-			// Автоматически снимаем lock сами
-			unSaveLock(conn);
+			// Автоматически снимаем lock сами и посылаем индекс для сохранения
+			unSaveLock(conn, -1 === deleteIndex ? index : -1);
 		} else {
 			_.each(participants, function (participant) {
-				sendData(participant.connection, {type: 'saveChanges', time: objChange.time,
-					changes: objChange.changes, user: userId, locks: []});
+				sendData(participant.connection, {type: 'saveChanges', changes: objChangesDocument.slice(index),
+					locks: []});
 			});
 			sendData(conn, {type: 'savePartChanges'});
 		}
@@ -1218,7 +1224,7 @@ exports.install = function (server, callbackFunction) {
 		sendData(conn, {type:"saveLock", saveLock:isSaveLock});
 	}
 	// Снимаем лок с сохранения
-	function unSaveLock(conn) {
+	function unSaveLock(conn, index) {
 		if (undefined != arrSaveLock[conn.docId] && conn.user.id != arrSaveLock[conn.docId].user) {
 			// Не можем удалять не свой лок
 			return;
@@ -1230,7 +1236,7 @@ exports.install = function (server, callbackFunction) {
 		arrSaveLock[conn.docId] = undefined;
 
 		// Отправляем только тому, кто спрашивал (всем отправлять нельзя)
-		sendData(conn, {type:"unSaveLock"});
+		sendData(conn, {type:'unSaveLock', index: index});
 	}
 	// Возвращаем все сообщения для документа
 	function getMessages(conn) {
@@ -1242,54 +1248,69 @@ exports.install = function (server, callbackFunction) {
 		logger.info(message);
     }});
 
-	var callbackLoadCallbacksMySql = function (arrayElements) {
+	var callbackLoadPuckerMySql = function (error, arrayElements) {
 		if (null != arrayElements) {
 			var i, element;
 			for (i = 0; i < arrayElements.length; ++i) {
 				element = arrayElements[i];
-				if (!parseCallbackUrl(element.docid, element.callback))
-					logger.error('error parse callback id =' + element.docid + ' callback = ' + element.callback);
+		 		updatePucker(true, element['dp_key'], element['dp_callback'], element['dp_documentFormatSave']);
 			}
 		}
 
-		mysqlBase.loadChanges(callbackLoadChangesMySql);
+		mysqlBase.loadTable(mysqlBase.tableId.callbacks, callbackLoadCallbacksMySql);
 	};
-	var callbackLoadChangesMySql = function (arrayElements){
-		var createTimer = function (id, objProp) {
-			return setTimeout(function () {
-				sendChangesToServer(objProp.server,	id, objProp.documentFormatSave);
-			}, c_oAscSaveTimeOutDelay);
-		};
+
+	var callbackLoadCallbacksMySql = function (error, arrayElements) {
 		if (null != arrayElements) {
-			// add elements
-			var docId, objChange, i, element, objProps = {};
+			var i, element, callbackUrl;
 			for (i = 0; i < arrayElements.length; ++i) {
 				element = arrayElements[i];
-				docId = element.docid;
-				try {
-					objChange = {docid:docId, changes:element.data, user:element.userid,
-						useridoriginal: element.useridoriginal, insertId: -1}; // Пишем пока без времени (это не особо нужно)
-					if (!objChanges.hasOwnProperty(docId)) {
-						objChanges[docId] = [objChange];
-						objProps[docId] = {server: {
-							host: element.serverHost, port: element.serverPort, path: element.serverPath
-						}, documentFormatSave: element.documentFormatSave};
-					} else
-						objChanges[docId].push(objChange);
-				} catch (e) {}
-			}
-			// Send to server
-			for (i in objChanges) if (objChanges.hasOwnProperty(i)) {
-				// Send changes to save server
-				if (objChanges[i] && 0 < objChanges[i].length && objServiceInfo[i]) {
-					saveTimers[i] = createTimer(i, objProps[i]);
-				}
+				callbackUrl = parseUrl(element['dc_callback']);
+				if (null === callbackUrl)
+					logger.error('error parse callback = ' + element['dc_callback']);
+				objServiceInfo[element['dc_key']] = callbackUrl;
 			}
 		}
-		callbackFunction ();
+
+		mysqlBase.loadTable(mysqlBase.tableId.changes, callbackLoadChangesMySql);
+	};
+	var callbackLoadChangesMySql = function (error, arrayElements){
+		var createTimer = function (id) {
+			return setTimeout(function () { sendChangesToServer(id); }, c_oAscSaveTimeOutDelay);
+		};
+		var docId;
+		if (null != arrayElements) {
+			// add elements
+			var i, element, objProps = {}, objChangesDocument;
+			for (i = 0; i < arrayElements.length; ++i) {
+				element = arrayElements[i];
+
+				docId = element['dc_key'];
+				objChangesDocument = objChanges[docId];
+				if (!objChangesDocument)
+					objChangesDocument = objChanges[docId] = new DocumentChanges();
+
+				objChangesDocument.push({docid: docId, change: element['dc_data'], time: Date.now(),
+					user: element['dc_user_id'], useridoriginal: element['dc_user_id_original']});
+			}
+
+			// Есть изменения, должны запустить сборку, только если есть подписчики
+			for (docId in objServiceInfo) {
+				if (objChanges[docId] && 0 < objChanges[docId].index) {
+					saveTimers[docId] = createTimer(docId, objProps[docId]);
+				} else
+					deleteCallback(docId);
+			}
+		}
+		// Удалим ненужные из базы сборщика
+		for (docId in objServicePucker) {
+			if (!saveTimers[docId])
+				deletePucker(docId);
+		}
+		callbackFunction();
 	};
 
-	mysqlBase.loadCallbacks(callbackLoadCallbacksMySql);
+	mysqlBase.loadTable(mysqlBase.tableId.pucker, callbackLoadPuckerMySql);
 };
 // Команда с сервера (в частности teamlab)
 exports.commandFromServer = function (query) {
@@ -1306,8 +1327,12 @@ exports.commandFromServer = function (query) {
 			// - если пользователей нет и изменений нет, то отсылаем стату "закрыто" и в базу не добавляем
 			// - если пользователей нет, а изменения есть, то отсылаем статус "редактируем" без пользователей, но добавляем в базу
 			// - если есть пользователи, то просто добавляем в базу
-			if (!objServiceInfo[docId] && !parseCallbackUrl(docId, query.callback))
-				return c_oAscServerCommandErrors.ParseError;
+			if (!objServiceInfo[docId]) {
+				var oCallbackUrl = parseUrl(query.callback);
+				if (null === oCallbackUrl)
+					return c_oAscServerCommandErrors.ParseError;
+				objServiceInfo[docId] = oCallbackUrl;
+			}
 			sendStatusDocument(docId, true);
 			break;
 		case 'drop':
