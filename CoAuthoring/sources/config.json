@@ -14,8 +14,9 @@
 		"user"				: "canvas_usr",
 		"pass"				: "canvas_usr",
 		"charset"			: "utf8",
-		"tableChangesName"	: "docschanges",
-		"tableCallbacks"	: "doccallbacks",
-		"tableResult"		: "tast_result"
+		"tableChanges"		: "doc_changes",
+		"tableCallbacks"	: "doc_callbacks",
+		"tableResult"		: "tast_result",
+		"tablePucker"		: "doc_pucker"
 	}
 }
