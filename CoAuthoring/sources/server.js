@@ -20,13 +20,9 @@ if (config['ssl']) {
 	server = http.createServer(app);
 }
 
-app.configure('development', function() {
-    app.use(express.errorHandler({ dumpExceptions: true, showStack: true }));
-});
-
-app.configure('production', function() {
-    app.use(express.errorHandler());
-});
+// Если захочется использовать 'development' и 'production',
+// то с помощью app.settings.env (https://github.com/strongloop/express/issues/936)
+// Если нужна обработка ошибок, то теперь она такая https://github.com/expressjs/errorhandler
 
 docsCoServer.install(server, function() {
 	server.listen(config['server']['port'], function() {
