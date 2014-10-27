@@ -1,12 +1,13 @@
 ﻿/*
+ ----------------------------------------------------view-режим---------------------------------------------------------
 * 1) Для view-режима обновляем страницу (без быстрого перехода), чтобы пользователь не считался за редактируемого и не
 * 	держал документ для сборки (если не ждать, то непонятен быстрый переход из view в edit, когда документ уже собрался)
 * 2) Если пользователь во view-режиме, то он не участвует в редактировании (только в chat-е). При открытии он получает
 * 	все актуальные изменения в документе на момент открытия. Для view-режима не принимаем изменения и не отправляем их
 * 	view-пользователям (т.к. непонятно что делать в ситуации, когда 1-пользователь наделал изменений,
 * 	сохранил и сделал undo).
-*
-* Схема сохранения:
+*-----------------------------------------------------------------------------------------------------------------------
+*------------------------------------------------Схема сохранения-------------------------------------------------------
 * а) Один пользователь - первый раз приходят изменения без индекса, затем изменения приходят с индексом, можно делать
 * 	undo-redo (история не трется). Если автосохранение включено, то оно на любое действие (не чаще 5-ти секунд).
 * b) Как только заходит второй пользователь, начинается совместное редактирование. На документ ставится lock, чтобы
@@ -14,19 +15,25 @@
 * c) Когда пользователей 2 или больше, каждое сохранение трет историю и присылается целиком (без индекса). Если
 * 	автосохранение включено, то сохраняется не чаще раз в 10-минут.
 * d) Когда пользователь остается один, после принятия чужих изменений начинается пункт 'а'
-*
-* Схема работы с сервером:
+*-----------------------------------------------------------------------------------------------------------------------
+*--------------------------------------------Схема работы с сервером----------------------------------------------------
 * а) Когда все уходят, спустя время c_oAscSaveTimeOutDelay на сервер документов шлется команда на сборку.
 * b) Если приходит статус '1' на CommandService.ashx, то удалось сохранить и поднять версию. Очищаем callback-и и
 * 	изменения из базы и из памяти.
-* с) Если приходит статус, отличный от '1', то трем callback-и, а изменения оставляем. Т.к. можно будет зайти в старую
-* 	версию и получить несобранные изменения.
-*
-* При поднятии сервера, если он упал, мы получаем callback-и из базы, и только для них запускаем сборку, если были
-* изменения.
-*
-* При неудачной сборке (сюда можно отнести как генерацию файла, так и работа внешнего подписчика с готовым результатом)
-* мы сбрасываем статус у файла на несобранный (чтобы его можно было открывать без сообщения об ошибке версии).
+* с) Если приходит статус, отличный от '1'(сюда можно отнести как генерацию файла, так и работа внешнего подписчика
+* 	с готовым результатом), то трем callback-и, а изменения оставляем. Т.к. можно будет зайти в старую
+* 	версию и получить несобранные изменения. Также сбрасываем статус у файла на несобранный, чтобы его можно было
+* 	открывать без сообщения об ошибке версии.
+*-----------------------------------------------------------------------------------------------------------------------
+*----------------------------------------Таблица в базе данных doc_pucker-----------------------------------------------
+* Отвечает не только за информацио о сервисе для сборки. Если есть запись в этой таблице, то значит документ
+* редактировался и были изменения. В эту таблицу пишем только на сохранении изменений
+*-----------------------------------------------------------------------------------------------------------------------
+*------------------------------------------------Старт сервера----------------------------------------------------------
+* 1) Загружаем информацию о сборщике
+* 2) Загружаем информацию о callback-ах
+* 3) Собираем только те файлы, у которых есть callback и информация для сборки
+*-----------------------------------------------------------------------------------------------------------------------
 * */
 
 var sockjs = require('sockjs'),
@@ -38,28 +45,31 @@ var sockjs = require('sockjs'),
 	config = require('./config.json'),
 	mysqlBase = require('./mySqlBase');
 
-var defaultHttpPort = 80, defaultHttpsPort = 443;
-var objChanges = {}, messages = {}, connections = [], objServiceInfo = {}, objServicePucker = {};
+var defaultHttpPort = 80, defaultHttpsPort = 443;	// Порты по умолчанию (для http и https)
+var messages					= {}, // Сообщения из чата для документов
+	connections					= [], // Активные соединения
+	objServiceInfo				= {}, // Информация о подписчиках (callback-ах)
+	objServicePucker			= {}, // Информация о сборщике + о сохранении файла
+	arrCacheDocumentsChanges	= [], // Кэш для хранения изменений активных документов
+	nCacheSize					= 100;// Размер кэша
 
-function DocumentChanges () {
-	this.index = 0;
+function DocumentChanges (docId) {
+	this.docId = docId;
 	this.arrChanges = [];
 
 	return this;
 }
+DocumentChanges.prototype.getLength = function () {
+	return this.arrChanges.length;
+};
 DocumentChanges.prototype.push = function (change) {
-	++this.index;
 	this.arrChanges.push(change);
 };
-DocumentChanges.prototype.slice = function (start) {
-	var res = new DocumentChanges();
-	res.index = this.index;
-	res.arrChanges = this.arrChanges.slice(start);
-	return res;
-};
 DocumentChanges.prototype.splice = function (start, deleteCount) {
-	this.index -= deleteCount;
 	this.arrChanges.splice(start, deleteCount);
+};
+DocumentChanges.prototype.concat = function (item) {
+	this.arrChanges = this.arrChanges.concat(item);
 };
 
 var c_oAscServerStatus = {
@@ -363,9 +373,9 @@ function sendStatusDocument (docId, bChangeBase) {
 
 	var status = c_oAscServerStatus.Editing;
 	var participants = getOriginalParticipantsId(docId);
-	var docChanges;
+	var oPucker = objServicePucker[docId];
 	// Проверка на наличие изменений
-	if (0 === participants.length && !((docChanges = objChanges[docId]) && 0 < docChanges.index))
+	if (0 === participants.length && !(oPucker && oPucker.inDataBase))
 		status = c_oAscServerStatus.Closed;
 
 	if (bChangeBase) {
@@ -396,6 +406,16 @@ function dropUserFromDocument (docId, userId, description) {
 	}
 }
 
+function removeDocumentChanges (docId) {
+	// Посмотрим в закэшированных данных
+	for (var i = 0, length = arrCacheDocumentsChanges.length; i < length; ++i) {
+		if (docId === arrCacheDocumentsChanges[i].docId) {
+			arrCacheDocumentsChanges.splice(i, 1);
+			return;
+		}
+	}
+}
+
 // Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
 function removeChanges (id, isCorrupted) {
 	logger.info('removeChanges: ' + id);
@@ -403,11 +423,12 @@ function removeChanges (id, isCorrupted) {
 	delete messages[id];
 
 	deleteCallback(id);
-	deletePucker(id);
 
 	if (!isCorrupted) {
+		// Удаляем информацию о сборщике
+		deletePucker(id);
 		// remove changes from memory
-		delete objChanges[id];
+		removeDocumentChanges(id);
 		// Нужно удалить изменения из базы
 		mysqlBase.deleteChanges(id, null);
 	} else {
@@ -421,7 +442,7 @@ function deletePucker (docId) {
 	mysqlBase.deletePucker(docId);
 	delete objServicePucker[docId];
 }
-function updatePucker (bIsLoad, docId, url, documentFormatSave) {
+function updatePucker (docId, url, documentFormatSave, inDataBase) {
 	if (!objServicePucker.hasOwnProperty(docId)) {
 		var serverUrl = parseUrl(url);
 		if (null === serverUrl) {
@@ -430,13 +451,23 @@ function updatePucker (bIsLoad, docId, url, documentFormatSave) {
 		}
 
 		objServicePucker[docId] = {
-			server: serverUrl,
-			documentFormatSave: documentFormatSave
+			url					: url,					// Оригинальная ссылка
+			server				: serverUrl,			// Распарсили ссылку
+			documentFormatSave	: documentFormatSave,	// Формат документа
+			inDataBase			: inDataBase,			// Записали ли мы в базу (в базу добавляем только на сохранении)
+			index				: 0						// Текущий индекс изменения
 		};
-
-		if (!bIsLoad)
-			mysqlBase.insertInTable(mysqlBase.tableId.pucker, docId, url, documentFormatSave);
 	}
+}
+// Добавление в базу информации для сборки (только на сохранении)
+function insertPucker (docId) {
+	var pucker = objServicePucker[docId];
+	// Добавляем в базу если мы еще не добавляли
+	if (pucker && !pucker.inDataBase) {
+		mysqlBase.insertInTable(mysqlBase.tableId.pucker, docId, pucker.url, pucker.documentFormatSave);
+		pucker.inDataBase = true;
+	}
+	return pucker;
 }
 
 exports.install = function (server, callbackFunction) {
@@ -449,7 +480,7 @@ exports.install = function (server, callbackFunction) {
 		arrSaveLock = {},
 		saveTimers = {},// Таймеры сохранения, после выхода всех пользователей
         urlParse = new RegExp("^/doc/([0-9-.a-zA-Z_=]*)/c.+", 'i');
-	var asc_coAuthV	= '3.0.4';
+	var asc_coAuthV	= '3.0.5';
 
     sockjs_echo.on('connection', function (conn) {
 		if (null == conn) {
@@ -480,7 +511,7 @@ exports.install = function (server, callbackFunction) {
             logger.error("On error");
         });
         conn.on('close', function () {
-            var connection = this, userLocks, participants, reconnected, curChanges;
+            var connection = this, userLocks, participants, reconnected, oPucker;
 			var docId = conn.docId;
 			if (null == docId)
 				return;
@@ -520,8 +551,8 @@ exports.install = function (server, callbackFunction) {
 						arrSaveLock[docId] = undefined;
 
 						// Send changes to save server
-						curChanges = objChanges[docId];
-						if (curChanges && 0 < curChanges.index) {
+						oPucker = objServicePucker[docId];
+						if (oPucker && oPucker.inDataBase) {
 							saveTimers[docId] = setTimeout(function () {
 								sendChangesToServer(docId);
 							}, c_oAscSaveTimeOutDelay);
@@ -557,6 +588,54 @@ exports.install = function (server, callbackFunction) {
             }
         });
     });
+	// Получение только кэшированных изменений для документа (чтобы их модифицировать)
+	function getDocumentChangesCache (docId) {
+		var oPucker = objServicePucker[docId];
+		if (oPucker && oPucker.inDataBase) {
+			var i, length;
+			// Посмотрим в закэшированных данных
+			for (i = 0, length = arrCacheDocumentsChanges.length; i < length; ++i) {
+				if (docId === arrCacheDocumentsChanges[i].docId)
+					return arrCacheDocumentsChanges[i];
+			}
+		}
+		return null;
+	}
+	// Получение изменений для документа (либо из кэша, либо обращаемся к базе, но только если были сохранения)
+	function getDocumentChanges (docId, callback) {
+		var oPucker = objServicePucker[docId];
+		if (oPucker && oPucker.inDataBase) {
+			var i, length;
+			// Посмотрим в закэшированных данных
+			for (i = 0, length = arrCacheDocumentsChanges.length; i < length; ++i) {
+				if (docId === arrCacheDocumentsChanges[i].docId) {
+					callback(arrCacheDocumentsChanges[i].arrChanges, oPucker.index);
+					return;
+				}
+			}
+
+			var callbackGetChanges = function (error, arrayElements) {
+				var j, element;
+				var objChangesDocument = new DocumentChanges(docId);
+				for (j = 0; j < arrayElements.length; ++j) {
+					element = arrayElements[j];
+
+					objChangesDocument.push({docid: docId, change: element['dc_data'], time: Date.now(),
+						user: element['dc_user_id'], useridoriginal: element['dc_user_id_original']});
+				}
+
+				oPucker.index = objChangesDocument.getLength();
+
+				// Стоит удалять из начала, если не убрались по размеру
+				arrCacheDocumentsChanges.push(objChangesDocument);
+				callback(objChangesDocument.arrChanges, oPucker.index);
+			};
+			// Берем из базы данных
+			mysqlBase.getChanges(docId, callbackGetChanges);
+			return;
+		}
+		callback(undefined, 0);
+	}
 
 	function getUserLocks (docId, sessionId) {
 		var userLocks = [], i;
@@ -583,7 +662,7 @@ exports.install = function (server, callbackFunction) {
 	}
 
 	function checkEndAuthLock (isSave, docId, userId, participants, currentConnection) {
-		var result = false, connection;
+		var result = false;
 		if (lockDocuments.hasOwnProperty(docId) && userId === lockDocuments[docId].id) {
 			delete lockDocuments[docId];
 
@@ -600,19 +679,12 @@ exports.install = function (server, callbackFunction) {
 				};
 			});
 
-			_.each(participants, function (participant) {
-				connection = participant.connection;
-				if (userId !== connection.user.id && !connection.isViewer) {
-					sendData(connection, {
-						type: "auth",
-						result: 1,
-						sessionId: connection.sessionId,
-						participants: participantsMap,
-						messages: messages[connection.docid],
-						locks: locks[connection.docId],
-						changes: objChanges[connection.docId],
-						indexUser: indexUser[connection.docId]
-					});
+			getDocumentChanges(docId, function (objChangesDocument, changesIndex) {
+				var connection;
+				for (var i = 0, l = participants.length; i < l; ++i) {
+					connection = participants[i].connection;
+					if (userId !== connection.user.id && !connection.isViewer)
+						sendAuthInfo(objChangesDocument, changesIndex, connection, participantsMap);
 				}
 			});
 
@@ -625,8 +697,8 @@ exports.install = function (server, callbackFunction) {
 				if (!participants)
 					participants = getParticipants(docId);
 
-				_.each(participants, function (participant) {
-					connection = participant.connection;
+				for (var i = 0, l = participants.length; i < l; ++i) {
+					var connection = participants[i].connection;
 					if (userId !== connection.user.id && !connection.isViewer) {
 						sendData(connection, {type: "releaseLock", locks: _.map(userLocks, function (e) {
 							return {
@@ -637,7 +709,7 @@ exports.install = function (server, callbackFunction) {
 							};
 						})});
 					}
-				});
+				}
 			}
 
 			// Автоматически снимаем lock сами
@@ -869,7 +941,7 @@ exports.install = function (server, callbackFunction) {
 			conn.isViewer = data.isViewer;
 
 			// Сохраняем информацию для сборки
-			updatePucker(false, docId, data.server, data.documentFormatSave);
+			updatePucker(docId, data.server, data.documentFormatSave, false);
 
 			//Set the unique ID
 			if (data.sessionId !== null && _.isString(data.sessionId) && data.sessionId !== "") {
@@ -945,24 +1017,35 @@ exports.install = function (server, callbackFunction) {
 			lockDocuments[docId] = firstParticipantNoView;
 		}
 
-		// Для view не ждем снятия lock-а
-		var sendObject = lockDocuments[docId] && !conn.isViewer ? {
-			type			: "waitAuth",
-			lockDocument	: lockDocuments[docId]
-		} : {
+		if (lockDocuments[docId] && !conn.isViewer) {
+			// Для view не ждем снятия lock-а
+			var sendObject = {
+				type			: "waitAuth",
+				lockDocument	: lockDocuments[docId]
+			};
+			sendData(conn, sendObject);//Or 0 if fails
+		} else {
+			getDocumentChanges(docId, function (objChangesDocument, changesIndex) {
+				sendAuthInfo(objChangesDocument, changesIndex, conn, participantsMap);
+			});
+		}
+
+		sendParticipantsState(participants, true, conn);
+	}
+	function sendAuthInfo (objChangesDocument, changesIndex, conn, participantsMap) {
+		var docId = conn.docId;
+		var sendObject = {
 			type			: "auth",
 			result			: 1,
 			sessionId		: conn.sessionId,
 			participants	: participantsMap,
 			messages		: messages[docId],
 			locks			: locks[docId],
-			changes			: objChanges[docId],
+			changes			: objChangesDocument,
+			changesIndex	: changesIndex,
 			indexUser		: indexUser[docId]
 		};
-
 		sendData(conn, sendObject);//Or 0 if fails
-
-		sendParticipantsState(participants, true, conn);
 	}
 	function onMessage(conn, data) {
 		var participants = getParticipants(conn.docId),
@@ -1135,24 +1218,28 @@ exports.install = function (server, callbackFunction) {
 		var docId = conn.docId, userId = conn.user.id;
 		var participants = getParticipants(docId, userId, true);
 
-		var objChangesDocument = objChanges[docId];
-		if (!objChangesDocument)
-			objChangesDocument = objChanges[docId] = new DocumentChanges();
+		// Пишем в базу информацию о сборщике и получаем текущий индекс
+		var pucker = insertPucker(docId);
+		// Закэшированный объект с изменениями
+		var objChangesDocument = getDocumentChangesCache(docId);
 
 		var deleteIndex = -1;
 		if (data.startSaveChanges && null != data.deleteIndex) {
 			deleteIndex = data.deleteIndex;
 			if (-1 !== deleteIndex) {
-				var deleteCount = objChangesDocument.index - deleteIndex;
-				objChangesDocument.splice(deleteIndex, deleteCount);
+				var deleteCount = pucker.index - deleteIndex;
+				if (objChangesDocument)
+					objChangesDocument.splice(deleteIndex, deleteCount);
+				pucker.index -= deleteCount;
 				mysqlBase.deleteChanges(docId, deleteIndex);
 			}
 		}
 
 		// Стартовый индекс изменения при добавлении
-		var index = objChangesDocument.index;
+		var startIndex = pucker.index;
 
 		var newChanges = JSON.parse(data.changes);
+		var arrNewDocumentChanges = [];
 		if (0 < newChanges.length) {
 			// Для Excel нужно пересчитать индексы для lock-ов
 			var bIsRecalculate = (data.isExcel && false !== data.isCoAuthoring);
@@ -1160,7 +1247,7 @@ exports.install = function (server, callbackFunction) {
 
 			for (var i = 0; i < newChanges.length; ++i) {
 				oElement = newChanges[i];
-				objChangesDocument.push({docid: docId, change: JSON.stringify(oElement), time: Date.now(),
+				arrNewDocumentChanges.push({docid: docId, change: JSON.stringify(oElement), time: Date.now(),
 					user: userId, useridoriginal: conn.user.idOriginal});
 
 				if (bIsRecalculate) {
@@ -1177,7 +1264,10 @@ exports.install = function (server, callbackFunction) {
 				_recalcLockArray(userId, locks[docId], oRecalcIndexColumns, oRecalcIndexRows);
 			}
 
-			mysqlBase.insertChanges(newChanges, docId, index, userId, conn.user.idOriginal);
+			if (objChangesDocument)
+				objChangesDocument.concat(arrNewDocumentChanges);
+			pucker.index += arrNewDocumentChanges.length;
+			mysqlBase.insertChanges(arrNewDocumentChanges, docId, startIndex, userId, conn.user.idOriginal);
 		}
 
 		if (data.endSaveChanges) {
@@ -1194,16 +1284,16 @@ exports.install = function (server, callbackFunction) {
 					};
 				});
 				_.each(participants, function (participant) {
-					sendData(participant.connection, {type: 'saveChanges', changes: objChangesDocument.slice(index),
-						locks: arrLocks});
+					sendData(participant.connection, {type: 'saveChanges', changes: arrNewDocumentChanges,
+						changesIndex: pucker.index, locks: arrLocks});
 				});
 			}
 			// Автоматически снимаем lock сами и посылаем индекс для сохранения
-			unSaveLock(conn, -1 === deleteIndex ? index : -1);
+			unSaveLock(conn, -1 === deleteIndex ? startIndex : -1);
 		} else {
 			_.each(participants, function (participant) {
-				sendData(participant.connection, {type: 'saveChanges', changes: objChangesDocument.slice(index),
-					locks: []});
+				sendData(participant.connection, {type: 'saveChanges', changes: arrNewDocumentChanges,
+					changesIndex: pucker.index, locks: []});
 			});
 			sendData(conn, {type: 'savePartChanges'});
 		}
@@ -1259,7 +1349,7 @@ exports.install = function (server, callbackFunction) {
 			var i, element;
 			for (i = 0; i < arrayElements.length; ++i) {
 				element = arrayElements[i];
-		 		updatePucker(true, element['dp_key'], element['dp_callback'], element['dp_documentFormatSave']);
+		 		updatePucker(element['dp_key'], element['dp_callback'], element['dp_documentFormatSave'], true);
 			}
 		}
 
@@ -1267,6 +1357,9 @@ exports.install = function (server, callbackFunction) {
 	};
 
 	var callbackLoadCallbacksMySql = function (error, arrayElements) {
+		var createTimer = function (id) {
+			return setTimeout(function () { sendChangesToServer(id); }, c_oAscSaveTimeOutDelay);
+		};
 		if (null != arrayElements) {
 			var i, element, callbackUrl;
 			for (i = 0; i < arrayElements.length; ++i) {
@@ -1276,43 +1369,18 @@ exports.install = function (server, callbackFunction) {
 					logger.error('error parse callback = ' + element['dc_callback']);
 				objServiceInfo[element['dc_key']] = callbackUrl;
 			}
-		}
 
-		mysqlBase.loadTable(mysqlBase.tableId.changes, callbackLoadChangesMySql);
-	};
-	var callbackLoadChangesMySql = function (error, arrayElements){
-		var createTimer = function (id) {
-			return setTimeout(function () { sendChangesToServer(id); }, c_oAscSaveTimeOutDelay);
-		};
-		var docId;
-		if (null != arrayElements) {
-			// add elements
-			var i, element, objProps = {}, objChangesDocument;
-			for (i = 0; i < arrayElements.length; ++i) {
-				element = arrayElements[i];
-
-				docId = element['dc_key'];
-				objChangesDocument = objChanges[docId];
-				if (!objChangesDocument)
-					objChangesDocument = objChanges[docId] = new DocumentChanges();
-
-				objChangesDocument.push({docid: docId, change: element['dc_data'], time: Date.now(),
-					user: element['dc_user_id'], useridoriginal: element['dc_user_id_original']});
-			}
-
-			// Есть изменения, должны запустить сборку, только если есть подписчики
+			var docId;
+			// Проходимся по всем подписчикам
 			for (docId in objServiceInfo) {
-				if (objChanges[docId] && 0 < objChanges[docId].index) {
-					saveTimers[docId] = createTimer(docId, objProps[docId]);
-				} else
+				// Если есть информация для сборки, то запускаем. Иначе - удаляем подписчика? : ToDo
+				if (objServicePucker[docId])
+					saveTimers[docId] = createTimer(docId);
+				else
 					deleteCallback(docId);
 			}
 		}
-		// Удалим ненужные из базы сборщика
-		for (docId in objServicePucker) {
-			if (!saveTimers[docId])
-				deletePucker(docId);
-		}
+
 		callbackFunction();
 	};
 
