@@ -30,7 +30,7 @@ docsCoServer.install(server, function() {
 	});
 	
 	app.get('/index.html', function(req, res) {
-		res.send('Server is functioning normally');
+		res.send('Server is functioning normally. Version: ' + docsCoServer.version);
 	});
 
 	app.get('/CommandService.ashx', onServiceCall);

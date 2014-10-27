@@ -53,6 +53,8 @@ var messages					= {}, // Сообщения из чата для докумен
 	arrCacheDocumentsChanges	= [], // Кэш для хранения изменений активных документов
 	nCacheSize					= 100;// Размер кэша
 
+var asc_coAuthV	= '3.0.5';				// Версия сервера совместного редактирования
+
 function DocumentChanges (docId) {
 	this.docId = docId;
 	this.arrChanges = [];
@@ -470,6 +472,8 @@ function insertPucker (docId) {
 	return pucker;
 }
 
+exports.version = asc_coAuthV;
+
 exports.install = function (server, callbackFunction) {
     'use strict';
     var sockjs_opts = {sockjs_url:"http://cdn.sockjs.org/sockjs-0.3.min.js"},
@@ -480,7 +484,6 @@ exports.install = function (server, callbackFunction) {
 		arrSaveLock = {},
 		saveTimers = {},// Таймеры сохранения, после выхода всех пользователей
         urlParse = new RegExp("^/doc/([0-9-.a-zA-Z_=]*)/c.+", 'i');
-	var asc_coAuthV	= '3.0.5';
 
     sockjs_echo.on('connection', function (conn) {
 		if (null == conn) {
