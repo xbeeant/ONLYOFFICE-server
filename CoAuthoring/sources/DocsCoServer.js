@@ -425,12 +425,12 @@ function removeChanges (id, isCorrupted) {
 	delete messages[id];
 
 	deleteCallback(id);
+	// remove changes from memory (удаляем из памяти всегда)
+	removeDocumentChanges(id);
 
 	if (!isCorrupted) {
 		// Удаляем информацию о сборщике
 		deletePucker(id);
-		// remove changes from memory
-		removeDocumentChanges(id);
 		// Нужно удалить изменения из базы
 		mysqlBase.deleteChanges(id, null);
 	} else {
