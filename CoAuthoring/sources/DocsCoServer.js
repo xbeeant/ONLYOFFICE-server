@@ -1244,27 +1244,12 @@ exports.install = function (server, callbackFunction) {
 		var newChanges = JSON.parse(data.changes);
 		var arrNewDocumentChanges = [];
 		if (0 < newChanges.length) {
-			// Для Excel нужно пересчитать индексы для lock-ов
-			var bIsRecalculate = (data.isExcel && false !== data.isCoAuthoring);
-			var oElement = null, oRecalcIndexColumns = null, oRecalcIndexRows = null;
+			var oElement = null;
 
 			for (var i = 0; i < newChanges.length; ++i) {
 				oElement = newChanges[i];
 				arrNewDocumentChanges.push({docid: docId, change: JSON.stringify(oElement), time: Date.now(),
 					user: userId, useridoriginal: conn.user.idOriginal});
-
-				if (bIsRecalculate) {
-					if (oElement.hasOwnProperty("type") && "10" === oElement["type"]) {
-						// Это мы получили recalcIndexColumns и recalcIndexRows
-						oRecalcIndexColumns = _addRecalcIndex(oElement["indexCols"]);
-						oRecalcIndexRows = _addRecalcIndex(oElement["indexRows"]);
-					}
-				}
-			}
-
-			// Теперь нужно пересчитать индексы для lock-элементов
-			if (null !== oRecalcIndexColumns || null !== oRecalcIndexRows) {
-				_recalcLockArray(userId, locks[docId], oRecalcIndexColumns, oRecalcIndexRows);
 			}
 
 			if (objChangesDocument)
@@ -1274,6 +1259,17 @@ exports.install = function (server, callbackFunction) {
 		}
 
 		if (data.endSaveChanges) {
+			// Для Excel нужно пересчитать индексы для lock-ов
+			if (data.isExcel && false !== data.isCoAuthoring && data.excelAdditionalInfo) {
+				var tmpAdditionalInfo = JSON.parse(data.excelAdditionalInfo);
+				// Это мы получили recalcIndexColumns и recalcIndexRows
+				var oRecalcIndexColumns = _addRecalcIndex(tmpAdditionalInfo["indexCols"]);
+				var oRecalcIndexRows = _addRecalcIndex(tmpAdditionalInfo["indexRows"]);
+				// Теперь нужно пересчитать индексы для lock-элементов
+				if (null !== oRecalcIndexColumns || null !== oRecalcIndexRows)
+					_recalcLockArray(userId, locks[docId], oRecalcIndexColumns, oRecalcIndexRows);
+			}
+
 			//Release locks
 			var userLocks = getUserLocks(docId, conn.sessionId);
 			// Для данного пользователя снимаем Lock с документа
@@ -1288,7 +1284,7 @@ exports.install = function (server, callbackFunction) {
 				});
 				_.each(participants, function (participant) {
 					sendData(participant.connection, {type: 'saveChanges', changes: arrNewDocumentChanges,
-						changesIndex: pucker.index, locks: arrLocks});
+						changesIndex: pucker.index, locks: arrLocks, excelAdditionalInfo: data.excelAdditionalInfo});
 				});
 			}
 			// Автоматически снимаем lock сами и посылаем индекс для сохранения
