@@ -555,7 +555,7 @@ exports.install = function (server, callbackFunction) {
 
 						// Send changes to save server
 						oPucker = objServicePucker[docId];
-						if (oPucker && oPucker.inDataBase) {
+						if (oPucker && oPucker.inDataBase && 0 !== oPucker.index) {
 							saveTimers[docId] = setTimeout(function () {
 								sendChangesToServer(docId);
 							}, c_oAscSaveTimeOutDelay);
