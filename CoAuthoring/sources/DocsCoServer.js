@@ -790,7 +790,7 @@ exports.install = function (server, callbackFunction) {
 		var sendData = JSON.stringify({
 			'id': docId,
 			'c': 'sfc',
-			'url': '/CommandService.ashx?c=saved&status=0&key=' + docId,
+			'url': '/CommandService.ashx?c=saved&key=' + docId + '&status=',
 			'outputformat': objServicePucker[docId].documentFormatSave,
 			'data': c_oAscSaveTimeOutDelay
 		});
