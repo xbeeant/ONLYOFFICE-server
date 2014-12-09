@@ -53,7 +53,7 @@ var messages					= {}, // Сообщения из чата для докумен
 	arrCacheDocumentsChanges	= [], // Кэш для хранения изменений активных документов
 	nCacheSize					= 100;// Размер кэша
 
-var asc_coAuthV	= '3.0.5';				// Версия сервера совместного редактирования
+var asc_coAuthV	= '3.0.6';				// Версия сервера совместного редактирования
 
 function DocumentChanges (docId) {
 	this.docId = docId;
@@ -80,6 +80,12 @@ var c_oAscServerStatus = {
 	MustSave	: 2,
 	Corrupted	: 3,
 	Closed		: 4
+};
+
+var c_oAscChangeBase = {
+	No		: 0,
+	Delete	: 1,
+	All		: 2
 };
 
 var c_oAscServerCommandErrors = {
@@ -367,7 +373,11 @@ function deleteCallback (id) {
 	delete objServiceInfo[id];
 }
 
-// Отправка статуса, чтобы знать когда документ начал редактироваться, а когда закончился
+/**
+ * Отправка статуса, чтобы знать когда документ начал редактироваться, а когда закончился
+ * @param docId
+ * @param {number} bChangeBase
+ */
 function sendStatusDocument (docId, bChangeBase) {
 	var callback = objServiceInfo[docId];
 	if (null == callback)
@@ -380,8 +390,8 @@ function sendStatusDocument (docId, bChangeBase) {
 	if (0 === participants.length && !(oPucker && oPucker.inDataBase))
 		status = c_oAscServerStatus.Closed;
 
-	if (bChangeBase) {
-		if (c_oAscServerStatus.Editing === status) {
+	if (c_oAscChangeBase.No !== bChangeBase) {
+		if (c_oAscServerStatus.Editing === status && c_oAscChangeBase.All === bChangeBase) {
 			// Добавить в базу
 			mysqlBase.insertInTable(mysqlBase.tableId.callbacks, docId, callback.href);
 		} else if (c_oAscServerStatus.Closed === status) {
@@ -416,6 +426,23 @@ function removeDocumentChanges (docId) {
 			return;
 		}
 	}
+}
+
+// Подписка на эвенты:
+function bindEvents(docId, callback) {
+	// Подписка на эвенты:
+	// - если пользователей нет и изменений нет, то отсылаем статус "закрыто" и в базу не добавляем
+	// - если пользователей нет, а изменения есть, то отсылаем статус "редактируем" без пользователей, но добавляем в базу
+	// - если есть пользователи, то просто добавляем в базу
+	var bChangeBase = c_oAscChangeBase.Delete;
+	if (!objServiceInfo[docId]) {
+		var oCallbackUrl = parseUrl(callback);
+		if (null === oCallbackUrl)
+			return c_oAscServerCommandErrors.ParseError;
+		objServiceInfo[docId] = oCallbackUrl;
+		bChangeBase = c_oAscChangeBase.All;
+	}
+	sendStatusDocument(docId, bChangeBase);
 }
 
 // Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
@@ -561,11 +588,11 @@ exports.install = function (server, callbackFunction) {
 							}, c_oAscSaveTimeOutDelay);
 						} else {
 							// Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
-							sendStatusDocument(docId, true);
+							sendStatusDocument(docId, c_oAscChangeBase.All);
 							deletePucker(docId);
 						}
 					} else
-						sendStatusDocument(docId, false);
+						sendStatusDocument(docId, c_oAscChangeBase.No);
 
 					//Давайдосвиданья!
 					//Release locks
@@ -943,6 +970,10 @@ exports.install = function (server, callbackFunction) {
 			};
 			conn.isViewer = data.isViewer;
 
+			// Если пришла информация о ссылке для посылания информации, то добавляем
+			if (data.documentCallbackUrl)
+				bindEvents(docId, data.documentCallbackUrl);
+
 			// Сохраняем информацию для сборки
 			updatePucker(docId, data.server, data.documentFormatSave, false);
 
@@ -1013,7 +1044,7 @@ exports.install = function (server, callbackFunction) {
 
 		// Отправляем на внешний callback только для тех, кто редактирует
 		if (!conn.isViewer)
-			sendStatusDocument(docId, false);
+			sendStatusDocument(docId, c_oAscChangeBase.No);
 
 		if (!bIsRestore && 2 === countNoView && !conn.isViewer) {
 			// Ставим lock на документ
@@ -1396,17 +1427,7 @@ exports.commandFromServer = function (query) {
 	var result = c_oAscServerCommandErrors.NoError;
 	switch(query.c) {
 		case 'info':
-			// Подписка на эвенты:
-			// - если пользователей нет и изменений нет, то отсылаем стату "закрыто" и в базу не добавляем
-			// - если пользователей нет, а изменения есть, то отсылаем статус "редактируем" без пользователей, но добавляем в базу
-			// - если есть пользователи, то просто добавляем в базу
-			if (!objServiceInfo[docId]) {
-				var oCallbackUrl = parseUrl(query.callback);
-				if (null === oCallbackUrl)
-					return c_oAscServerCommandErrors.ParseError;
-				objServiceInfo[docId] = oCallbackUrl;
-			}
-			sendStatusDocument(docId, true);
+			bindEvents(docId, query.callback);
 			break;
 		case 'drop':
 			dropUserFromDocument(docId, query.userid, query.description);
