@@ -308,7 +308,7 @@ function getOriginalParticipantsId(docId) {
 	return result;
 }
 
-function sendServerRequest (server, postData) {
+function sendServerRequest (server, postData, onReplyCallback) {
 	if (!server.host || !server.path)
 		return;
 	var options = {
@@ -331,6 +331,8 @@ function sendServerRequest (server, postData) {
 		res.setEncoding('utf8');
 		res.on('data', function(replyData) {
 			logger.info('replyData: ' + replyData);
+			if (onReplyCallback)
+				onReplyCallback(replyData);
 		});
 		res.on('end', function() {
 			logger.info('end');
@@ -401,7 +403,16 @@ function sendStatusDocument (docId, bChangeBase) {
 	}
 
 	var sendData = JSON.stringify({'key': docId, 'status': status, 'url': '', 'users': participants});
-	sendServerRequest(callback, sendData);
+	sendServerRequest(callback, sendData, function (replyData) {onReplySendStatusDocument(docId, replyData);});
+}
+function onReplySendStatusDocument (docId, replyData) {
+	if (!replyData)
+		return;
+	var i, oData = JSON.parse(replyData), usersId = oData.usersId;
+	if (Array.isArray(usersId)) {
+		for (i = 0; i < usersId.length; ++i)
+			dropUserFromDocument(docId, usersId[i], '');
+	}
 }
 
 function dropUserFromDocument (docId, userId, description) {
