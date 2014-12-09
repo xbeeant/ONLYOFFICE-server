@@ -1441,7 +1441,10 @@ exports.commandFromServer = function (query) {
 			bindEvents(docId, query.callback);
 			break;
 		case 'drop':
-			dropUserFromDocument(docId, query.userid, query.description);
+			if (query.userid)
+				dropUserFromDocument(docId, query.userid, query.description);
+			else if (query.usersId)
+				onReplySendStatusDocument(docId, query.usersId);
 			break;
 		case 'saved':
 			// Результат от менеджера документов о статусе обработки сохранения файла после сборки
