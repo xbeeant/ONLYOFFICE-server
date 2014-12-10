@@ -408,10 +408,13 @@ function sendStatusDocument (docId, bChangeBase) {
 function onReplySendStatusDocument (docId, replyData) {
 	if (!replyData)
 		return;
-	var i, oData = JSON.parse(replyData), usersId = oData.usersId;
-	if (Array.isArray(usersId)) {
-		for (i = 0; i < usersId.length; ++i)
-			dropUserFromDocument(docId, usersId[i], '');
+	var i, oData = JSON.parse(replyData), users;
+	if (!oData)
+		return;
+	users = Array.isArray(oData) ? oData : oData.users;
+	if (Array.isArray(users)) {
+		for (i = 0; i < users.length; ++i)
+			dropUserFromDocument(docId, users[i], '');
 	}
 }
 
@@ -1443,8 +1446,8 @@ exports.commandFromServer = function (query) {
 		case 'drop':
 			if (query.userid)
 				dropUserFromDocument(docId, query.userid, query.description);
-			else if (query.usersId)
-				onReplySendStatusDocument(docId, query.usersId);
+			else if (query.users)
+				onReplySendStatusDocument(docId, query.users);
 			break;
 		case 'saved':
 			// Результат от менеджера документов о статусе обработки сохранения файла после сборки
