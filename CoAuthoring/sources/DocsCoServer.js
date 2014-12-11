@@ -326,11 +326,11 @@ function sendServerRequest (server, postData, onReplyCallback) {
 
 	var requestFunction = server.https ? https.request : http.request;
 
-	logger.info('postData: ' + postData);
+	logger.info('postData: %s', postData);
 	var req = requestFunction(options, function(res) {
 		res.setEncoding('utf8');
 		res.on('data', function(replyData) {
-			logger.info('replyData: ' + replyData);
+			logger.info('replyData: %s', replyData);
 			if (onReplyCallback)
 				onReplyCallback(replyData);
 		});
@@ -340,7 +340,7 @@ function sendServerRequest (server, postData, onReplyCallback) {
 	});
 
 	req.on('error', function(e) {
-		logger.warn('problem with request on server: ' + e.message);
+		logger.warn('problem with request on server: %s', e.message);
 	});
 
 	// write data to request body
@@ -464,7 +464,7 @@ function bindEvents(docId, callback, sendStatus) {
 
 // Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
 function removeChanges (id, isCorrupted) {
-	logger.info('removeChanges: ' + id);
+	logger.info('removeChanges: %s', id);
 	// remove messages from memory
 	delete messages[id];
 
@@ -480,7 +480,7 @@ function removeChanges (id, isCorrupted) {
 	} else {
 		// Обновим статус файла (т.к. ошибка, выставим, что не собиралось)
 		mysqlBase.updateStatusFile(id);
-		logger.error('saved corrupted id = ' + id);
+		logger.error('saved corrupted id = %s', id);
 	}
 }
 function deletePucker (docId) {
@@ -492,7 +492,7 @@ function updatePucker (docId, url, documentFormatSave, inDataBase) {
 	if (!objServicePucker.hasOwnProperty(docId)) {
 		var serverUrl = parseUrl(url);
 		if (null === serverUrl) {
-			logger.error('Error server url = ' + url);
+			logger.error('Error server url = %s', url);
 			return;
 		}
 
@@ -531,7 +531,7 @@ exports.install = function (server, callbackFunction) {
 
     sockjs_echo.on('connection', function (conn) {
 		if (null == conn) {
-			logger.error ("null == conn");
+			logger.error("null == conn");
 			return;
         }
         conn.on('data', function (message) {
@@ -550,7 +550,7 @@ exports.install = function (server, callbackFunction) {
 					case 'unLockDocument'		: checkEndAuthLock(data.isSave, conn.docId, conn.user.id, null, conn); break;
 				}
             } catch (e) {
-                logger.error("error receiving response:" + e);
+                logger.error("error receiving response: %s", e);
             }
 
         });
@@ -996,7 +996,7 @@ exports.install = function (server, callbackFunction) {
 
 			//Set the unique ID
 			if (data.sessionId !== null && _.isString(data.sessionId) && data.sessionId !== "") {
-				logger.info("restored old session id=" + data.sessionId);
+				logger.info("restored old session id = %s", data.sessionId);
 
 				// Останавливаем сборку (вдруг она началась)
 				// Когда переподсоединение, нам нужна проверка на сборку файла
@@ -1109,7 +1109,7 @@ exports.install = function (server, callbackFunction) {
 		}
 
 		// insert
-		logger.info("insert message: " + JSON.stringify(msg));
+		logger.info("insert message: %s", JSON.stringify(msg));
 
 		_.each(participants, function (participant) {
 			sendData(participant.connection, {type:"message", messages:[msg]});
@@ -1128,7 +1128,7 @@ exports.install = function (server, callbackFunction) {
 		var i = 0;
 		var lengthArray = (arrayBlocks) ? arrayBlocks.length : 0;
 		for (; i < lengthArray; ++i) {
-			logger.info("getLock id: " + arrayBlocks[i]);
+			logger.info("getLock id: %s", arrayBlocks[i]);
 			if (documentLocks.hasOwnProperty(arrayBlocks[i]) && documentLocks[arrayBlocks[i]] !== null) {
 				isLock = true;
 				break;
@@ -1413,7 +1413,7 @@ exports.install = function (server, callbackFunction) {
 				element = arrayElements[i];
 				callbackUrl = parseUrl(element['dc_callback']);
 				if (null === callbackUrl)
-					logger.error('error parse callback = ' + element['dc_callback']);
+					logger.error('error parse callback = %s', element['dc_callback']);
 				objServiceInfo[element['dc_key']] = callbackUrl;
 			}
 
@@ -1440,7 +1440,7 @@ exports.commandFromServer = function (query) {
 	if (null == docId)
 		return c_oAscServerCommandErrors.DocumentIdError;
 
-	logger.info('commandFromServer: docId = ' + docId + ' c = ' + query.c);
+	logger.info('commandFromServer: docId = %s c = %s', docId, query.c);
 	var result = c_oAscServerCommandErrors.NoError;
 	switch(query.c) {
 		case 'info':
