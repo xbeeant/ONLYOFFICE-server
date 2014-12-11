@@ -379,9 +379,8 @@ function deleteCallback (id) {
  * Отправка статуса, чтобы знать когда документ начал редактироваться, а когда закончился
  * @param docId
  * @param {number} bChangeBase
- * @param sendStatus - отправлять информация на сервер или нет
  */
-function sendStatusDocument (docId, bChangeBase, sendStatus) {
+function sendStatusDocument (docId, bChangeBase) {
 	var callback = objServiceInfo[docId];
 	if (null == callback)
 		return;
@@ -403,10 +402,8 @@ function sendStatusDocument (docId, bChangeBase, sendStatus) {
 		}
 	}
 
-	if (sendStatus) {
-		var sendData = JSON.stringify({'key': docId, 'status': status, 'url': '', 'users': participants});
-		sendServerRequest(callback, sendData, function (replyData) {onReplySendStatusDocument(docId, replyData);});
-	}
+	var sendData = JSON.stringify({'key': docId, 'status': status, 'url': '', 'users': participants});
+	sendServerRequest(callback, sendData, function (replyData) {onReplySendStatusDocument(docId, replyData);});
 }
 function onReplySendStatusDocument (docId, replyData) {
 	if (!replyData)
@@ -446,7 +443,7 @@ function removeDocumentChanges (docId) {
 }
 
 // Подписка на эвенты:
-function bindEvents(docId, callback, sendStatus) {
+function bindEvents(docId, callback) {
 	// Подписка на эвенты:
 	// - если пользователей нет и изменений нет, то отсылаем статус "закрыто" и в базу не добавляем
 	// - если пользователей нет, а изменения есть, то отсылаем статус "редактируем" без пользователей, но добавляем в базу
@@ -459,7 +456,7 @@ function bindEvents(docId, callback, sendStatus) {
 		objServiceInfo[docId] = oCallbackUrl;
 		bChangeBase = c_oAscChangeBase.All;
 	}
-	sendStatusDocument(docId, bChangeBase, sendStatus);
+	sendStatusDocument(docId, bChangeBase);
 }
 
 // Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
@@ -605,11 +602,11 @@ exports.install = function (server, callbackFunction) {
 							}, c_oAscSaveTimeOutDelay);
 						} else {
 							// Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
-							sendStatusDocument(docId, c_oAscChangeBase.All, true);
+							sendStatusDocument(docId, c_oAscChangeBase.All);
 							deletePucker(docId);
 						}
 					} else
-						sendStatusDocument(docId, c_oAscChangeBase.No, true);
+						sendStatusDocument(docId, c_oAscChangeBase.No);
 
 					//Давайдосвиданья!
 					//Release locks
@@ -987,10 +984,6 @@ exports.install = function (server, callbackFunction) {
 			};
 			conn.isViewer = data.isViewer;
 
-			// Если пришла информация о ссылке для посылания информации, то добавляем
-			if (data.documentCallbackUrl)
-				bindEvents(docId, data.documentCallbackUrl, false);
-
 			// Сохраняем информацию для сборки
 			updatePucker(docId, data.server, data.documentFormatSave, false);
 
@@ -1034,11 +1027,11 @@ exports.install = function (server, callbackFunction) {
 
 			} else {
 				conn.sessionId = conn.id;
-				endAuth(conn, false);
+				endAuth(conn, false, data.documentCallbackUrl);
 			}
 		}
 	}
-	function endAuth(conn, bIsRestore) {
+	function endAuth(conn, bIsRestore, documentCallbackUrl) {
 		var docId = conn.docId;
 		connections.push({connection:conn});
 		var participants = getParticipants(docId);
@@ -1060,8 +1053,13 @@ exports.install = function (server, callbackFunction) {
 		}
 
 		// Отправляем на внешний callback только для тех, кто редактирует
-		if (!conn.isViewer)
-			sendStatusDocument(docId, c_oAscChangeBase.No, true);
+		if (!conn.isViewer) {
+			// Если пришла информация о ссылке для посылания информации, то добавляем
+			if (!bIsRestore && documentCallbackUrl)
+				bindEvents(docId, documentCallbackUrl);
+			else
+				sendStatusDocument(docId, c_oAscChangeBase.No);
+		}
 
 		if (!bIsRestore && 2 === countNoView && !conn.isViewer) {
 			// Ставим lock на документ
@@ -1444,7 +1442,7 @@ exports.commandFromServer = function (query) {
 	var result = c_oAscServerCommandErrors.NoError;
 	switch(query.c) {
 		case 'info':
-			bindEvents(docId, query.callback, true);
+			bindEvents(docId, query.callback);
 			break;
 		case 'drop':
 			if (query.userid)
