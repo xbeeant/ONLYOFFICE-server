@@ -379,8 +379,9 @@ function deleteCallback (id) {
  * Отправка статуса, чтобы знать когда документ начал редактироваться, а когда закончился
  * @param docId
  * @param {number} bChangeBase
+ * @param sendStatus - отправлять информация на сервер или нет
  */
-function sendStatusDocument (docId, bChangeBase) {
+function sendStatusDocument (docId, bChangeBase, sendStatus) {
 	var callback = objServiceInfo[docId];
 	if (null == callback)
 		return;
@@ -402,8 +403,10 @@ function sendStatusDocument (docId, bChangeBase) {
 		}
 	}
 
-	var sendData = JSON.stringify({'key': docId, 'status': status, 'url': '', 'users': participants});
-	sendServerRequest(callback, sendData, function (replyData) {onReplySendStatusDocument(docId, replyData);});
+	if (sendStatus) {
+		var sendData = JSON.stringify({'key': docId, 'status': status, 'url': '', 'users': participants});
+		sendServerRequest(callback, sendData, function (replyData) {onReplySendStatusDocument(docId, replyData);});
+	}
 }
 function onReplySendStatusDocument (docId, replyData) {
 	if (!replyData)
@@ -443,7 +446,7 @@ function removeDocumentChanges (docId) {
 }
 
 // Подписка на эвенты:
-function bindEvents(docId, callback) {
+function bindEvents(docId, callback, sendStatus) {
 	// Подписка на эвенты:
 	// - если пользователей нет и изменений нет, то отсылаем статус "закрыто" и в базу не добавляем
 	// - если пользователей нет, а изменения есть, то отсылаем статус "редактируем" без пользователей, но добавляем в базу
@@ -456,7 +459,7 @@ function bindEvents(docId, callback) {
 		objServiceInfo[docId] = oCallbackUrl;
 		bChangeBase = c_oAscChangeBase.All;
 	}
-	sendStatusDocument(docId, bChangeBase);
+	sendStatusDocument(docId, bChangeBase, sendStatus);
 }
 
 // Удаляем изменения из памяти (используется только с основного сервера, для очистки!)
@@ -602,11 +605,11 @@ exports.install = function (server, callbackFunction) {
 							}, c_oAscSaveTimeOutDelay);
 						} else {
 							// Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
-							sendStatusDocument(docId, c_oAscChangeBase.All);
+							sendStatusDocument(docId, c_oAscChangeBase.All, true);
 							deletePucker(docId);
 						}
 					} else
-						sendStatusDocument(docId, c_oAscChangeBase.No);
+						sendStatusDocument(docId, c_oAscChangeBase.No, true);
 
 					//Давайдосвиданья!
 					//Release locks
@@ -986,7 +989,7 @@ exports.install = function (server, callbackFunction) {
 
 			// Если пришла информация о ссылке для посылания информации, то добавляем
 			if (data.documentCallbackUrl)
-				bindEvents(docId, data.documentCallbackUrl);
+				bindEvents(docId, data.documentCallbackUrl, false);
 
 			// Сохраняем информацию для сборки
 			updatePucker(docId, data.server, data.documentFormatSave, false);
@@ -1058,7 +1061,7 @@ exports.install = function (server, callbackFunction) {
 
 		// Отправляем на внешний callback только для тех, кто редактирует
 		if (!conn.isViewer)
-			sendStatusDocument(docId, c_oAscChangeBase.No);
+			sendStatusDocument(docId, c_oAscChangeBase.No, true);
 
 		if (!bIsRestore && 2 === countNoView && !conn.isViewer) {
 			// Ставим lock на документ
@@ -1441,7 +1444,7 @@ exports.commandFromServer = function (query) {
 	var result = c_oAscServerCommandErrors.NoError;
 	switch(query.c) {
 		case 'info':
-			bindEvents(docId, query.callback);
+			bindEvents(docId, query.callback, true);
 			break;
 		case 'drop':
 			if (query.userid)
