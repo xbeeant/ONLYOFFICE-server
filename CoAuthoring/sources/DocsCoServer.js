@@ -1055,7 +1055,7 @@ exports.install = function (server, callbackFunction) {
 		// Отправляем на внешний callback только для тех, кто редактирует
 		if (!conn.isViewer) {
 			// Если пришла информация о ссылке для посылания информации, то добавляем
-			if (!bIsRestore && documentCallbackUrl)
+			if (documentCallbackUrl)
 				bindEvents(docId, documentCallbackUrl);
 			else
 				sendStatusDocument(docId, c_oAscChangeBase.No);
