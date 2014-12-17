@@ -659,6 +659,10 @@ exports.install = function (server, callbackFunction) {
 			}
 
 			var callbackGetChanges = function (error, arrayElements) {
+				// Если за тот момент, пока мы ждали из базы ответа, все ушли, то отправлять ничего не нужно
+				if (!oPucker)
+					return;
+
 				var j, element;
 				var objChangesDocument = new DocumentChanges(docId);
 				for (j = 0; j < arrayElements.length; ++j) {
