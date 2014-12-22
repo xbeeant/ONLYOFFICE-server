@@ -389,7 +389,7 @@ function sendStatusDocument (docId, bChangeBase) {
 	var participants = getOriginalParticipantsId(docId);
 	var oPucker = objServicePucker[docId];
 	// Проверка на наличие изменений
-	if (0 === participants.length && !(oPucker && oPucker.inDataBase))
+	if (0 === participants.length && !(oPucker && oPucker.inDataBase && 0 !== oPucker.index))
 		status = c_oAscServerStatus.Closed;
 
 	if (c_oAscChangeBase.No !== bChangeBase) {
@@ -602,8 +602,8 @@ exports.install = function (server, callbackFunction) {
 							}, c_oAscSaveTimeOutDelay);
 						} else {
 							// Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
-							sendStatusDocument(docId, c_oAscChangeBase.All);
 							deletePucker(docId);
+							sendStatusDocument(docId, c_oAscChangeBase.All);
 						}
 					} else
 						sendStatusDocument(docId, c_oAscChangeBase.No);
