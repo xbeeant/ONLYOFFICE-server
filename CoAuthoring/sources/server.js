@@ -10,6 +10,8 @@ var logger = require('./../../Common/sources/logger'),
 	app = express(),
 	server = null;
 
+logger.warn('Express server starting...');
+
 if (config['ssl']) {
 	var privateKey = fs.readFileSync(config['ssl']['key']).toString(),
 		certificate = fs.readFileSync(config['ssl']['cert']).toString(),
@@ -26,7 +28,7 @@ if (config['ssl']) {
 
 docsCoServer.install(server, function() {
 	server.listen(config['server']['port'], function() {
-		logger.info("Express server listening on port %d in %s mode", config['server']['port'], app.settings.env);
+		logger.warn("Express server listening on port %d in %s mode", config['server']['port'], app.settings.env);
 	});
 	
 	app.get('/index.html', function(req, res) {
