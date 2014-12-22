@@ -547,7 +547,7 @@ exports.install = function (server, callbackFunction) {
 					case 'unLockDocument'		: checkEndAuthLock(data.isSave, conn.docId, conn.user.id, null, conn); break;
 				}
             } catch (e) {
-                logger.error("error receiving response: %s", e);
+                logger.error("error receiving response: %s docId = %s", e, conn ? conn.docId : 'null');
             }
 
         });
