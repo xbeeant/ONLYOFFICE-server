@@ -408,7 +408,13 @@ function sendStatusDocument (docId, bChangeBase) {
 function onReplySendStatusDocument (docId, replyData) {
 	if (!replyData)
 		return;
-	var i, oData = JSON.parse(replyData), users;
+	var i, oData, users;
+	try {
+		oData = JSON.parse(replyData);
+	} catch (e) {
+		logger.error("error reply SendStatusDocument: %s docId = %s", e, docId);
+		oData = null;
+	}
 	if (!oData)
 		return;
 	users = Array.isArray(oData) ? oData : oData.users;
