@@ -35,7 +35,7 @@ CheckDictionary(arrDictionaries[0x0409], 'color', 'calor');*/
  
 exports.install = function (server, callbackFunction) {
 	'use strict';
-	var sockjs_opts = {sockjs_url:"http://cdn.sockjs.org/sockjs-0.3.min.js"},
+	var sockjs_opts = {sockjs_url: './../../Common/sources/sockjs-0.3.min.js'},
 		sockjs_echo = sockjs.createServer(sockjs_opts),
 		dataHandler;
 
