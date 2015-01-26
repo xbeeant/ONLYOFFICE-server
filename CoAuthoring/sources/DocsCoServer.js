@@ -53,7 +53,7 @@ var messages					= {}, // Сообщения из чата для докумен
 	arrCacheDocumentsChanges	= [], // Кэш для хранения изменений активных документов
 	nCacheSize					= 100;// Размер кэша
 
-var asc_coAuthV	= '3.0.6';				// Версия сервера совместного редактирования
+var asc_coAuthV	= '3.0.7';				// Версия сервера совместного редактирования
 
 function DocumentChanges (docId) {
 	this.docId = docId;
@@ -1314,6 +1314,7 @@ exports.install = function (server, callbackFunction) {
 			mysqlBase.insertChanges(arrNewDocumentChanges, docId, startIndex, userId, conn.user.idOriginal);
 		}
 
+		var changesIndex = (-1 === deleteIndex && data.startSaveChanges) ? startIndex : -1;
 		if (data.endSaveChanges) {
 			// Для Excel нужно пересчитать индексы для lock-ов
 			if (data.isExcel && false !== data.isCoAuthoring && data.excelAdditionalInfo) {
@@ -1344,13 +1345,13 @@ exports.install = function (server, callbackFunction) {
 				});
 			}
 			// Автоматически снимаем lock сами и посылаем индекс для сохранения
-			unSaveLock(conn, -1 === deleteIndex ? startIndex : -1);
+			unSaveLock(conn, changesIndex);
 		} else {
 			_.each(participants, function (participant) {
 				sendData(participant.connection, {type: 'saveChanges', changes: arrNewDocumentChanges,
 					changesIndex: pucker.index, locks: []});
 			});
-			sendData(conn, {type: 'savePartChanges'});
+			sendData(conn, {type: 'savePartChanges', changesIndex: changesIndex});
 		}
 	}
 	// Можем ли мы сохранять ?
