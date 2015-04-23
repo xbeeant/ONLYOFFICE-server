@@ -23,3 +23,6 @@ exports.sqlQuery = function (sqlCommand, callbackFunction) {
 		});
 	});
 };
+exports.sqlEscape = function (value) {
+	return value.replace( /(\')/g, "\\'" );
+};
