@@ -1,15 +1,15 @@
 'use strict';
-var config = require('./config.json');
+var config = require('config');
 var amqp = require('amqplib/callback_api');
 
-var cfgRabbitUrl = config['rabbitmq']['url'];
-var cfgRabbitLogin = config['rabbitmq']['login'];
-var cfgRabbitPassword = config['rabbitmq']['password'];
-var cfgRabbitConnectionTimeout = config['rabbitmq']['connectionTimeout'];
-var cfgRabbitAuthMechanism = config['rabbitmq']['authMechanism'];
-var cfgRabbitVhost = config['rabbitmq']['vhost'];
-var cfgRabbitNoDelay = config['rabbitmq']['noDelay'];
-var cfgRabbitSslEnabled = config['rabbitmq']['sslenabled'];
+var cfgRabbitUrl = config.get('rabbitmq.url');
+var cfgRabbitLogin = config.get('rabbitmq.login');
+var cfgRabbitPassword = config.get('rabbitmq.password');
+var cfgRabbitConnectionTimeout = config.get('rabbitmq.connectionTimeout');
+var cfgRabbitAuthMechanism = config.get('rabbitmq.authMechanism');
+var cfgRabbitVhost = config.get('rabbitmq.vhost');
+var cfgRabbitNoDelay = config.get('rabbitmq.noDelay');
+var cfgRabbitSslEnabled = config.get('rabbitmq.sslenabled');
 
 function connetPromise() {
   return new Promise(function(resolve, reject) {
