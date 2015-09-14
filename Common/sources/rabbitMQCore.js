@@ -1,6 +1,7 @@
 'use strict';
 var config = require('config');
 var amqp = require('amqplib/callback_api');
+var logger = require('./logger');
 
 var cfgRabbitUrl = config.get('rabbitmq.url');
 var cfgRabbitLogin = config.get('rabbitmq.login');
@@ -11,26 +12,44 @@ var cfgRabbitVhost = config.get('rabbitmq.vhost');
 var cfgRabbitNoDelay = config.get('rabbitmq.noDelay');
 var cfgRabbitSslEnabled = config.get('rabbitmq.sslenabled');
 
-function connetPromise() {
+var RECONNECT_TIMEOUT = 1000;
+
+var connetOptions = {
+  login: cfgRabbitLogin,
+  password: cfgRabbitPassword,
+  connectionTimeout: cfgRabbitConnectionTimeout,
+  authMechanism: cfgRabbitAuthMechanism,
+  vhost: cfgRabbitVhost,
+  noDelay: cfgRabbitNoDelay,
+  ssl: {
+    enabled: cfgRabbitSslEnabled
+  }
+};
+
+function connetPromise(closeCallack) {
   return new Promise(function(resolve, reject) {
-    var option = {
-      login: cfgRabbitLogin,
-      password: cfgRabbitPassword,
-      connectionTimeout: cfgRabbitConnectionTimeout,
-      authMechanism: cfgRabbitAuthMechanism,
-      vhost: cfgRabbitVhost,
-      noDelay: cfgRabbitNoDelay,
-      ssl: {
-        enabled: cfgRabbitSslEnabled
-      }
-    };
-    amqp.connect(cfgRabbitUrl, option, function(err, conn) {
-      if (null != err) {
-        reject(err);
-      } else {
-        resolve(conn);
-      }
-    });
+    function startConnect() {
+      amqp.connect(cfgRabbitUrl, connetOptions, function(err, conn) {
+        if (null != err) {
+          logger.error('[AMQP] %s', err.stack);
+          setTimeout(startConnect, RECONNECT_TIMEOUT);
+        } else {
+          conn.on('error', function(err) {
+            logger.error('[AMQP] conn error', err.stack);
+          });
+          var closeCallback = function() {
+            //in some case receive multiple close events
+            conn.removeListener('close', closeCallback);
+            console.error("[AMQP] conn close");
+            closeCallack();
+          };
+          conn.on('close', closeCallback);
+          logger.debug('[AMQP] connected');
+          resolve(conn);
+        }
+      });
+    }
+    startConnect();
   });
 }
 function createChannelPromise(conn) {
