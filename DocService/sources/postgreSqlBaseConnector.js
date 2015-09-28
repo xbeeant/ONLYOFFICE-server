@@ -1,7 +1,7 @@
 var pg = require('pg');
 var configSql = require('config').get('services.CoAuthoring.sql')
-var connectionString = 'postgres://' + configSql.get('user') + ':' + configSql.get('pass') + '@' + configSql.get('host') +
-	(configSql.get('dbport') ? (':' + configSql.get('dbport')) : '') + '/' + configSql.get('database');
+var connectionString = 'postgres://' + configSql.get('dbUser') + ':' + configSql.get('dbPass') + '@' + configSql.get('dbHost') +
+	(configSql.get('dbPort') ? (':' + configSql.get('dbPort')) : '') + '/' + configSql.get('dbName');
 
 var logger = require('./../../Common/sources/logger');
 
