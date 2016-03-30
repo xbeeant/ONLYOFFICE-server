@@ -23,7 +23,7 @@
  *
 */
 var pg = require('pg');
-var configSql = require('config').get('services.CoAuthoring.sql')
+var configSql = require('config').get('services.CoAuthoring.sql');
 var connectionString = 'postgres://' + configSql.get('dbUser') + ':' + configSql.get('dbPass') + '@' + configSql.get('dbHost') +
 	(configSql.get('dbPort') ? (':' + configSql.get('dbPort')) : '') + '/' + configSql.get('dbName');
 
