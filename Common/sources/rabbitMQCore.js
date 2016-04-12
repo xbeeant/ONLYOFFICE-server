@@ -50,7 +50,7 @@ var connetOptions = {
   }
 };
 
-function connetPromise(closeCallack) {
+function connetPromise(closeCallback) {
   return new Promise(function(resolve, reject) {
     function startConnect() {
       amqp.connect(cfgRabbitUrl, connetOptions, function(err, conn) {
@@ -61,13 +61,13 @@ function connetPromise(closeCallack) {
           conn.on('error', function(err) {
             logger.error('[AMQP] conn error', err.stack);
           });
-          var closeCallback = function() {
+          var closeEventCallback = function() {
             //in some case receive multiple close events
-            conn.removeListener('close', closeCallback);
-            console.error("[AMQP] conn close");
-            closeCallack();
+            conn.removeListener('close', closeEventCallback);
+            console.debug("[AMQP] conn close");
+            closeCallback();
           };
-          conn.on('close', closeCallback);
+          conn.on('close', closeEventCallback);
           logger.debug('[AMQP] connected');
           resolve(conn);
         }
