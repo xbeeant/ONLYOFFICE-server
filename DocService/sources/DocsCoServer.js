@@ -540,11 +540,11 @@ function* getCallback(id) {
   var selectRes = yield sqlBase.getCallbackPromise(id);
   if (selectRes.length > 0) {
     var row = selectRes[0];
-    if (row.dc_callback) {
-      callbackUrl = row.dc_callback;
+    if (row.callback) {
+      callbackUrl = row.callback;
     }
-    if (row.dc_baseurl) {
-      baseUrl = row.dc_baseurl;
+    if (row.baseurl) {
+      baseUrl = row.baseurl;
     }
   }
   if (null != callbackUrl && null != baseUrl) {
@@ -563,8 +563,8 @@ function* getChangesIndex(docId) {
     res = parseInt(redisRes);
   } else {
     var getRes = yield sqlBase.getChangesIndexPromise(docId);
-    if (getRes && getRes.length > 0 && null != getRes[0]['dc_change_id']) {
-      res = getRes[0]['dc_change_id'] + 1;
+    if (getRes && getRes.length > 0 && null != getRes[0]['change_id']) {
+      res = getRes[0]['change_id'] + 1;
     }
   }
   return res;
@@ -971,9 +971,9 @@ exports.install = function(server, callbackFunction) {
       element = arrayElements[j];
 
       // Добавляем GMT, т.к. в базу данных мы пишем UTC, но сохраняется туда строка без UTC и при зачитывании будет неправильное время
-      objChangesDocument.push({docid: docId, change: element['dc_data'],
-        time: element['dc_date'].getTime(), user: element['dc_user_id'],
-        useridoriginal: element['dc_user_id_original']});
+      objChangesDocument.push({docid: docId, change: element['change_data'],
+        time: element['change_date'].getTime(), user: element['user_id'],
+        useridoriginal: element['user_id_original']});
     }
     return objChangesDocument;
   }
@@ -1282,7 +1282,7 @@ exports.install = function(server, callbackFunction) {
         try {
           var result = yield sqlBase.checkStatusFilePromise(docId);
 
-          var status = result[0]['tr_status'];
+          var status = result[0]['status'];
           if (FileStatus.Ok === status) {
             // Все хорошо, статус обновлять не нужно
           } else if (FileStatus.SaveVersion === status) {
@@ -1290,7 +1290,7 @@ exports.install = function(server, callbackFunction) {
             var updateMask = new taskResult.TaskResultData();
             updateMask.key = docId;
             updateMask.status = status;
-            updateMask.statusInfo = result[0]['tr_status_info'];
+            updateMask.statusInfo = result[0]['status_info'];
             var updateTask = new taskResult.TaskResultData();
             updateTask.status = taskResult.FileStatus.Ok;
             updateTask.statusInfo = constants.NO_ERROR;
