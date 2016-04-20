@@ -1282,7 +1282,7 @@ exports.install = function(server, callbackFunction) {
         try {
           var result = yield sqlBase.checkStatusFilePromise(docId);
 
-          var status = result[0]['status'];
+          var status = result && result.length > 0 ? result[0]['status'] : null;
           if (FileStatus.Ok === status) {
             // Все хорошо, статус обновлять не нужно
           } else if (FileStatus.SaveVersion === status) {
