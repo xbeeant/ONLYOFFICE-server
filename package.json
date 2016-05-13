@@ -11,7 +11,8 @@
       "./FileConverter/package.json",
       "./Metrics/package.json",
       "./SpellChecker/package.json",
-      "./Common/config/*.json"
+      "./Common/config/*.json",
+      "./Common/config/log4js/*.json"
     ],
     "dest": "./build"
   },
