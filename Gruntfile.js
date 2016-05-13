@@ -68,6 +68,6 @@ module.exports = function (grunt) {
   grunt.loadNpmTasks('grunt-banner');
   grunt.loadNpmTasks('grunt-check-dependencies');
   
-  grunt.registerTask('default', ['clean', 'mkdir', 'copy', 'decomment', 'usebanner', 'checkDependencies']);
+  grunt.registerTask('default', ['clean', 'mkdir', 'copy', 'usebanner', 'checkDependencies']);
 
 };
