@@ -911,14 +911,19 @@ exports.install = function(server, callbackFunction) {
     } else {
       conn.isCloseCoAuthoring = true;
     }
-
+    var tmpUser = conn.user;
+    var commands = [
+      ['hdel', redisKeyPresenceHash + docId, tmpUser.id],
+      ['zrem', redisKeyPresenceSet + docId, tmpUser.id]
+    ];
     if (isCloseCoAuthoringTmp) {
+      var multi = redisClient.multi(commands);
+      yield utils.promiseRedis(multi, multi.exec);
       // Мы уже закрывали совместное редактирование
       return;
     }
 
     var state = (false == reconnected) ? false : undefined;
-    var tmpUser = conn.user;
     yield* publish({type: commonDefines.c_oPublishType.participantsState, docId: docId, user: tmpUser, state: state}, docId, tmpUser.id);
 
     if (!reconnected) {
@@ -927,10 +932,6 @@ exports.install = function(server, callbackFunction) {
       if (conn.user.id == saveLock) {
         yield utils.promiseRedis(redisClient, redisClient.del, redisKeySaveLock + docId);
       }
-      var commands = [
-        ['hdel', redisKeyPresenceHash + docId, tmpUser.id],
-        ['zrem', redisKeyPresenceSet + docId, tmpUser.id]
-      ];
       // Только если редактируем
       if (false === tmpUser.view) {
         commands.push(['zrangebyscore', redisKeyPresenceSet + docId, 0, (new Date()).getTime()],
@@ -1239,7 +1240,8 @@ exports.install = function(server, callbackFunction) {
       //Parse docId
       var parsed = urlParse.exec(conn.url);
       if (parsed.length > 1) {
-        docId = conn.docId = parsed[1];
+        //в version history может приходить разные id в url и data
+        docId = conn.docId = data.docid;
       } else {
         //TODO: Send some shit back
       }
@@ -1281,6 +1283,7 @@ exports.install = function(server, callbackFunction) {
         });
         // Кладем в массив, т.к. нам нужно отправлять данные для открытия/сохранения документа
         connections.push(conn);
+        yield* updatePresence(docId, conn.user.id, JSON.stringify(conn.user));
         // Посылаем формальную авторизацию, чтобы подтвердить соединение
         yield* sendAuthInfo(undefined, undefined, conn, undefined);
         if (cmd) {
@@ -1991,10 +1994,8 @@ exports.install = function(server, callbackFunction) {
         var idSet = new Set();
         for (var i = 0; i < connections.length; ++i) {
           var conn = connections[i];
-          if (!conn.user.view && !conn.isCloseCoAuthoring) {
-            idSet.add(conn.docId);
-            updatePresenceCommandsToArray(commands, conn.docId, conn.user.id, JSON.stringify(conn.user));
-          }
+          idSet.add(conn.docId);
+          updatePresenceCommandsToArray(commands, conn.docId, conn.user.id, JSON.stringify(conn.user));
         }
         var expireAt = new Date().getTime() + cfgExpPresence * 1000;
         idSet.forEach(function(value1, value2, set) {
