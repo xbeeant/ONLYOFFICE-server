@@ -4,6 +4,6 @@
 	}],
 	"replaceConsole": "true",
 	"levels": {
-		"nodeJS": "INFO"
+		"nodeJS": "WARN"
 	}
 }
