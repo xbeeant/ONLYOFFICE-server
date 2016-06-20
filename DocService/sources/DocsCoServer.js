@@ -724,6 +724,7 @@ function* bindEvents(docId, callback, baseUrl, opt_userAction) {
   }
   var userAction = opt_userAction ? opt_userAction : new commonDefines.OutputAction(commonDefines.c_oAscUserAction.AllIn, null);
   yield* sendStatusDocument(docId, bChangeBase, userAction, oCallbackUrl, baseUrl);
+  return commonDefines.c_oAscServerCommandErrors.NoError;
 }
 
 function* cleanDocumentOnExit(docId, deleteChanges) {
@@ -2095,7 +2096,7 @@ exports.commandFromServer = function (req, res) {
         logger.debug('Start commandFromServer: docId = %s c = %s', docId, query.c);
         switch (query.c) {
           case 'info':
-            yield* bindEvents(docId, query.callback, utils.getBaseUrlByRequest(req));
+            result = yield* bindEvents(docId, query.callback, utils.getBaseUrlByRequest(req));
             break;
           case 'drop':
             if (query.userid) {
