@@ -531,7 +531,10 @@ function* sendServerRequest(docId, uri, postData) {
 function parseUrl(callbackUrl) {
   var result = null;
   try {
-    var parseObject = url.parse(decodeURIComponent(callbackUrl));
+    //делать decodeURIComponent не нужно http://expressjs.com/en/4x/api.html#app.settings.table
+    //по умолчанию express использует 'query parser' = 'extended', но даже в 'simple' версии делается decode
+    //percent-encoded characters within the query string will be assumed to use UTF-8 encoding
+    var parseObject = url.parse(callbackUrl);
     var isHttps = 'https:' === parseObject.protocol;
     var port = parseObject.port;
     if (!port) {
@@ -601,10 +604,10 @@ function* setForceSave(docId, lastSave, savePathDoc) {
  * @param callback
  * @param baseUrl
  */
-function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl) {
+function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl, opt_userData) {
   if (!callback) {
     var getRes = yield* getCallback(docId);
-    if(getRes) {
+    if (getRes) {
       callback = getRes.server;
     }
   }
@@ -634,21 +637,14 @@ function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl) 
   var sendData = new commonDefines.OutputSfcData();
   sendData.setKey(docId);
   sendData.setStatus(status);
-  if(c_oAscServerStatus.Closed !== status){
+  if (c_oAscServerStatus.Closed !== status) {
     sendData.setUsers(participants);
-  } else {
-    sendData.setUsers(undefined);
   }
   if (userAction) {
-    var actions = [];
-    if (commonDefines.c_oAscUserAction.AllIn === userAction.type) {
-      for (var i = 0; i < participants.length; ++i) {
-        actions.push(new commonDefines.OutputAction(commonDefines.c_oAscUserAction.In, participants[i]));
-      }
-    } else {
-      actions.push(userAction);
-    }
-    sendData.setActions(actions);
+    sendData.setActions([userAction]);
+  }
+  if (opt_userData) {
+    sendData.setUserData(opt_userData);
   }
   var uri = callback.href;
   var replyData = null;
@@ -705,7 +701,7 @@ function dropUserFromDocument(docId, userId, description) {
 }
 
 // Подписка на эвенты:
-function* bindEvents(docId, callback, baseUrl, opt_userAction) {
+function* bindEvents(docId, callback, baseUrl, opt_userAction, opt_userData) {
   // Подписка на эвенты:
   // - если пользователей нет и изменений нет, то отсылаем статус "закрыто" и в базу не добавляем
   // - если пользователей нет, а изменения есть, то отсылаем статус "редактируем" без пользователей, но добавляем в базу
@@ -722,8 +718,7 @@ function* bindEvents(docId, callback, baseUrl, opt_userAction) {
     }
     bChangeBase = c_oAscChangeBase.All;
   }
-  var userAction = opt_userAction ? opt_userAction : new commonDefines.OutputAction(commonDefines.c_oAscUserAction.AllIn, null);
-  yield* sendStatusDocument(docId, bChangeBase, userAction, oCallbackUrl, baseUrl);
+  yield* sendStatusDocument(docId, bChangeBase, opt_userAction, oCallbackUrl, baseUrl, opt_userData);
   return commonDefines.c_oAscServerCommandErrors.NoError;
 }
 
@@ -2096,7 +2091,7 @@ exports.commandFromServer = function (req, res) {
         logger.debug('Start commandFromServer: docId = %s c = %s', docId, query.c);
         switch (query.c) {
           case 'info':
-            result = yield* bindEvents(docId, query.callback, utils.getBaseUrlByRequest(req));
+            result = yield* bindEvents(docId, query.callback, utils.getBaseUrlByRequest(req), undefined, query.userdata);
             break;
           case 'drop':
             if (query.userid) {

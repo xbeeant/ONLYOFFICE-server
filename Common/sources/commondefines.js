@@ -463,8 +463,8 @@ function OutputSfcData() {
   this['url'] = undefined;
   this['changesurl'] = undefined;
   this['changeshistory'] = undefined;
-  this['users'] = [];
-  this['actions'] = [];
+  this['users'] = undefined;
+  this['actions'] = undefined;
   this['mailMerge'] = undefined;
   this['userdata'] = undefined;
 }
@@ -670,8 +670,7 @@ var c_oAscEncodingsMap = {"437": 43, "720": 1, "737": 21, "775": 5, "850": 39, "
 var c_oAscCodePageUtf8 = 46;//65001
 var c_oAscUserAction = {
   Out: 0,
-  In: 1,
-  AllIn: 2
+  In: 1
 };
 var c_oAscServerCommandErrors = {
   NoError: 0,
