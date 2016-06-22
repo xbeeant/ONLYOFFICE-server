@@ -677,8 +677,9 @@ var c_oAscServerCommandErrors = {
   NoError: 0,
   DocumentIdError: 1,
   ParseError: 2,
-  CommandError: 3,
-  NotModify: 4
+  UnknownError: 3,
+  NotModify: 4,
+  UnknownCommand: 5
 };
 
 exports.TaskQueueData = TaskQueueData;

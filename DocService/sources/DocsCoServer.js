@@ -2136,7 +2136,7 @@ exports.commandFromServer = function (req, res) {
                 //start new convert
                 var status = yield* converterService.convertFromChanges(docId, baseUrl, lastSave, query.userdata);
                 if (constants.NO_ERROR !== status.err) {
-                  result = commonDefines.c_oAscServerCommandErrors.CommandError;
+                  result = commonDefines.c_oAscServerCommandErrors.UnknownError;
                 }
               }
             } else {
@@ -2144,12 +2144,12 @@ exports.commandFromServer = function (req, res) {
             }
             break;
           default:
-            result = commonDefines.c_oAscServerCommandErrors.CommandError;
+            result = commonDefines.c_oAscServerCommandErrors.UnknownCommand;
             break;
         }
       }
     } catch (err) {
-      result = commonDefines.c_oAscServerCommandErrors.CommandError;
+      result = commonDefines.c_oAscServerCommandErrors.UnknownError;
       logger.error('Error commandFromServer: docId = %s\r\n%s', docId, err.stack);
     } finally {
       var output = JSON.stringify({'key': req.query.key, 'error': result});
