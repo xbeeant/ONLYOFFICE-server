@@ -150,12 +150,13 @@ function convertHealthCheck(req, res) {
       var docId = task.key;
       //put test file to storage
       var data = yield utils.readFile(cfgHealthCheckFilePath);
-      yield storage.putObject(docId + '/origin', data, data.length);
+      var format = 'docx';
+      yield storage.putObject(docId + '/origin.' + format, data, data.length);
       //convert
       var cmd = new commonDefines.InputCommand();
       cmd.setCommand('conv');
       cmd.setSaveKey(docId);
-      cmd.setFormat('docx');
+      cmd.setFormat(format);
       cmd.setDocId(docId);
       cmd.setTitle('Editor.bin');
       cmd.setOutputFormat(constants.AVS_OFFICESTUDIO_FILE_CANVAS);
