@@ -3,7 +3,9 @@ Common/config/local.json
 license.lic
 App_Data/
 */node_modules
-FileConverter/Bin
+FileConverter/Bin/*.dll
+FileConverter/Bin/*.exe
+FileConverter/Bin/HtmlFileInternal
 DocService/npm-debug.log
 build
 node_modules

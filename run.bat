@@ -6,14 +6,13 @@ ECHO copy file to converter
 ECHO ----------------------------------------
 
 mkdir "%~dp0\App_Data"
-mkdir "%~dp0\FileConverter\Bin"
-mkdir "%~dp0\FileConverter\Bin\HtmlFileInternal"
+mkdir "%~dp0\FileConverter\bin"
+mkdir "%~dp0\FileConverter\bin\HtmlFileInternal"
 
-cd /D "%~dp0\FileConverter\Bin" || goto ERROR
+cd /D "%~dp0\FileConverter\bin" || goto ERROR
 copy "..\..\..\core\build\bin\windows\icudt.dll" "."
 copy "..\..\..\core\build\bin\icu\win_32\icudt55.dll" "."
 copy "..\..\..\core\build\bin\icu\win_32\icuuc55.dll" "."
-copy "..\..\..\core\build\lib\DoctRenderer.config" "."
 copy "..\..\..\core\build\lib\win_32\doctrenderer.dll" "."
 copy "..\..\..\core\build\lib\win_32\HtmlRenderer.dll" "."
 copy "..\..\..\core\build\lib\win_32\DjVuFile.dll" "."
