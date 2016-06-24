@@ -8,8 +8,8 @@ GRUNT_FILES = Gruntfile.js.out
 
 FILE_CONVERTER = $(OUTPUT)/FileConverter/bin
 FILE_CONVERTER_FILES += ../core/build/lib/linux_64/*.so
-FILE_CONVERTER_FILES += /usr/local/lib/libicudata.so.55
-FILE_CONVERTER_FILES += /usr/local/lib/libicuuc.so.55
+FILE_CONVERTER_FILES += /usr/local/lib/libicudata.so.55*
+FILE_CONVERTER_FILES += /usr/local/lib/libicuuc.so.55*
 FILE_CONVERTER_FILES += ../core/build/bin/linux/x2t
 FILE_CONVERTER_FILES += ../v8/third_party/icu/linux/icudtl_dat.S
 
