@@ -1,3 +1,6 @@
+
+[![License](https://img.shields.io/badge/License-GNU%20AGPL%20V3-green.svg?style=flat)](http://www.gnu.org/licenses/agpl-3.0.ru.html) ![Release](https://img.shields.io/badge/Release-v4.0.0-blue.svg?style=flat)
+
 ## Document service set up
 
 This instruction describes document service deployment for Windows based platform.
@@ -65,3 +68,7 @@ All config files for the server part can be foun in the `Common\config` folder
 * `development-windows.json` - config files for the development version running on a Windows based platform (this configuration is used when running the 'run.bat' script).
 
 In case it is necessary to temporarily edit the config files, create the local.json file and reassign the values there. It will allow to prevent from uploading local changes and losing config files when updating the repository. See https://github.com/lorenwest/node-config/wiki/Configuration-Files for more information about the configuration files.
+
+## License
+
+Core is released under an GNU AGPL v3.0 license. See the LICENSE file for more information.
