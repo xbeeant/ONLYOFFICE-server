@@ -1,6 +1,11 @@
 
 [![License](https://img.shields.io/badge/License-GNU%20AGPL%20V3-green.svg?style=flat)](http://www.gnu.org/licenses/agpl-3.0.ru.html) ![Release](https://img.shields.io/badge/Release-v4.0.0-blue.svg?style=flat)
 
+## Server
+Server backend used for [ONLYOFFICE Document Server][1].
+
+  [1]: https://github.com/ONLYOFFICE/DocumentServer
+
 ## Document service set up
 
 This instruction describes document service deployment for Windows based platform.
