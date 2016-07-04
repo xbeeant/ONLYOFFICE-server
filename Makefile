@@ -80,7 +80,8 @@ clean:
 install:
 	sudo adduser --quiet --home /var/www/onlyoffice --system --group onlyoffice
 
-	sudo mkdir -p /var/log/onlyoffice
+	sudo mkdir -p /var/www/onlyoffice/documentserver
+	sudo mkdir -p /var/log/onlyoffice/documentserver
 	sudo mkdir -p /var/lib/onlyoffice/documentserver/App_Data
 
 	sudo chown onlyoffice:onlyoffice -R /var/www/onlyoffice
