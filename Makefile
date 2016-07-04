@@ -1,4 +1,4 @@
-OUTPUT_DIR = build
+OUTPUT_DIR = build/server
 OUTPUT = $(OUTPUT_DIR)
 
 GRUNT = grunt
@@ -87,18 +87,18 @@ install:
 	sudo chown onlyoffice:onlyoffice -R /var/log/onlyoffice
 	sudo chown onlyoffice:onlyoffice -R /var/lib/onlyoffice
 
-	sudo cp -r build/. /var/www/onlyoffice/documentserver/
+	sudo cp -fr -t /var/www/onlyoffice/documentserver build/* ../web-apps/deploy/*
 	
-	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/Bin/libDjVuFile.so /lib/libDjVuFile.so
-	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/Bin/libdoctrenderer.so /lib/libdoctrenderer.so
-	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/Bin/libHtmlFile.so /lib/libHtmlFile.so
-	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/Bin/libHtmlRenderer.so /lib/libHtmlRenderer.so
-	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/Bin/libPdfReader.so /lib/libPdfReader.so
-	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/Bin/libPdfWriter.so /lib/libPdfWriter.so
-	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/Bin/libXpsFile.so /lib/libXpsFile.so
-	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/Bin/libUnicodeConverter.so /lib/libUnicodeConverter.so
-	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/Bin/libicudata.so.55 /lib/libicudata.so.55
-	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/Bin/libicuuc.so.55 /lib/libicuuc.so.55
+	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libDjVuFile.so /lib/libDjVuFile.so
+	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libdoctrenderer.so /lib/libdoctrenderer.so
+	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libHtmlFile.so /lib/libHtmlFile.so
+	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libHtmlRenderer.so /lib/libHtmlRenderer.so
+	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libPdfReader.so /lib/libPdfReader.so
+	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libPdfWriter.so /lib/libPdfWriter.so
+	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libXpsFile.so /lib/libXpsFile.so
+	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libUnicodeConverter.so /lib/libUnicodeConverter.so
+	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libicudata.so.55 /lib/libicudata.so.55
+	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libicuuc.so.55 /lib/libicuuc.so.55
 
 	sudo -u onlyoffice "/var/www/onlyoffice/documentserver/server/tools/AllFontsGen"\
 		"/usr/share/fonts"\
