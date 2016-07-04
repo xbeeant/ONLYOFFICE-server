@@ -44,7 +44,7 @@ build-date: $(GRUNT_FILES)
 	
 htmlfileinternal: $(FILE_CONVERTER)
 	mkdir -p $(HTML_FILE_INTERNAL) && \
-		cp -r -t $(HTML_FILE_INTERNAL) $(HTML_FILE_INTERNAL_FILES) && \
+		cp -r -t $(HTML_FILE_INTERNAL) $(HTML_FILE_INTERNAL_FILES)
 		
 $(FILE_CONVERTER): $(GRUNT_FILES)
 	mkdir -p $(FILE_CONVERTER) && \
