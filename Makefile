@@ -89,6 +89,8 @@ install:
 	sudo chown onlyoffice:onlyoffice -R /var/lib/onlyoffice
 
 	sudo cp -fr -t /var/www/onlyoffice/documentserver build/* ../web-apps/deploy/*
+	sudo mkdir -p /etc/onlyoffice/documentserver
+	sudo mv /var/www/onlyoffice/documentserver/server/Common/config/* /etc/onlyoffice/documentserver
 	
 	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libDjVuFile.so /lib/libDjVuFile.so
 	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libdoctrenderer.so /lib/libdoctrenderer.so
