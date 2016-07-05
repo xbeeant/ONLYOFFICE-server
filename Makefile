@@ -83,15 +83,15 @@ install:
 	sudo mkdir -p /var/www/onlyoffice/documentserver
 	sudo mkdir -p /var/log/onlyoffice/documentserver
 	sudo mkdir -p /var/lib/onlyoffice/documentserver/App_Data
-
-	sudo chown onlyoffice:onlyoffice -R /var/www/onlyoffice
-	sudo chown onlyoffice:onlyoffice -R /var/log/onlyoffice
-	sudo chown onlyoffice:onlyoffice -R /var/lib/onlyoffice
-
+	
 	sudo cp -fr -t /var/www/onlyoffice/documentserver build/* ../web-apps/deploy/*
 	sudo mkdir -p /etc/onlyoffice/documentserver
 	sudo mv /var/www/onlyoffice/documentserver/server/Common/config/* /etc/onlyoffice/documentserver
 	
+	sudo chown onlyoffice:onlyoffice -R /var/www/onlyoffice
+	sudo chown onlyoffice:onlyoffice -R /var/log/onlyoffice
+	sudo chown onlyoffice:onlyoffice -R /var/lib/onlyoffice
+
 	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libDjVuFile.so /lib/libDjVuFile.so
 	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libdoctrenderer.so /lib/libdoctrenderer.so
 	sudo ln -s /var/www/onlyoffice/documentserver/server/FileConverter/bin/libHtmlFile.so /lib/libHtmlFile.so
