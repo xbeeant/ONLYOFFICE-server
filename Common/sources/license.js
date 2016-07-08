@@ -58,6 +58,7 @@ exports.readLicense = function() {
         res.type = constants.LICENSE_RESULT.Success;
       } else {
         res.type = constants.LICENSE_RESULT.Expired;
+        res.count = 0;
       }
 
       res.light = !!oLicense['light'];

@@ -39,14 +39,14 @@ const config = configCommon.get('services.CoAuthoring');
 const logger = require('./../../Common/sources/logger');
 
 if (cluster.isMaster) {
-  const numCPUs = require('os').cpus().length;
+  //const numCPUs = require('os').cpus().length;
   const license = require('./../../Common/sources/license');
 
-  const cfgWorkerPerCpu = config.get('server.workerpercpu');
+  //const cfgWorkerPerCpu = config.get('server.workerpercpu');
   var licenseInfo, workersCount = 0;
   const readLicense = () => {
     licenseInfo = license.readLicense();
-    workersCount = 1; //Math.min(licenseInfo.count, Math.ceil(numCPUs * cfgWorkerPerCpu));
+    workersCount = Math.min(1, licenseInfo.count/*, Math.ceil(numCPUs * cfgWorkerPerCpu)*/);
   };
   const updateLicenseWorker = (worker) => {
     worker.send({data: licenseInfo});
