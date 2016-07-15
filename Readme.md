@@ -1,3 +1,9 @@
+
+[![License](https://img.shields.io/badge/License-GNU%20AGPL%20V3-green.svg?style=flat)](http://www.gnu.org/licenses/agpl-3.0.ru.html) ![Release](https://img.shields.io/badge/Release-v4.0.1-blue.svg?style=flat)
+
+## Server
+The backend server software layer which is the part of [ONLYOFFICE Document Server][2] and is the base for all other components.
+
 ## Document service set up
 
 This instruction describes document service deployment for Windows based platform.
@@ -65,3 +71,14 @@ All config files for the server part can be foun in the `Common\config` folder
 * `development-windows.json` - config files for the development version running on a Windows based platform (this configuration is used when running the 'run.bat' script).
 
 In case it is necessary to temporarily edit the config files, create the local.json file and reassign the values there. It will allow to prevent from uploading local changes and losing config files when updating the repository. See https://github.com/lorenwest/node-config/wiki/Configuration-Files for more information about the configuration files.
+
+## User Feedback and Support
+
+If you have any problems with or questions about [ONLYOFFICE Document Server][2], please visit our official forum to find answers to your questions: [dev.onlyoffice.org][1].
+
+  [1]: http://dev.onlyoffice.org
+  [2]: https://github.com/ONLYOFFICE/DocumentServer
+
+## License
+
+Server is released under an GNU AGPL v3.0 license. See the LICENSE file for more information.
