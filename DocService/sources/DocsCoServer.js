@@ -706,20 +706,22 @@ function* bindEvents(docId, callback, baseUrl, opt_userAction, opt_userData) {
   // - если пользователей нет и изменений нет, то отсылаем статус "закрыто" и в базу не добавляем
   // - если пользователей нет, а изменения есть, то отсылаем статус "редактируем" без пользователей, но добавляем в базу
   // - если есть пользователи, то просто добавляем в базу
-  var bChangeBase = c_oAscChangeBase.Delete;
-  var getRes = yield* getCallback(docId);
+  var bChangeBase;
   var oCallbackUrl;
+  var getRes = yield* getCallback(docId);
   if (getRes) {
     oCallbackUrl = getRes.server;
+    bChangeBase = c_oAscChangeBase.Delete;
   } else {
     oCallbackUrl = parseUrl(callback);
-    if (null === oCallbackUrl) {
-      return commonDefines.c_oAscServerCommandErrors.ParseError;
-    }
     bChangeBase = c_oAscChangeBase.All;
   }
-  yield* sendStatusDocument(docId, bChangeBase, opt_userAction, oCallbackUrl, baseUrl, opt_userData);
-  return commonDefines.c_oAscServerCommandErrors.NoError;
+  if (null === oCallbackUrl) {
+    return commonDefines.c_oAscServerCommandErrors.ParseError;
+  } else {
+    yield* sendStatusDocument(docId, bChangeBase, opt_userAction, oCallbackUrl, baseUrl, opt_userData);
+    return commonDefines.c_oAscServerCommandErrors.NoError;
+  }
 }
 
 function* cleanDocumentOnExit(docId, deleteChanges) {
@@ -2091,7 +2093,13 @@ exports.commandFromServer = function (req, res) {
         logger.debug('Start commandFromServer: docId = %s c = %s', docId, query.c);
         switch (query.c) {
           case 'info':
-            result = yield* bindEvents(docId, query.callback, utils.getBaseUrlByRequest(req), undefined, query.userdata);
+            //If no files in the database means they have not been edited.
+            var selectRes = yield taskResult.select(docId);
+            if (selectRes.length > 0) {
+              result = yield* bindEvents(docId, query.callback, utils.getBaseUrlByRequest(req), undefined, query.userdata);
+            } else {
+              result = commonDefines.c_oAscServerCommandErrors.DocumentIdError;
+            }
             break;
           case 'drop':
             if (query.userid) {
