@@ -1232,6 +1232,16 @@ exports.install = function(server, callbackFunction) {
     return resultLock;
   }
 
+  function* authRestore(conn, sessionId) {
+    conn.sessionId = sessionId;//restore old
+    //Kill previous connections
+    connections = _.reject(connections, function(el) {
+      return el.sessionId === sessionId;//Delete this connection
+    });
+
+    yield* endAuth(conn, true);
+  }
+
   function* auth(conn, data) {
     // Проверка версий
     if (data.version !== asc_coAuthV) {
@@ -1302,71 +1312,68 @@ exports.install = function(server, callbackFunction) {
       if (bIsRestore) {
         logger.info("restored old session: docId = %s id = %s", docId, data.sessionId);
 
-        // Останавливаем сборку (вдруг она началась)
-        // Когда переподсоединение, нам нужна проверка на сборку файла
-        try {
-          var result = yield sqlBase.checkStatusFilePromise(docId);
+        if (!conn.user.view) {
+          // Останавливаем сборку (вдруг она началась)
+          // Когда переподсоединение, нам нужна проверка на сборку файла
+          try {
+            var result = yield sqlBase.checkStatusFilePromise(docId);
 
-          var status = result && result.length > 0 ? result[0]['status'] : null;
-          if (taskResult.FileStatus.Ok === status) {
-            // Все хорошо, статус обновлять не нужно
-          } else if (taskResult.FileStatus.SaveVersion === status) {
-            // Обновим статус файла (идет сборка, нужно ее остановить)
-            var updateMask = new taskResult.TaskResultData();
-            updateMask.key = docId;
-            updateMask.status = status;
-            updateMask.statusInfo = result[0]['status_info'];
-            var updateTask = new taskResult.TaskResultData();
-            updateTask.status = taskResult.FileStatus.Ok;
-            updateTask.statusInfo = constants.NO_ERROR;
-            var updateIfRes = yield taskResult.updateIf(updateTask, updateMask);
-            if (!(updateIfRes.affectedRows > 0)) {
+            var status = result && result.length > 0 ? result[0]['status'] : null;
+            if (taskResult.FileStatus.Ok === status) {
+              // Все хорошо, статус обновлять не нужно
+            } else if (taskResult.FileStatus.SaveVersion === status) {
+              // Обновим статус файла (идет сборка, нужно ее остановить)
+              var updateMask = new taskResult.TaskResultData();
+              updateMask.key = docId;
+              updateMask.status = status;
+              updateMask.statusInfo = result[0]['status_info'];
+              var updateTask = new taskResult.TaskResultData();
+              updateTask.status = taskResult.FileStatus.Ok;
+              updateTask.statusInfo = constants.NO_ERROR;
+              var updateIfRes = yield taskResult.updateIf(updateTask, updateMask);
+              if (!(updateIfRes.affectedRows > 0)) {
+                // error version
+                sendFileError(conn, 'Update Version error');
+                return;
+              }
+            } else if (taskResult.FileStatus.UpdateVersion === status) {
               // error version
               sendFileError(conn, 'Update Version error');
               return;
+            } else {
+              // Other error
+              sendFileError(conn, 'Other error');
+              return;
             }
-          } else if (taskResult.FileStatus.UpdateVersion === status) {
-            // error version
-            sendFileError(conn, 'Update Version error');
-            return;
-          } else {
-            // Other error
-            sendFileError(conn, 'Other error');
-            return;
-          }
 
-          var objChangesDocument = yield* getDocumentChanges(docId);
-          var bIsSuccessRestore = true;
-          if (objChangesDocument && 0 < objChangesDocument.arrChanges.length) {
-            var change = objChangesDocument.arrChanges[objChangesDocument.getLength() - 1];
-            if (change['change']) {
-              if (change['user'] !== curUserId) {
-                bIsSuccessRestore = 0 === (((data['lastOtherSaveTime'] - change['time']) / 1000) >> 0);
+            var objChangesDocument = yield* getDocumentChanges(docId);
+            var bIsSuccessRestore = true;
+            if (objChangesDocument && 0 < objChangesDocument.arrChanges.length) {
+              var change = objChangesDocument.arrChanges[objChangesDocument.getLength() - 1];
+              if (change['change']) {
+                if (change['user'] !== curUserId) {
+                  bIsSuccessRestore = 0 === (((data['lastOtherSaveTime'] - change['time']) / 1000) >> 0);
+                }
               }
             }
-          }
 
-          if (bIsSuccessRestore) {
-            conn.sessionId = data.sessionId;//restore old
-
-            // Проверяем lock-и
-            var arrayBlocks = data['block'];
-            var getLockRes = yield* getLock(conn, data, true);
-            if (arrayBlocks && (0 === arrayBlocks.length || getLockRes)) {
-              //Kill previous connections
-              connections = _.reject(connections, function(el) {
-                return el.sessionId === data.sessionId;//Delete this connection
-              });
-
-              yield* endAuth(conn, true);
+            if (bIsSuccessRestore) {
+              // Проверяем lock-и
+              var arrayBlocks = data['block'];
+              var getLockRes = yield* getLock(conn, data, true);
+              if (arrayBlocks && (0 === arrayBlocks.length || getLockRes)) {
+                yield* authRestore(conn, data.sessionId);
+              } else {
+                sendFileError(conn, 'Restore error. Locks not checked.');
+              }
             } else {
-              sendFileError(conn, 'Restore error. Locks not checked.');
+              sendFileError(conn, 'Restore error. Document modified.');
             }
-          } else {
-            sendFileError(conn, 'Restore error. Document modified.');
+          } catch (err) {
+            sendFileError(conn, 'DataBase error\r\n' + err.stack);
           }
-        } catch (err) {
-          sendFileError(conn, 'DataBase error\r\n' + err.stack);
+        } else {
+          yield* authRestore(conn, data.sessionId);
         }
       } else {
         conn.sessionId = conn.id;
