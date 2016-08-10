@@ -66,10 +66,9 @@ var MAX_OPEN_FILES = 200;
 var TEMP_PREFIX = 'ASC_CONVERT';
 var queue = null;
 var clientStatsD = statsDClient.getClient();
-var exitCodesReturn = [constants.CONVERT_MS_OFFCRYPTO, constants.CONVERT_NEED_PARAMS, constants.CONVERT_CORRUPTED,
-  constants.CONVERT_DRM, constants.CONVERT_PASSWORD];
-var exitCodesMinorError = [constants.CONVERT_MS_OFFCRYPTO, constants.CONVERT_NEED_PARAMS, constants.CONVERT_DRM,
+var exitCodesReturn = [constants.CONVERT_NEED_PARAMS, constants.CONVERT_CORRUPTED, constants.CONVERT_DRM,
   constants.CONVERT_PASSWORD];
+var exitCodesMinorError = [constants.CONVERT_NEED_PARAMS, constants.CONVERT_DRM, constants.CONVERT_PASSWORD];
 var exitCodesUpload = [constants.NO_ERROR, constants.CONVERT_CORRUPTED, constants.CONVERT_NEED_PARAMS,
   constants.CONVERT_DRM];
 

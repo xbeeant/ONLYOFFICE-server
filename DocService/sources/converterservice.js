@@ -74,7 +74,7 @@ function* getConvertStatus(cmd, selectRes, baseUrl) {
         status.err = constants.UNKNOWN;
         break;
       case taskResult.FileStatus.NeedPassword:
-        status.err = constants.CONVERT_DRM;
+        status.err = row.status_info;
         break;
     }
     var lastOpenDate = row.last_open_date;
