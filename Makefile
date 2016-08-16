@@ -6,16 +6,43 @@ GRUNT_FLAGS = --no-color -v
 
 GRUNT_FILES = Gruntfile.js.out
 
+ifeq ($(OS),Windows_NT)
+    PLATFORM := win
+    EXEC_EXT := .exe
+    SHARED_EXT := .dll
+    ifeq ($(PROCESSOR_ARCHITECTURE),AMD64)
+        ARCHITECTURE := 64
+    endif
+    ifeq ($(PROCESSOR_ARCHITECTURE),x86)
+        ARCHITECTURE := 32
+    endif
+else
+    UNAME_S := $(shell uname -s)
+    ifeq ($(UNAME_S),Linux)
+        PLATFORM := linux
+        SHARED_EXT := .so*
+    endif
+    UNAME_P := $(shell uname -p)
+    ifeq ($(UNAME_P),x86_64)
+        ARCHITECTURE := 64
+    endif
+    ifneq ($(filter %86,$(UNAME_P)),)
+        ARCHITECTURE := 32
+    endif
+endif
+
+TARGET := $(PLATFORM)_$(ARCHITECTURE)
+
 FILE_CONVERTER = $(OUTPUT)/FileConverter/bin
-FILE_CONVERTER_FILES += ../core/build/lib/linux_64/*.so
-FILE_CONVERTER_FILES += /usr/local/lib/libicudata.so.55*
-FILE_CONVERTER_FILES += /usr/local/lib/libicuuc.so.55*
-FILE_CONVERTER_FILES += ../core/build/bin/linux/x2t
-FILE_CONVERTER_FILES += ../v8/third_party/icu/linux/icudtl_dat.S
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/*$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/Common/3dParty/icu/$(TARGET)/build/libicudata$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/Common/3dParty/icu/$(TARGET)/build/libicuuc$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/bin/$(TARGET)/x2t$(EXEC_EXT)
+FILE_CONVERTER_FILES += ../core/Common/3dParty/v8/$(TARGET)/icudtl_dat.S
 
 HTML_FILE_INTERNAL := $(FILE_CONVERTER)/HtmlFileInternal
-HTML_FILE_INTERNAL_FILES += ../core/build/lib/linux_64/HtmlFileInternal
-HTML_FILE_INTERNAL_FILES += ../core/build/cef/linux_64/**
+HTML_FILE_INTERNAL_FILES += ../core/build/lib/$(TARGET)/HtmlFileInternal$(EXEC_EXT)
+HTML_FILE_INTERNAL_FILES += ../core/build/cef/$(TARGET)/**
 
 SPELLCHECKER_DICTIONARIES := $(OUTPUT)/SpellChecker/dictionaries
 SPELLCHECKER_DICTIONARY_FILES += ../dictionaries/**
@@ -25,7 +52,7 @@ SCHEMA_FILES = $(SCHEMA_DIR)/**
 SCHEMA = $(OUTPUT)/$(SCHEMA_DIR)/
 
 TOOLS_DIR = tools
-TOOLS_FILES = ../core/build/bin/AllFontsGen/linux_64
+TOOLS_FILES = ../core/build/bin/AllFontsGen/$(TARGET)
 TOOLS = $(OUTPUT)/$(TOOLS_DIR)/
 
 LICENSE_FILES = LICENSE.txt 3rd-Party.txt license/
