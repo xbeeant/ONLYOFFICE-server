@@ -99,6 +99,11 @@
 				"files": 604800,
 				"filesCron": "00 00 */1 * * *",
 				"filesremovedatonce": 10
+			},
+			"ipfilter": {
+				"rules": [[true, "*"]],
+				"useforrequest": false,
+				"errorcode": 401
 			}
 		}
 	},

@@ -166,24 +166,31 @@ function* downloadFile(docId, uri, fileFrom) {
   var res = false;
   var data = null;
   var downloadAttemptCount = 0;
-  while (!res && downloadAttemptCount++ < cfgDownloadAttemptMaxCount) {
-    try {
-      data = yield utils.downloadUrlPromise(uri, cfgDownloadTimeout * 1000, cfgDownloadMaxBytes);
-      res = true;
-    } catch (err) {
-      res = false;
-      logger.error('error downloadFile:url=%s;attempt=%d;code:%s;connect:%s;(id=%s)\r\n%s', uri, downloadAttemptCount, err.code, err.connect, docId, err.stack);
-      //not continue attempts if timeout
-      if (err.code === 'ETIMEDOUT' || err.code === 'EMSGSIZE') {
-        break;
-      } else {
-        yield utils.sleep(cfgDownloadAttemptDelay);
+  var urlParsed = url.parse(uri);
+  var filterStatus = utils.checkIpFilter(urlParsed.hostname);
+  if (0 == filterStatus) {
+    while (!res && downloadAttemptCount++ < cfgDownloadAttemptMaxCount) {
+      try {
+        data = yield utils.downloadUrlPromise(uri, cfgDownloadTimeout * 1000, cfgDownloadMaxBytes);
+        res = true;
+      } catch (err) {
+        res = false;
+        logger.error('error downloadFile:url=%s;attempt=%d;code:%s;connect:%s;(id=%s)\r\n%s', uri, downloadAttemptCount, err.code, err.connect, docId, err.stack);
+        //not continue attempts if timeout
+        if (err.code === 'ETIMEDOUT' || err.code === 'EMSGSIZE') {
+          break;
+        } else {
+          yield utils.sleep(cfgDownloadAttemptDelay);
+        }
       }
     }
-  }
-  if (res) {
-    logger.debug('downloadFile complete(id=%s)', docId);
-    fs.writeFileSync(fileFrom, data);
+    if (res) {
+      logger.debug('downloadFile complete(id=%s)', docId);
+      fs.writeFileSync(fileFrom, data);
+    }
+  } else {
+    logger.error('checkIpFilter error:url=%s;code:%s;(id=%s)', uri, filterStatus, docId);
+    res = false;
   }
   return res;
 }

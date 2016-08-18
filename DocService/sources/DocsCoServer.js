@@ -716,6 +716,13 @@ function* bindEvents(docId, callback, baseUrl, opt_userAction, opt_userData) {
   } else {
     oCallbackUrl = parseUrl(callback);
     bChangeBase = c_oAscChangeBase.All;
+    if (null !== oCallbackUrl) {
+      if (utils.checkIpFilter(oCallbackUrl.host) > 0) {
+        logger.error('checkIpFilter error: docId = %s;url = %s', docId, callback);
+        //todo add new error type
+        oCallbackUrl = null;
+      }
+    }
   }
   if (null === oCallbackUrl) {
     return commonDefines.c_oAscServerCommandErrors.ParseError;
@@ -1378,8 +1385,8 @@ exports.install = function(server, callbackFunction) {
         }
       } else {
         conn.sessionId = conn.id;
-        yield* endAuth(conn, false, data.documentCallbackUrl);
-        if (cmd) {
+        var endAuthRes = yield* endAuth(conn, false, data.documentCallbackUrl);
+        if (endAuthRes && cmd) {
           yield canvasService.openDocument(conn, cmd, upsertRes);
         }
       }
@@ -1387,6 +1394,7 @@ exports.install = function(server, callbackFunction) {
   }
 
   function* endAuth(conn, bIsRestore, documentCallbackUrl) {
+    var res = true;
     var docId = conn.docId;
     var tmpUser = conn.user;
     connections.push(conn);
@@ -1404,48 +1412,56 @@ exports.install = function(server, callbackFunction) {
     }
 
     // Отправляем на внешний callback только для тех, кто редактирует
+    var bindEventsRes = commonDefines.c_oAscServerCommandErrors.NoError;
     if (!tmpUser.view) {
       var userAction = new commonDefines.OutputAction(commonDefines.c_oAscUserAction.In, tmpUser.idOriginal);
       // Если пришла информация о ссылке для посылания информации, то добавляем
       if (documentCallbackUrl) {
-        yield* bindEvents(docId, documentCallbackUrl, conn.baseUrl, userAction);
+        bindEventsRes = yield* bindEvents(docId, documentCallbackUrl, conn.baseUrl, userAction);
       } else {
         yield* sendStatusDocument(docId, c_oAscChangeBase.No, userAction);
       }
     }
-    var lockDocument = null;
-    if (!bIsRestore && 2 === countNoView && !tmpUser.view) {
-      // Ставим lock на документ
-      var isLock = yield utils.promiseRedis(redisClient, redisClient.setnx,
-          redisKeyLockDoc + docId, JSON.stringify(firstParticipantNoView));
-      if(isLock) {
-        lockDocument = firstParticipantNoView;
-        yield utils.promiseRedis(redisClient, redisClient.expire, redisKeyLockDoc + docId, cfgExpLockDoc);
-      }
-    }
-    if (!lockDocument) {
-      var getRes = yield utils.promiseRedis(redisClient, redisClient.get, redisKeyLockDoc + docId);
-      if (getRes) {
-        lockDocument = JSON.parse(getRes);
-      }
-    }
 
-    if (lockDocument && !tmpUser.view) {
-      // Для view не ждем снятия lock-а
-      var sendObject = {
-        type: "waitAuth",
-        lockDocument: lockDocument
-      };
-      sendData(conn, sendObject);//Or 0 if fails
-    } else {
-      if (bIsRestore) {
-        yield* sendAuthInfo(undefined, undefined, conn, participantsMap);
-      } else {
-        var objChangesDocument = yield* getDocumentChanges(docId);
-        yield* sendAuthInfo(objChangesDocument.arrChanges, objChangesDocument.getLength(), conn, participantsMap);
+    if (commonDefines.c_oAscServerCommandErrors.NoError === bindEventsRes) {
+      var lockDocument = null;
+      if (!bIsRestore && 2 === countNoView && !tmpUser.view) {
+        // Ставим lock на документ
+        var isLock = yield utils.promiseRedis(redisClient, redisClient.setnx,
+                                              redisKeyLockDoc + docId, JSON.stringify(firstParticipantNoView));
+        if (isLock) {
+          lockDocument = firstParticipantNoView;
+          yield utils.promiseRedis(redisClient, redisClient.expire, redisKeyLockDoc + docId, cfgExpLockDoc);
+        }
       }
+      if (!lockDocument) {
+        var getRes = yield utils.promiseRedis(redisClient, redisClient.get, redisKeyLockDoc + docId);
+        if (getRes) {
+          lockDocument = JSON.parse(getRes);
+        }
+      }
+
+      if (lockDocument && !tmpUser.view) {
+        // Для view не ждем снятия lock-а
+        var sendObject = {
+          type: "waitAuth",
+          lockDocument: lockDocument
+        };
+        sendData(conn, sendObject);//Or 0 if fails
+      } else {
+        if (bIsRestore) {
+          yield* sendAuthInfo(undefined, undefined, conn, participantsMap);
+        } else {
+          var objChangesDocument = yield* getDocumentChanges(docId);
+          yield* sendAuthInfo(objChangesDocument.arrChanges, objChangesDocument.getLength(), conn, participantsMap);
+        }
+      }
+      yield* publish({type: commonDefines.c_oPublishType.participantsState, docId: docId, user: tmpUser, state: true}, docId, tmpUser.id);
+    } else {
+      sendFileError(conn, 'ip filter');
+      res = false;
     }
-    yield* publish({type: commonDefines.c_oPublishType.participantsState, docId: docId, user: tmpUser, state: true}, docId, tmpUser.id);
+    return res;
   }
 
   function* sendAuthInfo(objChangesDocument, changesIndex, conn, participantsMap) {
