@@ -81,37 +81,9 @@ exports.loadTable = function (tableId, callbackFunction) {
 	var sqlCommand = "SELECT * FROM " + table + ";";
 	baseConnector.sqlQuery(sqlCommand, callbackFunction);
 };
-exports.upsertInTable = function (tableId, toInsert, toUpdate, callbackFunction) {
-  var table = getTableById(tableId);
-  var sqlCommand = "INSERT INTO " + table + " VALUES (";
-  for (var i = 0, l = toInsert.length; i < l; ++i) {
-    sqlCommand += baseConnector.sqlEscape(toInsert[i]);
-    if (i !== l - 1)
-      sqlCommand += ",";
-  }
-  sqlCommand += ") ON DUPLICATE KEY UPDATE ";
-  for (var i = 0, l = toUpdate.length; i + 1 < l; i += 2) {
-    sqlCommand += toUpdate[i] + "=" + baseConnector.sqlEscape(toUpdate[i+1]);
-    if (i + 1 !== l - 1)
-      sqlCommand += ",";
-  }
-  sqlCommand += ";";
-  baseConnector.sqlQuery(sqlCommand, callbackFunction);
-};
-exports.upsertInTablePromise = function (tableId, toInsert, toUpdate) {
-  return new Promise(function(resolve, reject) {
-    exports.upsertInTable(tableId, toInsert, toUpdate, function(error, result) {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(result);
-      }
-    });
-  });
-};
 exports.insertCallback = function(id, href, baseUrl, callbackFunction) {
-  var sqlCommand = "INSERT IGNORE INTO " + tableCallbacks + " VALUES (" + baseConnector.sqlEscape(id) + "," +
-    baseConnector.sqlEscape(href) + "," + baseConnector.sqlEscape(baseUrl) + ");";
+  var sqlCommand = "INSERT " + baseConnector.ignoreStr + " INTO " + tableCallbacks + " VALUES (" + baseConnector.sqlEscape(id) + "," +
+    baseConnector.sqlEscape(href) + "," + baseConnector.sqlEscape(baseUrl) + ") " + baseConnector.doNothingStr + ";";
 
   baseConnector.sqlQuery(sqlCommand, callbackFunction);
 };
