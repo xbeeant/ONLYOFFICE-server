@@ -252,7 +252,7 @@ exports.getChanges = function (docId, callback) {
 	lockCriticalSection(docId, function () {_getChanges(docId, callback);});
 };
 function _getChanges (docId, callback) {
-	getDataFromTable(c_oTableId.changes, "*", "id='" + docId + "'",
+	getDataFromTable(c_oTableId.changes, "*", "id='" + docId + "' ORDER BY change_id ASC",
 		function (error, result) {unLockCriticalSection(docId); if (callback) callback(error, result);});
 }
 
