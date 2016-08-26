@@ -30,7 +30,8 @@
     "./build/server/DocService",
     "./build/server/FileConverter",
     "./build/server/Metrics",
-    "./build/server/SpellChecker"
+    "./build/server/SpellChecker",
+    "./build/server/Winser"
   ],
   "dependencies": {
     "grunt": "^0.4.5",
