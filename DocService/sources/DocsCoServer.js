@@ -2079,8 +2079,13 @@ exports.install = function(server, callbackFunction) {
       }
     });
   }
-  var innerPintJob = new cron.CronJob(cfgExpDocumentsCron, expireDoc);
-  innerPintJob.start();
+  var innerPingJob = function(opt_isStart) {
+    if (!opt_isStart) {
+      logger.warn('expireDoc restart');
+    }
+    new cron.CronJob(cfgExpDocumentsCron, expireDoc, innerPingJob, true);
+  };
+  innerPingJob(true);
 
   pubsub = new pubsubService();
   pubsub.on('message', pubsubOnMessage);
