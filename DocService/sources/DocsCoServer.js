@@ -830,6 +830,10 @@ exports.install = function(server, callbackFunction) {
           logger.debug('Server shutdown receive data');
           return;
         }
+        if (conn.isCiriticalError && ('message' == data.type || 'getLock' == data.type || 'saveChanges' == data.type)) {
+          logger.warn("conn.isCiriticalError send command: docId = %s type = %s", docId, data.type);
+          return;
+        }
         switch (data.type) {
           case 'auth'          :
             yield* auth(conn, data);
@@ -1090,6 +1094,7 @@ exports.install = function(server, callbackFunction) {
 
   function sendFileError(conn, errorId) {
     logger.error('error description: docId = %s errorId = %s', conn.docId, errorId);
+    conn.isCiriticalError = true;
     sendData(conn, {type: 'error', description: errorId});
   }
 
