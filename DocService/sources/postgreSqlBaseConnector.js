@@ -47,6 +47,7 @@ var pool = new pg.Pool({
   ssl: false,
   idleTimeoutMillis: 30000
 });
+var cfgTableCallbacks = configSql.get('tableCallbacks');
 //todo datetime timezone
 types.setTypeParser(1114, function(stringValue) {
   return new Date(stringValue + '+0000');
@@ -57,7 +58,7 @@ types.setTypeParser(1184, function(stringValue) {
 
 var logger = require('./../../Common/sources/logger');
 
-exports.sqlQuery = function(sqlCommand, callbackFunction, opt_noModifyRes) {
+exports.sqlQuery = function(sqlCommand, callbackFunction, opt_noModifyRes, opt_noLog) {
   co(function *() {
     var client = null;
     var result = null;
@@ -67,10 +68,12 @@ exports.sqlQuery = function(sqlCommand, callbackFunction, opt_noModifyRes) {
       result = yield client.query(sqlCommand);
     } catch (err) {
       error = err;
-      if (client) {
-        logger.error('sqlQuery error sqlCommand: %s:\r\n%s', sqlCommand.slice(0, 50), err.stack);
-      } else {
-        logger.error('pool.getConnection error: %s', err);
+      if (!opt_noLog) {
+        if (client) {
+          logger.error('sqlQuery error sqlCommand: %s:\r\n%s', sqlCommand.slice(0, 50), err.stack);
+        } else {
+          logger.error('pool.getConnection error: %s', err);
+        }
       }
     } finally {
       if (client) {
@@ -94,35 +97,67 @@ exports.sqlEscape = function(value) {
   //todo parameterized queries
   return undefined !== value ? pgEscape.literal(value.toString()) : 'NULL';
 };
-exports.ignoreStr = '';
-exports.doNothingStr = 'ON CONFLICT DO NOTHING';
+var isSupportOnConflict = false;
+(function checkIsSupportOnConflict() {
+  var sqlCommand = 'INSERT INTO checkIsSupportOnConflict (id) VALUES(1) ON CONFLICT DO NOTHING;';
+  exports.sqlQuery(sqlCommand, function(error, result) {
+    if (error) {
+      if ('42601' == error.code) {
+        //SYNTAX ERROR
+        isSupportOnConflict = false;
+        logger.debug('checkIsSupportOnConflict false');
+      } else if ('42P01' == error.code) {
+        //	UNDEFINED TABLE
+        isSupportOnConflict = true;
+        logger.debug('checkIsSupportOnConflict true');
+      } else {
+        logger.error('checkIsSupportOnConflict unexpected error code:\r\n%s', error.stack);
+      }
+    }
+  }, true, true);
+})();
 
-function getUpsertString(task, opt_updateUserIndex) {
+exports.insertCallback = function(id, href, baseUrl, callbackFunction) {
+  var sqlCommand = "INSERT INTO " + cfgTableCallbacks + " VALUES (" + exports.sqlEscape(id) + "," +
+    exports.sqlEscape(href) + "," + exports.sqlEscape(baseUrl) + ")";
+  if (isSupportOnConflict) {
+    sqlCommand += ' ON CONFLICT DO NOTHING;';
+    exports.sqlQuery(sqlCommand, callbackFunction);
+  } else {
+    sqlCommand += ';';
+    exports.sqlQuery(sqlCommand, function(error, result) {
+      if (error && error.code == '23505') {
+        //UNIQUE VIOLATION
+        callbackFunction(null, result);
+      } else {
+        callbackFunction(error, result);
+      }
+    });
+  }
+};
+
+function getUpsertString(task) {
   task.completeDefaults();
   var dateNow = sqlBase.getDateTime(new Date());
   var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.title, task.userIndex, task.changeId];
   var commandArgEsc = commandArg.map(function(curVal) {
     return exports.sqlEscape(curVal)
   });
-  //http://stackoverflow.com/questions/34762732/how-to-find-out-if-an-upsert-was-an-update-with-postgresql-9-5-upsert
-  var sql = "INSERT INTO task_result (id, status, status_info, last_open_date, title, user_index, change_id) SELECT " +
-    commandArgEsc.join(', ') +
-    " WHERE 'false' = set_config('myapp.isupdate', 'false', true) ON CONFLICT (id) DO UPDATE SET  last_open_date = " +
-    sqlBase.baseConnector.sqlEscape(dateNow);
-  if (opt_updateUserIndex) {
-    sql += ', user_index = task_result.user_index + 1';
+  if (isSupportOnConflict) {
+    //http://stackoverflow.com/questions/34762732/how-to-find-out-if-an-upsert-was-an-update-with-postgresql-9-5-upsert
+    return "INSERT INTO task_result (id, status, status_info, last_open_date, title, user_index, change_id) SELECT " +
+      commandArgEsc.join(', ') +
+      " WHERE 'false' = set_config('myapp.isupdate', 'false', true) ON CONFLICT (id) DO UPDATE SET  last_open_date = " +
+      sqlBase.baseConnector.sqlEscape(dateNow) +
+      ", user_index = task_result.user_index + 1 WHERE 'true' = set_config('myapp.isupdate', 'true', true) RETURNING" +
+      " current_setting('myapp.isupdate') as isupdate, user_index as userindex;";
+  } else {
+    return "SELECT * FROM merge_db(" + commandArgEsc.join(', ') + ");";
   }
-  sql +=
-    " WHERE 'true' = set_config('myapp.isupdate', 'true', true) RETURNING current_setting('myapp.isupdate') as update";
-  if (opt_updateUserIndex) {
-    sql += ', user_index';
-  }
-  sql += ';';
-  return sql;
 }
-exports.upsert = function(task, opt_updateUserIndex) {
+exports.upsert = function(task) {
   return new Promise(function(resolve, reject) {
-    var sqlCommand = getUpsertString(task, opt_updateUserIndex);
+    var sqlCommand = getUpsertString(task);
     exports.sqlQuery(sqlCommand, function(error, result) {
       if (error) {
         reject(error);
@@ -130,8 +165,8 @@ exports.upsert = function(task, opt_updateUserIndex) {
         if (result && result.rows.length > 0) {
           var first = result.rows[0];
           result = {affectedRows: 0, insertId: 0};
-          result.affectedRows = 'true' == first.update ? 2 : 1;
-          result.insertId = opt_updateUserIndex ? first.user_index : 0;
+          result.affectedRows = 'true' == first.isupdate ? 2 : 1;
+          result.insertId = first.userindex;
         }
         resolve(result);
       }

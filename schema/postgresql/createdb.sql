@@ -50,3 +50,32 @@ CREATE TABLE IF NOT EXISTS "public"."task_result" (
 PRIMARY KEY ("id")
 )
 WITH (OIDS=FALSE);
+
+--https://www.postgresql.org/docs/current/static/plpgsql-control-structures.html#PLPGSQL-UPSERT-EXAMPLE
+CREATE OR REPLACE FUNCTION merge_db(_id varchar(255), _status int2, _status_info int8, _last_open_date timestamp without time zone, _title varchar(255), _user_index int8, _change_id int8, OUT isupdate char(5), OUT userindex int8) AS
+$$
+DECLARE
+	t_var "public"."task_result"."user_index"%TYPE;
+BEGIN
+	LOOP
+		-- first try to update the key
+		-- note that "a" must be unique
+		UPDATE "public"."task_result" SET last_open_date=_last_open_date, user_index=user_index+1 WHERE id = _id RETURNING user_index into userindex;
+		IF found THEN
+			isupdate := 'true';
+			RETURN;
+		END IF;
+		-- not there, so try to insert the key
+		-- if someone else inserts the same key concurrently,
+		-- we could get a unique-key failure
+		BEGIN
+			INSERT INTO "public"."task_result"(id, status, status_info, last_open_date, title, user_index, change_id) VALUES(_id, _status, _status_info, _last_open_date, _title, _user_index, _change_id) RETURNING user_index into userindex;
+			isupdate := 'false';
+			RETURN;
+		EXCEPTION WHEN unique_violation THEN
+			-- do nothing, and loop to try the UPDATE again
+		END;
+	END LOOP;
+END;
+$$
+LANGUAGE plpgsql;
