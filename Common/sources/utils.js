@@ -29,16 +29,32 @@
  * terms at http://creativecommons.org/licenses/by-sa/4.0/legalcode
  *
  */
-
+var config = require('config');
 var fs = require('fs');
 var path = require('path');
 var url = require('url');
 var request = require('request');
 var co = require('co');
 var URI = require("uri-js");
+const escapeStringRegexp = require('escape-string-regexp');
 var constants = require('./constants');
 
+var configIpFilter = config.get('services.CoAuthoring.ipfilter');
+var cfgIpFilterRules = configIpFilter.get('rules');
+var cfgIpFilterErrorCode = configIpFilter.get('errorcode');
+
 var ANDROID_SAFE_FILENAME = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ._-+,@£$€!½§~\'=()[]{}0123456789';
+
+var g_oIpFilterRules = function() {
+  var res = [];
+  for (var i = 0; i < cfgIpFilterRules.length; ++i) {
+    var rule = cfgIpFilterRules[i];
+    var regExpStr = rule['address'].split('*').map(escapeStringRegexp).join('.*');
+    var exp = new RegExp('^' + regExpStr + '$', 'i');
+    res.push({allow: rule['allowed'], exp: exp});
+  }
+  return res;
+}();
 
 exports.addSeconds = function(date, sec) {
   date.setSeconds(date.getSeconds() + sec);
@@ -495,3 +511,17 @@ function* pipeFiles(from, to) {
   yield pipeStreams(fromStream, toStream, true);
 }
 exports.pipeFiles = co.wrap(pipeFiles);
+function checkIpFilter(hostname) {
+  var status = 0;
+  for (var i = 0; i < g_oIpFilterRules.length; ++i) {
+    var rule = g_oIpFilterRules[i];
+    if (rule.exp.test(hostname)) {
+      if (!rule.allow) {
+        status = cfgIpFilterErrorCode;
+      }
+      break;
+    }
+  }
+  return status;
+}
+exports.checkIpFilter = checkIpFilter;

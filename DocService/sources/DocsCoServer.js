@@ -49,7 +49,7 @@
  * d) Когда пользователь остается один, после принятия чужих изменений начинается пункт 'а'
  *-----------------------------------------------------------------------------------------------------------------------
  *--------------------------------------------Схема работы с сервером----------------------------------------------------
- * а) Когда все уходят, спустя время c_oAscSaveTimeOutDelay на сервер документов шлется команда на сборку.
+ * а) Когда все уходят, спустя время cfgAscSaveTimeOutDelay на сервер документов шлется команда на сборку.
  * b) Если приходит статус '1' на CommandService.ashx, то удалось сохранить и поднять версию. Очищаем callback-и и
  * 	изменения из базы и из памяти.
  * с) Если приходит статус, отличный от '1'(сюда можно отнести как генерацию файла, так и работа внешнего подписчика
@@ -95,6 +95,8 @@ var pubsubService = require('./' + config.get('pubsub.name'));
 var queueService = require('./../../Common/sources/taskqueueRabbitMQ');
 var cfgSpellcheckerUrl = config.get('server.editor_settings_spellchecker_url');
 var cfgCallbackRequestTimeout = config.get('server.callbackRequestTimeout');
+//The waiting time to document assembly when all out(not 0 in case of F5 in the browser)
+var cfgAscSaveTimeOutDelay = config.get('server.savetimeoutdelay');
 
 var cfgPubSubMaxChanges = config.get('pubsub.maxChanges');
 
@@ -183,7 +185,6 @@ var c_oAscChangeBase = {
   All: 2
 };
 
-var c_oAscSaveTimeOutDelay = 5000;	// Время ожидания для сохранения на сервере (для отработки F5 в браузере)
 var c_oAscLockTimeOutDelay = 500;	// Время ожидания для сохранения, когда зажата база данных
 
 var c_oAscRecalcIndexTypes = {
@@ -715,6 +716,13 @@ function* bindEvents(docId, callback, baseUrl, opt_userAction, opt_userData) {
   } else {
     oCallbackUrl = parseUrl(callback);
     bChangeBase = c_oAscChangeBase.All;
+    if (null !== oCallbackUrl) {
+      if (utils.checkIpFilter(oCallbackUrl.host) > 0) {
+        logger.error('checkIpFilter error: docId = %s;url = %s', docId, callback);
+        //todo add new error type
+        oCallbackUrl = null;
+      }
+    }
   }
   if (null === oCallbackUrl) {
     return commonDefines.c_oAscServerCommandErrors.ParseError;
@@ -755,7 +763,7 @@ function* _createSaveTimer(docId, opt_userId, opt_queue, opt_noDelay) {
   var updateIfRes = yield taskResult.updateIf(updateTask, updateMask);
   if (updateIfRes.affectedRows > 0) {
     if(!opt_noDelay){
-      yield utils.sleep(c_oAscSaveTimeOutDelay);
+      yield utils.sleep(cfgAscSaveTimeOutDelay);
     }
     while (true) {
       if (!sqlBase.isLockCriticalSection(docId)) {
@@ -820,6 +828,10 @@ exports.install = function(server, callbackFunction) {
         if(getIsShutdown())
         {
           logger.debug('Server shutdown receive data');
+          return;
+        }
+        if (conn.isCiriticalError && ('message' == data.type || 'getLock' == data.type || 'saveChanges' == data.type)) {
+          logger.warn("conn.isCiriticalError send command: docId = %s type = %s", docId, data.type);
           return;
         }
         switch (data.type) {
@@ -1082,6 +1094,7 @@ exports.install = function(server, callbackFunction) {
 
   function sendFileError(conn, errorId) {
     logger.error('error description: docId = %s errorId = %s', conn.docId, errorId);
+    conn.isCiriticalError = true;
     sendData(conn, {type: 'error', description: errorId});
   }
 
@@ -1377,8 +1390,8 @@ exports.install = function(server, callbackFunction) {
         }
       } else {
         conn.sessionId = conn.id;
-        yield* endAuth(conn, false, data.documentCallbackUrl);
-        if (cmd) {
+        var endAuthRes = yield* endAuth(conn, false, data.documentCallbackUrl);
+        if (endAuthRes && cmd) {
           yield canvasService.openDocument(conn, cmd, upsertRes);
         }
       }
@@ -1386,6 +1399,7 @@ exports.install = function(server, callbackFunction) {
   }
 
   function* endAuth(conn, bIsRestore, documentCallbackUrl) {
+    var res = true;
     var docId = conn.docId;
     var tmpUser = conn.user;
     connections.push(conn);
@@ -1403,48 +1417,56 @@ exports.install = function(server, callbackFunction) {
     }
 
     // Отправляем на внешний callback только для тех, кто редактирует
+    var bindEventsRes = commonDefines.c_oAscServerCommandErrors.NoError;
     if (!tmpUser.view) {
       var userAction = new commonDefines.OutputAction(commonDefines.c_oAscUserAction.In, tmpUser.idOriginal);
       // Если пришла информация о ссылке для посылания информации, то добавляем
       if (documentCallbackUrl) {
-        yield* bindEvents(docId, documentCallbackUrl, conn.baseUrl, userAction);
+        bindEventsRes = yield* bindEvents(docId, documentCallbackUrl, conn.baseUrl, userAction);
       } else {
         yield* sendStatusDocument(docId, c_oAscChangeBase.No, userAction);
       }
     }
-    var lockDocument = null;
-    if (!bIsRestore && 2 === countNoView && !tmpUser.view) {
-      // Ставим lock на документ
-      var isLock = yield utils.promiseRedis(redisClient, redisClient.setnx,
-          redisKeyLockDoc + docId, JSON.stringify(firstParticipantNoView));
-      if(isLock) {
-        lockDocument = firstParticipantNoView;
-        yield utils.promiseRedis(redisClient, redisClient.expire, redisKeyLockDoc + docId, cfgExpLockDoc);
-      }
-    }
-    if (!lockDocument) {
-      var getRes = yield utils.promiseRedis(redisClient, redisClient.get, redisKeyLockDoc + docId);
-      if (getRes) {
-        lockDocument = JSON.parse(getRes);
-      }
-    }
 
-    if (lockDocument && !tmpUser.view) {
-      // Для view не ждем снятия lock-а
-      var sendObject = {
-        type: "waitAuth",
-        lockDocument: lockDocument
-      };
-      sendData(conn, sendObject);//Or 0 if fails
-    } else {
-      if (bIsRestore) {
-        yield* sendAuthInfo(undefined, undefined, conn, participantsMap);
-      } else {
-        var objChangesDocument = yield* getDocumentChanges(docId);
-        yield* sendAuthInfo(objChangesDocument.arrChanges, objChangesDocument.getLength(), conn, participantsMap);
+    if (commonDefines.c_oAscServerCommandErrors.NoError === bindEventsRes) {
+      var lockDocument = null;
+      if (!bIsRestore && 2 === countNoView && !tmpUser.view) {
+        // Ставим lock на документ
+        var isLock = yield utils.promiseRedis(redisClient, redisClient.setnx,
+                                              redisKeyLockDoc + docId, JSON.stringify(firstParticipantNoView));
+        if (isLock) {
+          lockDocument = firstParticipantNoView;
+          yield utils.promiseRedis(redisClient, redisClient.expire, redisKeyLockDoc + docId, cfgExpLockDoc);
+        }
       }
+      if (!lockDocument) {
+        var getRes = yield utils.promiseRedis(redisClient, redisClient.get, redisKeyLockDoc + docId);
+        if (getRes) {
+          lockDocument = JSON.parse(getRes);
+        }
+      }
+
+      if (lockDocument && !tmpUser.view) {
+        // Для view не ждем снятия lock-а
+        var sendObject = {
+          type: "waitAuth",
+          lockDocument: lockDocument
+        };
+        sendData(conn, sendObject);//Or 0 if fails
+      } else {
+        if (bIsRestore) {
+          yield* sendAuthInfo(undefined, undefined, conn, participantsMap);
+        } else {
+          var objChangesDocument = yield* getDocumentChanges(docId);
+          yield* sendAuthInfo(objChangesDocument.arrChanges, objChangesDocument.getLength(), conn, participantsMap);
+        }
+      }
+      yield* publish({type: commonDefines.c_oPublishType.participantsState, docId: docId, user: tmpUser, state: true}, docId, tmpUser.id);
+    } else {
+      sendFileError(conn, 'ip filter');
+      res = false;
     }
-    yield* publish({type: commonDefines.c_oPublishType.participantsState, docId: docId, user: tmpUser, state: true}, docId, tmpUser.id);
+    return res;
   }
 
   function* sendAuthInfo(objChangesDocument, changesIndex, conn, participantsMap) {
@@ -1864,9 +1886,10 @@ exports.install = function(server, callbackFunction) {
   function _checkLicense(conn) {
     return co(function* () {
       try {
+        const c_LR = constants.LICENSE_RESULT;
         var licenseType = licenseInfo.type;
-        if (constants.LICENSE_RESULT.Success !== licenseType) {
-          licenseType = constants.LICENSE_RESULT.Success;
+        if (constants.PACKAGE_TYPE_OS === licenseInfo.packageType && c_LR.Error === licenseType) {
+          licenseType = c_LR.Success;
 
           var count = constants.LICENSE_CONNECTIONS;
           var cursor = '0', sum = 0, scanRes, tmp, length, i, users;
@@ -1877,7 +1900,7 @@ exports.install = function(server, callbackFunction) {
 
             for (i = 0; i < length; ++i) {
               if (sum >= count) {
-                licenseType = constants.LICENSE_RESULT.Connections;
+                licenseType = c_LR.Connections;
                 break;
               }
 
@@ -1886,7 +1909,7 @@ exports.install = function(server, callbackFunction) {
             }
 
             if (sum >= count) {
-              licenseType = constants.LICENSE_RESULT.Connections;
+              licenseType = c_LR.Connections;
               break;
             }
 
@@ -2061,8 +2084,13 @@ exports.install = function(server, callbackFunction) {
       }
     });
   }
-  var innerPintJob = new cron.CronJob(cfgExpDocumentsCron, expireDoc);
-  innerPintJob.start();
+  var innerPingJob = function(opt_isStart) {
+    if (!opt_isStart) {
+      logger.warn('expireDoc restart');
+    }
+    new cron.CronJob(cfgExpDocumentsCron, expireDoc, innerPingJob, true);
+  };
+  innerPingJob(true);
 
   pubsub = new pubsubService();
   pubsub.on('message', pubsubOnMessage);
