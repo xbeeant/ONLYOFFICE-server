@@ -1,0 +1,49 @@
+﻿{
+  "log": {
+    "filePath": "../../Common/config/log4js/development.json"
+  },
+  "storage": {
+    "name": "storage-fs",
+    "fs": {
+      "folderPath": "../../App_Data",
+      "secretString": "onlyoffice"
+    }
+  },
+  "services": {
+    "CoAuthoring": {
+      "server": {
+        "port": 80,
+        "sockjsUrl": "/web-apps/vendor/sockjs/sockjs.min.js",
+        "editor_settings_spellchecker_url": "",
+        "static_content": [
+          {
+            "name": "/sdkjs",
+            "path": "../../../sdkjs"
+          },
+          {
+            "name": "/web-apps",
+            "path": "../../../web-apps"
+          },
+          {
+            "name": "/sdkjs-plugins",
+            "path": "../../../sdkjs-plugins"
+          }
+        ]
+      },
+      "utils": {
+        "utils_common_fontdir": "C:\\Windows\\Fonts"
+      }
+    }
+  },
+  "license": {
+    "license_file": "./../../license.lic"
+  },
+  "FileConverter": {
+    "converter": {
+      "fontDir": "",
+      "presentationThemesDir": "../../../sdkjs/slide/themes",
+      "filePath": "../../FileConverter/Bin/x2t.exe",
+      "errorfiles": "error"
+    }
+  }
+}
