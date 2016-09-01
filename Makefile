@@ -85,8 +85,7 @@ htmlfileinternal: $(FILE_CONVERTER)
 		
 $(FILE_CONVERTER): $(GRUNT_FILES)
 	mkdir -p $(FILE_CONVERTER) && \
-		cp -r -t $(FILE_CONVERTER) $(FILE_CONVERTER_FILES) && \
-		sed 's,../../..,/var/www/onlyoffice/documentserver,' -i $(FILE_CONVERTER)/DoctRenderer.config
+		cp -r -t $(FILE_CONVERTER) $(FILE_CONVERTER_FILES)
 
 $(SPELLCHECKER_DICTIONARIES): $(GRUNT_FILES)
 	mkdir -p $(SPELLCHECKER_DICTIONARIES) && \
