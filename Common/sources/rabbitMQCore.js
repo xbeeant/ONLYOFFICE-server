@@ -72,7 +72,7 @@ function connetPromise(closeCallback) {
           var closeEventCallback = function() {
             //in some case receive multiple close events
             conn.removeListener('close', closeEventCallback);
-            console.debug("[AMQP] conn close");
+            logger.debug('[AMQP] conn close');
             closeCallback();
           };
           conn.on('close', closeEventCallback);

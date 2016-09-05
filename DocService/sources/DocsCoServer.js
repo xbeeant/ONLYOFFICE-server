@@ -610,6 +610,9 @@ function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl, 
     var getRes = yield* getCallback(docId);
     if (getRes) {
       callback = getRes.server;
+      if (!baseUrl) {
+        baseUrl = getRes.baseUrl;
+      }
     }
   }
   if (null == callback) {
@@ -747,7 +750,7 @@ function* cleanDocumentOnExit(docId, deleteChanges) {
 function* cleanDocumentOnExitNoChanges(docId, opt_userId) {
   var userAction = opt_userId ? new commonDefines.OutputAction(commonDefines.c_oAscUserAction.Out, opt_userId) : null;
   // Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
-  yield* sendStatusDocument(docId, c_oAscChangeBase.All, userAction);
+  yield* sendStatusDocument(docId, c_oAscChangeBase.No, userAction);
   //если пользователь зашел в документ, соединение порвалось, на сервере удалилась вся информация,
   //при восстановлении соединения userIndex сохранится и он совпадет с userIndex следующего пользователя
   yield* cleanDocumentOnExit(docId, false);
@@ -828,6 +831,10 @@ exports.install = function(server, callbackFunction) {
         if(getIsShutdown())
         {
           logger.debug('Server shutdown receive data');
+          return;
+        }
+        if (conn.isCiriticalError && ('message' == data.type || 'getLock' == data.type || 'saveChanges' == data.type)) {
+          logger.warn("conn.isCiriticalError send command: docId = %s type = %s", docId, data.type);
           return;
         }
         switch (data.type) {
@@ -1090,6 +1097,7 @@ exports.install = function(server, callbackFunction) {
 
   function sendFileError(conn, errorId) {
     logger.error('error description: docId = %s errorId = %s', conn.docId, errorId);
+    conn.isCiriticalError = true;
     sendData(conn, {type: 'error', description: errorId});
   }
 
@@ -1881,9 +1889,10 @@ exports.install = function(server, callbackFunction) {
   function _checkLicense(conn) {
     return co(function* () {
       try {
+        const c_LR = constants.LICENSE_RESULT;
         var licenseType = licenseInfo.type;
-        if (constants.LICENSE_RESULT.Success !== licenseType) {
-          licenseType = constants.LICENSE_RESULT.Success;
+        if (constants.PACKAGE_TYPE_OS === licenseInfo.packageType && c_LR.Error === licenseType) {
+          licenseType = c_LR.Success;
 
           var count = constants.LICENSE_CONNECTIONS;
           var cursor = '0', sum = 0, scanRes, tmp, length, i, users;
@@ -1894,7 +1903,7 @@ exports.install = function(server, callbackFunction) {
 
             for (i = 0; i < length; ++i) {
               if (sum >= count) {
-                licenseType = constants.LICENSE_RESULT.Connections;
+                licenseType = c_LR.Connections;
                 break;
               }
 
@@ -1903,7 +1912,7 @@ exports.install = function(server, callbackFunction) {
             }
 
             if (sum >= count) {
-              licenseType = constants.LICENSE_RESULT.Connections;
+              licenseType = c_LR.Connections;
               break;
             }
 
@@ -2078,8 +2087,13 @@ exports.install = function(server, callbackFunction) {
       }
     });
   }
-  var innerPintJob = new cron.CronJob(cfgExpDocumentsCron, expireDoc);
-  innerPintJob.start();
+  var innerPingJob = function(opt_isStart) {
+    if (!opt_isStart) {
+      logger.warn('expireDoc restart');
+    }
+    new cron.CronJob(cfgExpDocumentsCron, expireDoc, innerPingJob, true);
+  };
+  innerPingJob(true);
 
   pubsub = new pubsubService();
   pubsub.on('message', pubsubOnMessage);
