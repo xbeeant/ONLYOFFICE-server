@@ -1,6 +1,6 @@
 {
   "log": {
-    "filePath": "../../Common/config/log4js/development.json"
+    "filePath": "../../Common/config/log4js/production.json"
   },
   "storage": {
     "name": "storage-fs",
@@ -12,8 +12,7 @@
   "services": {
     "CoAuthoring": {
       "server": {
-        "port": 8080,
-        "sockjsUrl": "/office/vendor/sockjs/sockjs.min.js",
+        "sockjsUrl": "/web-apps/vendor/sockjs/sockjs.min.js",
         "editor_settings_spellchecker_url": "",
         "static_content": [
           {
@@ -23,21 +22,11 @@
           {
             "name": "/web-apps",
             "path": "../../../web-apps"
-          },
-          {
-            "name": "/sdkjs-plugins",
-            "path": "../../../sdkjs-plugins"
           }
         ]
       },
       "utils": {
-        "utils_common_fontdir": "/Library/Fonts"
-      },
-      "sql": {
-        "type": "mysql",
-        "dbPort": 3306,
-        "dbUser": "root",
-        "dbPass": "onlyoffice"
+        "utils_common_fontdir": "C:\\Windows\\Fonts"
       }
     }
   },
@@ -47,8 +36,8 @@
   "FileConverter": {
     "converter": {
       "fontDir": "",
-      "presentationThemesDir": "../../../OfficeWeb/PowerPoint/themes",
-      "filePath": "../../FileConverter/Bin/x2t",
+      "presentationThemesDir": "../../../sdkjs/slide/themes",
+      "filePath": "../../FileConverter/bin/x2t.exe",
       "errorfiles": "error"
     }
   }
