@@ -416,6 +416,18 @@ function getParticipantUser(docId, includeUserId) {
     return el.docId === docId && el.user.id === includeUserId;
   });
 }
+function getConnectionInfo(conn) {
+  var user = conn.user;
+  var data = {
+    id: user.id,
+    idOriginal: user.idOriginal,
+    username: user.username,
+    indexUser: user.indexUser,
+    view: user.view,
+    connectionId: conn.id
+  };
+  return JSON.stringify(data);
+}
 function updatePresenceCommandsToArray(outCommands, docId, userId, userInfo) {
   var expireAt = new Date().getTime() + cfgExpPresence * 1000;
   outCommands.push(
@@ -425,9 +437,9 @@ function updatePresenceCommandsToArray(outCommands, docId, userId, userInfo) {
     ['expire', redisKeyPresenceHash + docId, cfgExpPresence]
   );
 }
-function* updatePresence(docId, userId, userInfo) {
+function* updatePresence(docId, userId, connInfo) {
   var commands = [];
-  updatePresenceCommandsToArray(commands, docId, userId, userInfo);
+  updatePresenceCommandsToArray(commands, docId, userId, connInfo);
   var expireAt = new Date().getTime() + cfgExpPresence * 1000;
   commands.push(['zadd', redisKeyDocuments, expireAt, docId]);
   var multi = redisClient.multi(commands);
@@ -479,6 +491,17 @@ function* hasEditors(docId, optZRange, optHVals) {
     }
   }
   return hasEditors;
+}
+function* isUserReconnect(docId, userId, connectionId) {
+  var elem;
+  var hvals = yield* getAllPresence(docId);
+  for (var i = 0; i < hvals.length; ++i) {
+    elem = JSON.parse(hvals[i]);
+    if (userId === elem.id && connectionId !== elem.connectionId) {
+      return true;
+    }
+  }
+  return false;
 }
 function* publish(data, optDocId, optUserId) {
   var needPublish = true;
@@ -917,8 +940,8 @@ exports.install = function(server, callbackFunction) {
     if (null == docId) {
       return;
     }
-
-    logger.info("Connection closed or timed out: docId = %s", docId);
+    var tmpUser = conn.user;
+    logger.info("Connection closed or timed out: userId = %s docId = %s", tmpUser.id, docId);
     var isCloseCoAuthoringTmp = conn.isCloseCoAuthoring;
     if (isCloseConnection) {
       //Notify that participant has gone
@@ -926,28 +949,29 @@ exports.install = function(server, callbackFunction) {
         return el.id === conn.id;//Delete this connection
       });
       //Check if it's not already reconnected
-      reconnected = _.any(connections, function(el) {
-        return (el.sessionId === conn.sessionId);//This means that client is reconnected
-      });
+      reconnected = yield* isUserReconnect(docId, tmpUser.id, conn.id);
+      logger.info("reconnected: userId = %s docId = %s", tmpUser.id, docId);
     } else {
       conn.isCloseCoAuthoring = true;
     }
-    var tmpUser = conn.user;
-    var commands = [
-      ['hdel', redisKeyPresenceHash + docId, tmpUser.id],
-      ['zrem', redisKeyPresenceSet + docId, tmpUser.id]
-    ];
+
+    var commands = [];
+    if (!reconnected) {
+      commands.push(['hdel', redisKeyPresenceHash + docId, tmpUser.id]);
+      commands.push(['zrem', redisKeyPresenceSet + docId, tmpUser.id]);
+    }
     if (isCloseCoAuthoringTmp) {
-      var multi = redisClient.multi(commands);
-      yield utils.promiseRedis(multi, multi.exec);
-      // Мы уже закрывали совместное редактирование
+      if (commands.length > 0) {
+        var multi = redisClient.multi(commands);
+        yield utils.promiseRedis(multi, multi.exec);
+      }
+      //we already close connection
       return;
     }
 
-    var state = (false == reconnected) ? false : undefined;
-    yield* publish({type: commonDefines.c_oPublishType.participantsState, docId: docId, user: tmpUser, state: state}, docId, tmpUser.id);
-
     if (!reconnected) {
+      yield* publish({type: commonDefines.c_oPublishType.participantsState, docId: docId, user: tmpUser, state: false}, docId, tmpUser.id);
+
       // Для данного пользователя снимаем лок с сохранения
       var saveLock = yield utils.promiseRedis(redisClient, redisClient.get, redisKeySaveLock + docId);
       if (conn.user.id == saveLock) {
@@ -991,7 +1015,7 @@ exports.install = function(server, callbackFunction) {
 
         // Для данного пользователя снимаем Lock с документа
         yield* checkEndAuthLock(false, docId, conn.user.id);
-      } else {
+      } else if(commands.length > 0) {
         var multi = redisClient.multi(commands);
         yield utils.promiseRedis(multi, multi.exec);
       }
@@ -1315,7 +1339,7 @@ exports.install = function(server, callbackFunction) {
         });
         // Кладем в массив, т.к. нам нужно отправлять данные для открытия/сохранения документа
         connections.push(conn);
-        yield* updatePresence(docId, conn.user.id, JSON.stringify(conn.user));
+        yield* updatePresence(docId, conn.user.id, getConnectionInfo(conn));
         // Посылаем формальную авторизацию, чтобы подтвердить соединение
         yield* sendAuthInfo(undefined, undefined, conn, undefined);
         if (cmd) {
@@ -1406,7 +1430,7 @@ exports.install = function(server, callbackFunction) {
     var docId = conn.docId;
     var tmpUser = conn.user;
     connections.push(conn);
-    yield* updatePresence(docId, tmpUser.id, JSON.stringify(tmpUser));
+    yield* updatePresence(docId, tmpUser.id, getConnectionInfo(conn));
     var firstParticipantNoView, countNoView = 0;
     var participantsMap = yield* getParticipantMap(docId);
     for (var i = 0; i < participantsMap.length; ++i) {
@@ -2072,7 +2096,7 @@ exports.install = function(server, callbackFunction) {
         for (var i = 0; i < connections.length; ++i) {
           var conn = connections[i];
           idSet.add(conn.docId);
-          updatePresenceCommandsToArray(commands, conn.docId, conn.user.id, JSON.stringify(conn.user));
+          updatePresenceCommandsToArray(commands, conn.docId, conn.user.id, getConnectionInfo(conn));
         }
         var expireAt = new Date().getTime() + cfgExpPresence * 1000;
         idSet.forEach(function(value1, value2, set) {
