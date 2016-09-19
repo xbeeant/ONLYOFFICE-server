@@ -53,7 +53,7 @@ const redisKeyLicense = cfgRedisPrefix + ((constants.PACKAGE_TYPE_OS === oPackag
 exports.readLicense = function*() {
 	const c_LR = constants.LICENSE_RESULT;
 	const resMax = {count: 999999, type: c_LR.Success};
-	var res = {count: 1, type: c_LR.Error, light: false, packageType: oPackageType};
+	var res = {count: 1, type: c_LR.Error, light: false, packageType: oPackageType, trial: false};
 	var checkFile = false;
 	try {
 		var oFile = fs.readFileSync(configL.get('license_file')).toString();
@@ -67,8 +67,8 @@ exports.readLicense = function*() {
 		const publicKey = '-----BEGIN PUBLIC KEY-----\nMIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDRhGF7X4A0ZVlEg594WmODVVUI\niiPQs04aLmvfg8SborHss5gQXu0aIdUT6nb5rTh5hD2yfpF2WIW6M8z0WxRhwicg\nXwi80H1aLPf6lEPPLvN29EhQNjBpkFkAJUbS8uuhJEeKw0cE49g80eBBF4BCqSL6\nPFQbP9/rByxdxEoAIQIDAQAB\n-----END PUBLIC KEY-----\n';
 		if (verify.verify(publicKey, sign, 'hex')) {
 			const endDate = new Date(oLicense['end_date']);
-			const isTrial = (true === oLicense['trial'] || 'true' === oLicense['trial']);
-			const checkDate = isTrial ? new Date() : oBuildDate; // Someone who likes to put json string instead of bool
+			const isTrial = res.trial = (true === oLicense['trial'] || 'true' === oLicense['trial']);
+			const checkDate = (isTrial && constants.PACKAGE_TYPE_OS === oPackageType) ? new Date() : oBuildDate; // Someone who likes to put json string instead of bool
 			if (endDate >= checkDate && 2 <= oLicense['version']) {
 				res.count = Math.min(Math.max(res.count, oLicense['process'] >> 0), resMax.count);
 				res.type = c_LR.Success;
@@ -92,6 +92,8 @@ exports.readLicense = function*() {
 			} else {
 				res.type = (yield* _getFileState()) ? c_LR.Success : c_LR.ExpiredTrial;
 				if (res.type === c_LR.Success) {
+					res.trial = true;
+					res.count = 2;
 					return res;
 				}
 			}
