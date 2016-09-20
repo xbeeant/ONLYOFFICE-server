@@ -1949,7 +1949,14 @@ exports.install = function(server, callbackFunction) {
             }
           }
         }
-        sendData(conn, {type: 'license', license: {type: licenseType, light: licenseInfo.light}});
+        sendData(conn, {
+          type: 'license',
+          license: {
+            type: licenseType,
+            light: licenseInfo.light,
+            trial: constants.PACKAGE_TYPE_OS === licenseInfo.packageType ? false : licenseInfo.trial
+          }
+        });
       } catch (err) {
         logger.error('_checkLicense error:\r\n%s', err.stack);
       }
