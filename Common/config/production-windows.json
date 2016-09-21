@@ -1,6 +1,6 @@
 {
   "log": {
-    "filePath": "../../Common/config/log4js/production.json"
+    "filePath": "../../../config/log4js/production.json"
   },
   "storage": {
     "name": "storage-fs",
