@@ -953,7 +953,9 @@ exports.install = function(server, callbackFunction) {
       });
       //Check if it's not already reconnected
       reconnected = yield* isUserReconnect(docId, tmpUser.id, conn.id);
-      logger.info("reconnected: userId = %s docId = %s", tmpUser.id, docId);
+      if (reconnected) {
+        logger.info("reconnected: userId = %s docId = %s", tmpUser.id, docId);
+      }
     } else {
       conn.isCloseCoAuthoring = true;
     }
