@@ -127,7 +127,7 @@ if (cluster.isMaster) {
     var staticContent = config.get('server.static_content');
     for (var i = 0; i < staticContent.length; ++i) {
       var staticContentElem = staticContent[i];
-      app.use(staticContentElem['name'], express.static(staticContentElem['path']));
+      app.use(staticContentElem['name'], express.static(staticContentElem['path'], staticContentElem['options']));
     }
   }
 

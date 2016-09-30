@@ -17,11 +17,13 @@
         "static_content": [
           {
             "name": "/sdkjs",
-            "path": "../../../sdkjs"
+            "path": "../../../sdkjs",
+            "options": {"maxAge": "7d"}
           },
           {
             "name": "/web-apps",
-            "path": "../../../web-apps"
+            "path": "../../../web-apps",
+            "options": {"maxAge": "7d"}
           }
         ]
       },
