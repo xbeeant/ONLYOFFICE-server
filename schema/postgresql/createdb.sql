@@ -26,7 +26,7 @@ WITH (OIDS=FALSE);
 -- ----------------------------
 CREATE TABLE IF NOT EXISTS "public"."doc_changes" (
 "id" varchar(255) COLLATE "default" NOT NULL,
-"change_id" int8 NOT NULL,
+"change_id" int4 NOT NULL,
 "user_id" varchar(255) COLLATE "default" NOT NULL,
 "user_id_original" varchar(255) COLLATE "default" NOT NULL,
 "user_name" varchar(255) COLLATE "default" NOT NULL,
@@ -42,17 +42,17 @@ WITH (OIDS=FALSE);
 CREATE TABLE IF NOT EXISTS "public"."task_result" (
 "id" varchar(255) COLLATE "default" NOT NULL,
 "status" int2 NOT NULL,
-"status_info" int8 NOT NULL,
+"status_info" int4 NOT NULL,
 "last_open_date" timestamp without time zone NOT NULL,
 "title" varchar(255) COLLATE "default" NOT NULL,
-"user_index" int8 NOT NULL DEFAULT 1,
-"change_id" int8 NOT NULL DEFAULT 0,
+"user_index" int4 NOT NULL DEFAULT 1,
+"change_id" int4 NOT NULL DEFAULT 0,
 PRIMARY KEY ("id")
 )
 WITH (OIDS=FALSE);
 
 --https://www.postgresql.org/docs/current/static/plpgsql-control-structures.html#PLPGSQL-UPSERT-EXAMPLE
-CREATE OR REPLACE FUNCTION merge_db(_id varchar(255), _status int2, _status_info int8, _last_open_date timestamp without time zone, _title varchar(255), _user_index int8, _change_id int8, OUT isupdate char(5), OUT userindex int8) AS
+CREATE OR REPLACE FUNCTION merge_db(_id varchar(255), _status int2, _status_info int4, _last_open_date timestamp without time zone, _title varchar(255), _user_index int4, _change_id int4, OUT isupdate char(5), OUT userindex int4) AS
 $$
 DECLARE
 	t_var "public"."task_result"."user_index"%TYPE;
