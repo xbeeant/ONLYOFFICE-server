@@ -6,16 +6,53 @@ GRUNT_FLAGS = --no-color -v
 
 GRUNT_FILES = Gruntfile.js.out
 
+ifeq ($(OS),Windows_NT)
+    PLATFORM := win
+    EXEC_EXT := .exe
+    SHARED_EXT := .dll
+    ifeq ($(PROCESSOR_ARCHITECTURE),AMD64)
+        ARCHITECTURE := 64
+    endif
+    ifeq ($(PROCESSOR_ARCHITECTURE),x86)
+        ARCHITECTURE := 32
+    endif
+else
+    UNAME_S := $(shell uname -s)
+    ifeq ($(UNAME_S),Linux)
+        PLATFORM := linux
+        SHARED_EXT := .so*
+    endif
+    UNAME_P := $(shell uname -p)
+    ifeq ($(UNAME_P),x86_64)
+        ARCHITECTURE := 64
+    endif
+    ifneq ($(filter %86,$(UNAME_P)),)
+        ARCHITECTURE := 32
+    endif
+endif
+
+TARGET := $(PLATFORM)_$(ARCHITECTURE)
+
 FILE_CONVERTER = $(OUTPUT)/FileConverter/bin
-FILE_CONVERTER_FILES += ../core/build/lib/linux_64/*.so
-FILE_CONVERTER_FILES += /usr/local/lib/libicudata.so.55*
-FILE_CONVERTER_FILES += /usr/local/lib/libicuuc.so.55*
-FILE_CONVERTER_FILES += ../core/build/bin/linux/x2t
-FILE_CONVERTER_FILES += ../v8/third_party/icu/linux/icudtl_dat.S
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/*$(SHARED_EXT)
+
+ifeq ($(PLATFORM),linux)
+FILE_CONVERTER_FILES += ../core/Common/3dParty/icu/$(TARGET)/build/libicudata$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/Common/3dParty/icu/$(TARGET)/build/libicuuc$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/Common/3dParty/v8/$(TARGET)/icudtl_dat.S
+endif
+
+ifeq ($(PLATFORM),win)
+FILE_CONVERTER_FILES += ../core/Common/3dParty/icu/$(TARGET)/build/icudt55$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/Common/3dParty/icu/$(TARGET)/build/icuuc55$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/Common/3dParty/v8/$(TARGET)/release/icudt.dll
+endif
+
+FILE_CONVERTER_FILES += ../core/build/bin/$(TARGET)/x2t$(EXEC_EXT)
 
 HTML_FILE_INTERNAL := $(FILE_CONVERTER)/HtmlFileInternal
-HTML_FILE_INTERNAL_FILES += ../core/build/lib/linux_64/HtmlFileInternal
-HTML_FILE_INTERNAL_FILES += ../core/build/cef/linux_64/**
+HTML_FILE_INTERNAL_FILES += ../core/build/lib/$(TARGET)/HtmlFileInternal$(EXEC_EXT)
+HTML_FILE_INTERNAL_FILES += ../core/build/cef/$(TARGET)/**
 
 SPELLCHECKER_DICTIONARIES := $(OUTPUT)/SpellChecker/dictionaries
 SPELLCHECKER_DICTIONARY_FILES += ../dictionaries/**
@@ -25,8 +62,8 @@ SCHEMA_FILES = $(SCHEMA_DIR)/**
 SCHEMA = $(OUTPUT)/$(SCHEMA_DIR)/
 
 TOOLS_DIR = tools
-TOOLS_FILES = ../core/build/bin/AllFontsGen/linux_64
-TOOLS = $(OUTPUT)/$(TOOLS_DIR)/
+TOOLS_FILES = ../core/build/bin/AllFontsGen/$(TARGET)
+TOOLS = $(OUTPUT)/$(TOOLS_DIR)
 
 LICENSE_FILES = LICENSE.txt 3rd-Party.txt license/
 LICENSE = $(addsuffix $(OUTPUT)/, LICENSE_FILES)
@@ -48,8 +85,7 @@ htmlfileinternal: $(FILE_CONVERTER)
 		
 $(FILE_CONVERTER): $(GRUNT_FILES)
 	mkdir -p $(FILE_CONVERTER) && \
-		cp -r -t $(FILE_CONVERTER) $(FILE_CONVERTER_FILES) && \
-		sed 's,../../..,/var/www/onlyoffice/documentserver,' -i $(FILE_CONVERTER)/DoctRenderer.config
+		cp -r -t $(FILE_CONVERTER) $(FILE_CONVERTER_FILES)
 
 $(SPELLCHECKER_DICTIONARIES): $(GRUNT_FILES)
 	mkdir -p $(SPELLCHECKER_DICTIONARIES) && \
@@ -62,7 +98,7 @@ $(SCHEMA):
 $(TOOLS):
 	mkdir -p $(TOOLS) && \
 		cp -r -t $(TOOLS) $(TOOLS_FILES) && \
-		mv $(TOOLS)/linux_64 $(TOOLS)/AllFontsGen
+		mv $(TOOLS)/$(TARGET)$(EXEC_EXT) $(TOOLS)/AllFontsGen$(EXEC_EXT)
 		
 $(LICENSE):
 	mkdir -p $(OUTPUT) && \
