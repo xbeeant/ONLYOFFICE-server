@@ -69,14 +69,15 @@ LICENSE_FILES = LICENSE.txt 3rd-Party.txt license/
 LICENSE = $(addsuffix $(OUTPUT)/, LICENSE_FILES)
 
 LICENSE_JS := $(OUTPUT)/Common/sources/license.js
+COMMON_DEFINES_JS := $(OUTPUT)/Common/sources/commondefines.js
 
 .PHONY: all clean install uninstall build-date htmlfileinternal
 
 all: $(FILE_CONVERTER) $(SPELLCHECKER_DICTIONARIES) $(TOOLS) $(SCHEMA) $(LICENSE)
 
 build-date: $(GRUNT_FILES)
-	sed "s|const buildVersion = .*|const buildVersion = '${PRODUCT_VERSION}';|" -i $(LICENSE_JS)
-	sed "s|const buildNumber = .*|const buildNumber = ${BUILD_NUMBER};|" -i $(LICENSE_JS)
+	sed "s|const buildVersion = .*|const buildVersion = '${PRODUCT_VERSION}';|" -i $(COMMON_DEFINES_JS)
+	sed "s|const buildNumber = .*|const buildNumber = ${BUILD_NUMBER};|" -i $(COMMON_DEFINES_JS)
 	sed "s|const buildDate = .*|const buildDate = '$$(date +%F)';|" -i $(LICENSE_JS)
 	
 htmlfileinternal: $(FILE_CONVERTER)
