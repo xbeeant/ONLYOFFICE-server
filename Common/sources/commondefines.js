@@ -698,6 +698,9 @@ var c_oAscServerCommandErrors = {
   UnknownCommand: 5
 };
 
+const buildVersion = '4.1.2';
+const buildNumber = 37;
+
 exports.TaskQueueData = TaskQueueData;
 exports.CMailMergeSendData = CMailMergeSendData;
 exports.InputCommand = InputCommand;
