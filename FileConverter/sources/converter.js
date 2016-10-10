@@ -84,9 +84,14 @@ function TaskQueueDataConvert(task) {
   this.embeddedFonts = cmd.embeddedfonts;
   this.fromChanges = task.getFromChanges();
   //todo
-  this.fontDir = path.resolve(cfgFontDir);
+  if (cfgFontDir) {
+    this.fontDir = path.resolve(cfgFontDir);
+  } else {
+    this.fontDir = cfgFontDir;
+  }
   this.themeDir = path.resolve(cfgPresentationThemesDir);
   this.mailMergeSend = cmd.mailmergesend;
+  this.thumbnail = cmd.thumbnail;
   this.doctParams = cmd.getDoctParams();
   this.password = cmd.getPassword();
   this.timestamp = new Date();
@@ -110,6 +115,9 @@ TaskQueueDataConvert.prototype = {
     if (this.mailMergeSend) {
       xml += this.serializeMailMerge(this.mailMergeSend);
     }
+    if (this.thumbnail) {
+      xml += this.serializeThumbnail(this.thumbnail);
+    }
     xml += this.serializeXmlProp('m_nDoctParams', this.doctParams);
     xml += this.serializeXmlProp('m_sPassword', this.password);
     xml += this.serializeXmlProp('m_oTimestamp', this.timestamp.toISOString());
@@ -130,6 +138,16 @@ TaskQueueDataConvert.prototype = {
     xml += this.serializeXmlProp('userid', data.getUserId());
     xml += this.serializeXmlProp('url', data.getUrl());
     xml += '</m_oMailMergeSend>';
+    return xml;
+  },
+  serializeThumbnail: function(data) {
+    var xml = '<m_oThumbnail>';
+    xml += this.serializeXmlProp('format', data.getFormat());
+    xml += this.serializeXmlProp('aspect', data.getAspect());
+    xml += this.serializeXmlProp('first', data.getFirst());
+    xml += this.serializeXmlProp('width', data.getWidth());
+    xml += this.serializeXmlProp('height', data.getHeight());
+    xml += '</m_oThumbnail>';
     return xml;
   },
   serializeXmlProp: function(name, value) {

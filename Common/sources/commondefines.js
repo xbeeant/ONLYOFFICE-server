@@ -56,6 +56,11 @@ function InputCommand(data) {
     } else {
       this['mailmergesend'] = undefined;
     }
+    if (data['thumbnail']) {
+      this['thumbnail'] = new CThumbnailData(data['thumbnail']);
+    } else {
+      this['thumbnail'] = undefined;
+    }
     this['status'] = data['status'];
     this['status_info'] = data['status_info'];
     this['savekey'] = data['savekey'];
@@ -89,6 +94,7 @@ function InputCommand(data) {
     this['embeddedfonts'] = undefined;//bool
     this['viewmode'] = undefined;//bool
     this['mailmergesend'] = undefined;
+    this['thumbnail'] = undefined;
     //private
     this['status'] = undefined;//int
     this['status_info'] = undefined;//int
@@ -206,6 +212,12 @@ InputCommand.prototype = {
   setMailMergeSend: function(data) {
     this['mailmergesend'] = data;
   },
+  getThumbnail: function() {
+    return this['thumbnail'];
+  },
+  setThumbnail: function(data) {
+    this['thumbnail'] = data;
+  },
   getStatus: function() {
     return this['status'];
   },
@@ -272,6 +284,51 @@ InputCommand.prototype = {
   setPassword: function(data) {
     this['password'] = data;
   }
+};
+function CThumbnailData(obj) {
+  if (obj) {
+    this['format'] = obj['format'];
+    this['aspect'] = obj['aspect'];
+    this['first'] = obj['first'];
+    this['width'] = obj['width'];
+    this['height'] = obj['height'];
+  } else {
+    this['format'] = null;
+    this['aspect'] = null;
+    this['first'] = null;
+    this['width'] = null;
+    this['height'] = null;
+  }
+}
+CThumbnailData.prototype.getFormat = function() {
+  return this['format']
+};
+CThumbnailData.prototype.setFormat = function(v) {
+  this['format'] = v;
+};
+CThumbnailData.prototype.getAspect = function() {
+  return this['aspect']
+};
+CThumbnailData.prototype.setAspect = function(v) {
+  this['aspect'] = v;
+};
+CThumbnailData.prototype.getFirst = function() {
+  return this['first']
+};
+CThumbnailData.prototype.setFirst = function(v) {
+  this['first'] = v;
+};
+CThumbnailData.prototype.getWidth = function() {
+  return this['width']
+};
+CThumbnailData.prototype.setWidth = function(v) {
+  this['width'] = v;
+};
+CThumbnailData.prototype.getHeight = function() {
+  return this['height']
+};
+CThumbnailData.prototype.setHeight = function(v) {
+  this['height'] = v;
 };
 
 function CMailMergeSendData(obj) {
@@ -700,6 +757,7 @@ var c_oAscServerCommandErrors = {
 
 exports.TaskQueueData = TaskQueueData;
 exports.CMailMergeSendData = CMailMergeSendData;
+exports.CThumbnailData = CThumbnailData;
 exports.InputCommand = InputCommand;
 exports.OutputSfcData = OutputSfcData;
 exports.OutputMailMerge = OutputMailMerge;

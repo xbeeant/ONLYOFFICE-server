@@ -211,6 +211,27 @@ function convertRequest(req, res) {
       cmd.setDelimiter(req.query['delimiter'] || commonDefines.c_oAscCsvDelimiter.Comma);
       cmd.setDoctParams(req.query['doctparams']);
       cmd.setPassword(req.query['password']);
+      var thumbnail = req.query['thumbnail'];
+      if (thumbnail) {
+        var thumbnailData = new commonDefines.CThumbnailData(JSON.parse(req.query['thumbnail']));
+        //constants from CXIMAGE_FORMAT_
+        switch (cmd.getOutputFormat()) {
+          case constants.AVS_OFFICESTUDIO_FILE_IMAGE_JPG:
+            thumbnailData.setFormat(3);
+            break;
+          case constants.AVS_OFFICESTUDIO_FILE_IMAGE_PNG:
+            thumbnailData.setFormat(4);
+            break;
+          case constants.AVS_OFFICESTUDIO_FILE_IMAGE_GIF:
+            thumbnailData.setFormat(2);
+            break;
+          case constants.AVS_OFFICESTUDIO_FILE_IMAGE_BMP:
+            thumbnailData.setFormat(1);
+            break;
+        }
+        cmd.setThumbnail(thumbnailData);
+        cmd.setOutputFormat(constants.AVS_OFFICESTUDIO_FILE_IMAGE);
+      }
       var async = 'true' == req.query['async'];
 
       if (constants.AVS_OFFICESTUDIO_FILE_UNKNOWN !== cmd.getOutputFormat()) {
