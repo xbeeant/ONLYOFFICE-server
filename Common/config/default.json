@@ -104,7 +104,9 @@
 				"documentsCron": "0 */2 * * * *",
 				"files": 86400,
 				"filesCron": "00 00 */1 * * *",
-				"filesremovedatonce": 100
+				"filesremovedatonce": 100,
+				"sessionidle": 0,
+				"sessionabsolute": 0
 			},
 			"ipfilter": {
 				"rules": [{"address": "*", "allowed": true}],

@@ -177,6 +177,10 @@ exports.REDIS_KEY_LICENSE_T = 'licenseT';
 
 exports.SHUTDOWN_CODE = 4001;
 exports.SHUTDOWN_REASON = 'server shutdown';
+exports.SESSION_IDLE_CODE = 4002;
+exports.SESSION_IDLE_REASON = 'idle session expires';
+exports.SESSION_ABSOLUTE_CODE = 4003;
+exports.SESSION_ABSOLUTE_REASON = 'absolute session expires';
 
 exports.CONTENT_DISPOSITION_INLINE = 'inline';
 exports.CONTENT_DISPOSITION_ATTACHMENT = 'attachment';

@@ -111,6 +111,8 @@ var cfgExpLastSave = config.get('expire.lastsave');
 var cfgExpForceSave = config.get('expire.forcesave');
 var cfgExpSaved = config.get('expire.saved');
 var cfgExpDocumentsCron = config.get('expire.documentsCron');
+var cfgExpSessionIdle = config.get('expire.sessionidle');
+var cfgExpSessionAbsolute = config.get('expire.sessionabsolute');
 var cfgSockjsUrl = config.get('server.sockjsUrl');
 
 var redisKeySaveLock = cfgRedisPrefix + constants.REDIS_KEY_SAVE_LOCK;
@@ -843,6 +845,7 @@ exports.install = function(server, callbackFunction) {
       return;
     }
     conn.baseUrl = utils.getBaseUrlByConnection(conn);
+    conn.timeConnect = conn.timeLastAction = new Date();
 
     conn.on('data', function(message) {
       return co(function* () {
@@ -864,6 +867,7 @@ exports.install = function(server, callbackFunction) {
           logger.warn("conn.isCiriticalError send command: docId = %s type = %s", docId, data.type);
           return;
         }
+        conn.timeLastAction = new Date();
         switch (data.type) {
           case 'auth'          :
             yield* auth(conn, data);
@@ -1336,6 +1340,9 @@ exports.install = function(server, callbackFunction) {
         view: data.view
       };
       conn.editorType = data['editorType'];
+      if (data.timeConnect) {
+        conn.timeConnect = new Date(data.timeConnect);
+      }
 
       // Ситуация, когда пользователь уже отключен от совместного редактирования
       if (bIsRestore && data.isCloseCoAuthoring) {
@@ -1526,6 +1533,7 @@ exports.install = function(server, callbackFunction) {
       type: 'auth',
       result: 1,
       sessionId: conn.sessionId,
+      timeConnect: conn.timeConnect.getTime(),
       participants: participantsMap,
       messages: allMessagesParsed,
       locks: docLock,
@@ -2112,8 +2120,21 @@ exports.install = function(server, callbackFunction) {
         logger.debug('expireDoc connections.length = %d', connections.length);
         var commands = [];
         var idSet = new Set();
+        var nowMs = new Date().getTime();
         for (var i = 0; i < connections.length; ++i) {
           var conn = connections[i];
+          if (cfgExpSessionAbsolute > 0) {
+            if (nowMs - conn.timeConnect.getTime() > cfgExpSessionAbsolute) {
+              conn.close(constants.SESSION_ABSOLUTE_CODE, constants.SESSION_ABSOLUTE_REASON);
+              continue;
+            }
+          }
+          if (cfgExpSessionIdle > 0) {
+            if (nowMs - conn.timeLastAction.getTime() > cfgExpSessionIdle) {
+              conn.close(constants.SESSION_IDLE_CODE, constants.SESSION_IDLE_REASON);
+              continue;
+            }
+          }
           idSet.add(conn.docId);
           updatePresenceCommandsToArray(commands, conn.docId, conn.user.id, getConnectionInfo(conn));
         }
