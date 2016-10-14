@@ -470,7 +470,7 @@ function OutputSfcData() {
   this['status'] = undefined;
   this['url'] = undefined;
   this['changesurl'] = undefined;
-  this['changeshistory'] = undefined;
+  this['history'] = undefined;
   this['users'] = undefined;
   this['actions'] = undefined;
   this['mailMerge'] = undefined;
@@ -501,10 +501,10 @@ OutputSfcData.prototype.setChangeUrl = function(data) {
   return this['changesurl'] = data;
 };
 OutputSfcData.prototype.getChangeHistory = function() {
-  return this['changeshistory'];
+  return this['history'];
 };
 OutputSfcData.prototype.setChangeHistory = function(data) {
-  return this['changeshistory'] = data;
+  return this['history'] = data;
 };
 OutputSfcData.prototype.getUsers = function() {
   return this['users'];
