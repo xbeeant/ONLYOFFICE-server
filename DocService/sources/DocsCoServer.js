@@ -112,6 +112,7 @@ var cfgExpSaved = config.get('expire.saved');
 var cfgExpDocumentsCron = config.get('expire.documentsCron');
 var cfgExpSessionIdle = config.get('expire.sessionidle');
 var cfgExpSessionAbsolute = config.get('expire.sessionabsolute');
+var cfgExpSessionCloseCommand = config.get('expire.sessionclosecommand');
 var cfgSockjsUrl = config.get('server.sockjsUrl');
 
 var redisKeySaveLock = cfgRedisPrefix + constants.REDIS_KEY_SAVE_LOCK;
@@ -398,6 +399,9 @@ function sendDataCursor(conn, msg) {
 }
 function sendDataMeta(conn, msg) {
   sendData(conn, {type: "meta", messages: msg});
+}
+function sendDataSession(conn, msg) {
+  sendData(conn, {type: "session", messages: msg});
 }
 function sendReleaseLock(conn, userLocks) {
   sendData(conn, {type: "releaseLock", locks: _.map(userLocks, function(e) {
@@ -844,7 +848,8 @@ exports.install = function(server, callbackFunction) {
       return;
     }
     conn.baseUrl = utils.getBaseUrlByConnection(conn);
-    conn.timeConnect = conn.timeLastAction = new Date();
+    conn.sessionIsSendWarning = false;
+    conn.sessionTimeConnect = conn.sessionTimeLastAction = new Date().getTime();
 
     conn.on('data', function(message) {
       return co(function* () {
@@ -866,7 +871,6 @@ exports.install = function(server, callbackFunction) {
           logger.warn("conn.isCiriticalError send command: docId = %s type = %s", docId, data.type);
           return;
         }
-        conn.timeLastAction = new Date();
         switch (data.type) {
           case 'auth'          :
             yield* auth(conn, data);
@@ -904,6 +908,10 @@ exports.install = function(server, callbackFunction) {
             break;
           case 'changesError':
             logger.error("changesError: docId = %s %s", docId, data.stack);
+            break;
+          case 'extendSession' :
+            conn.sessionIsSendWarning = false;
+            conn.sessionTimeLastAction = new Date().getTime();
             break;
           default:
             logger.debug("unknown command %s", message);
@@ -1339,8 +1347,8 @@ exports.install = function(server, callbackFunction) {
         view: data.view
       };
       conn.editorType = data['editorType'];
-      if (data.timeConnect) {
-        conn.timeConnect = new Date(data.timeConnect);
+      if (data.sessionTimeConnect) {
+        conn.sessionTimeConnect = data.sessionTimeConnect;
       }
 
       // Ситуация, когда пользователь уже отключен от совместного редактирования
@@ -1532,7 +1540,7 @@ exports.install = function(server, callbackFunction) {
       type: 'auth',
       result: 1,
       sessionId: conn.sessionId,
-      timeConnect: conn.timeConnect.getTime(),
+      sessionTimeConnect: conn.sessionTimeConnect,
       participants: participantsMap,
       messages: allMessagesParsed,
       locks: docLock,
@@ -2133,22 +2141,32 @@ exports.install = function(server, callbackFunction) {
     });
   }
   function expireDoc() {
+    var cronJob = this;
     return co(function* () {
       try {
         logger.debug('expireDoc connections.length = %d', connections.length);
         var commands = [];
         var idSet = new Set();
         var nowMs = new Date().getTime();
+        var nextMs = cronJob.nextDate();
         for (var i = 0; i < connections.length; ++i) {
           var conn = connections[i];
           if (cfgExpSessionAbsolute > 0) {
-            if (nowMs - conn.timeConnect.getTime() > cfgExpSessionAbsolute) {
+            if (nextMs - conn.sessionTimeConnect > cfgExpSessionAbsolute - cfgExpSessionCloseCommand &&
+                !conn.sessionIsSendWarning) {
+              conn.sessionIsSendWarning = true;
+              sendDataSession(conn, {code: constants.SESSION_ABSOLUTE_CODE, reason: constants.SESSION_ABSOLUTE_REASON});
+            } else if (nowMs - conn.sessionTimeConnect > cfgExpSessionAbsolute) {
               conn.close(constants.SESSION_ABSOLUTE_CODE, constants.SESSION_ABSOLUTE_REASON);
               continue;
             }
           }
           if (cfgExpSessionIdle > 0) {
-            if (nowMs - conn.timeLastAction.getTime() > cfgExpSessionIdle) {
+            if (nextMs - conn.sessionTimeLastAction > cfgExpSessionIdle - cfgExpSessionCloseCommand &&
+                !conn.sessionIsSendWarning) {
+              conn.sessionIsSendWarning = true;
+              sendDataSession(conn, {code: constants.SESSION_IDLE_CODE, reason: constants.SESSION_IDLE_REASON});
+            } else if (nowMs - conn.sessionTimeLastAction > cfgExpSessionIdle) {
               conn.close(constants.SESSION_IDLE_CODE, constants.SESSION_IDLE_REASON);
               continue;
             }
