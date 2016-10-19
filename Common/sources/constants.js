@@ -36,6 +36,14 @@ exports.OUTPUT_NAME = 'output';
 exports.ONLY_OFFICE_URL_PARAM = 'ooname';
 exports.DISPLAY_PREFIX = 'display';
 
+exports.RIGHTS = {
+  None    : 0,
+  Edit    : 1,
+  Review  : 2,
+  Comment : 3,
+  View    : 4
+};
+
 exports.LICENSE_RESULT = {
   Error       : 1,
   Expired     : 2,

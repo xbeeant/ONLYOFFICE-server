@@ -70,7 +70,6 @@
  *-----------------------------------------------------------------------------------------------------------------------
  * */
 
-var configCommon = require('config');
 var sockjs = require('sockjs');
 var _ = require('underscore');
 var https = require('https');
@@ -1960,12 +1959,30 @@ exports.install = function(server, callbackFunction) {
             }
           }
         }
+
+        var rights = constants.RIGHTS.Edit;
+        if (config.get('server.edit_singleton')) {
+          // ToDo docId from url ?
+          var docIdParsed = urlParse.exec(conn.url);
+          if (docIdParsed && 1 < docIdParsed.length) {
+            const participantsMap = yield* getParticipantMap(docIdParsed[1]);
+            for (let i = 0; i < participantsMap.length; ++i) {
+              const elem = participantsMap[i];
+              if (!elem.view) {
+                rights = constants.RIGHTS.View;
+                break;
+              }
+            }
+          }
+        }
+
         sendData(conn, {
           type: 'license',
           license: {
             type: licenseType,
             light: licenseInfo.light,
-            trial: constants.PACKAGE_TYPE_OS === licenseInfo.packageType ? false : licenseInfo.trial
+            trial: constants.PACKAGE_TYPE_OS === licenseInfo.packageType ? false : licenseInfo.trial,
+            rights: rights
           }
         });
       } catch (err) {
