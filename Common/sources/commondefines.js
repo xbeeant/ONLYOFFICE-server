@@ -527,7 +527,7 @@ function OutputSfcData() {
   this['status'] = undefined;
   this['url'] = undefined;
   this['changesurl'] = undefined;
-  this['changeshistory'] = undefined;
+  this['history'] = undefined;
   this['users'] = undefined;
   this['actions'] = undefined;
   this['mailMerge'] = undefined;
@@ -558,10 +558,10 @@ OutputSfcData.prototype.setChangeUrl = function(data) {
   return this['changesurl'] = data;
 };
 OutputSfcData.prototype.getChangeHistory = function() {
-  return this['changeshistory'];
+  return this['history'];
 };
 OutputSfcData.prototype.setChangeHistory = function(data) {
-  return this['changeshistory'] = data;
+  return this['history'] = data;
 };
 OutputSfcData.prototype.getUsers = function() {
   return this['users'];
@@ -664,7 +664,7 @@ var c_oAscCsvDelimiter = {
   None: 0,
   Tab: 1,
   Semicolon: 2,
-  Сolon: 3,
+  Colon: 3,
   Comma: 4,
   Space: 5
 };
@@ -755,6 +755,9 @@ var c_oAscServerCommandErrors = {
   UnknownCommand: 5
 };
 
+const buildVersion = '4.1.2';
+const buildNumber = 37;
+
 exports.TaskQueueData = TaskQueueData;
 exports.CMailMergeSendData = CMailMergeSendData;
 exports.CThumbnailData = CThumbnailData;
@@ -769,3 +772,5 @@ exports.c_oAscEncodingsMap = c_oAscEncodingsMap;
 exports.c_oAscCodePageUtf8 = c_oAscCodePageUtf8;
 exports.c_oAscUserAction = c_oAscUserAction;
 exports.c_oAscServerCommandErrors = c_oAscServerCommandErrors;
+exports.buildVersion = buildVersion;
+exports.buildNumber = buildNumber;

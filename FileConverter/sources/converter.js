@@ -306,7 +306,10 @@ function* processDownloadFromStorage(dataConvert, cmd, task, tempDirs) {
     fs.mkdirSync(changesDir);
     var indexFile = 0;
     var changesAuthor = null;
-    var changesHistoryData = [];
+    var changesHistory = {
+      serverVersion: commonDefines.buildVersion,
+      changes: []
+    };
     //todo writeable stream
     let changesBuffers = null;
     let changes = yield promiseGetChanges(cmd.getDocId());
@@ -323,7 +326,11 @@ function* processDownloadFromStorage(dataConvert, cmd, task, tempDirs) {
         }
         changesAuthor = change.user_id_original;
         var strDate = baseConnector.getDateTime(change.change_date);
-        changesHistoryData.push({'userid': changesAuthor, 'username': change.user_name, 'date': strDate});
+        changesHistory.changes.push({
+          'created': strDate, 'user': {
+            'id': changesAuthor, 'name': change.user_name
+          }
+        });
         changesBuffers = [];
         changesBuffers.push(new Buffer('[', 'utf8'));
       } else {
@@ -340,7 +347,7 @@ function* processDownloadFromStorage(dataConvert, cmd, task, tempDirs) {
       fs.writeFileSync(filePath, dataZipFile);
     }
     cmd.setUserId(changesAuthor);
-    fs.writeFileSync(path.join(tempDirs.result, 'changesHistory.json'), JSON.stringify(changesHistoryData), 'utf8');
+    fs.writeFileSync(path.join(tempDirs.result, 'changesHistory.json'), JSON.stringify(changesHistory), 'utf8');
   }
 }
 function* processUploadToStorage(dir, storagePath) {
