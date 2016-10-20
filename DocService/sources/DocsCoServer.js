@@ -83,7 +83,6 @@ const constants = require('./../../Common/sources/constants');
 var utils = require('./../../Common/sources/utils');
 var commonDefines = require('./../../Common/sources/commondefines');
 var statsDClient = require('./../../Common/sources/statsdclient');
-const license = require('./../../Common/sources/license');
 var config = require('config').get('services.CoAuthoring');
 var sqlBase = require('./baseConnector');
 var canvasService = require('./canvasservice');
@@ -2299,7 +2298,7 @@ exports.commandFromServer = function (req, res) {
             }
             break;
           case 'version':
-              version = license.buildVersion + '.' + license.buildNumber;
+              version = commonDefines.buildVersion + '.' + commonDefines.buildNumber;
             break;
           default:
             result = commonDefines.c_oAscServerCommandErrors.UnknownCommand;
