@@ -23,7 +23,7 @@ copy "..\..\..\core\build\lib\win_32\HtmlFile.dll" "."
 copy "..\..\..\core\build\lib\win_32\UnicodeConverter.dll" "."
 copy "..\..\..\core\build\lib\win_32\HtmlFileInternal.exe" ".\HtmlFileInternal"
 xcopy /s/h/e/k/c/y/q "..\..\..\core\build\cef\win_32" ".\HtmlFileInternal"
-copy "..\..\..\core\build\bin\windows\x2t32.exe" "."
+copy "..\..\..\core\build\bin\win_32\x2t.exe" "."
 
 "..\..\..\core\build\bin\AllFontsGen\win_32.exe" "%windir%\Fonts" "%~dp0\..\sdkjs\common\AllFonts.js" "%~dp0\..\sdkjs\common\Images" "%~dp0\FileConverter\bin\font_selection.bin"
 
