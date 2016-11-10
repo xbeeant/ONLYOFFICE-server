@@ -76,6 +76,8 @@ exports.readLicense = function*() {
 
 			res.light = (true === oLicense['light'] || 'true' === oLicense['light']); // Someone who likes to put json string instead of bool
 			res.branding = (true === oLicense['branding'] || 'true' === oLicense['branding']); // Someone who likes to put json string instead of bool
+		} else {
+			throw 'verify';
 		}
 	} catch (e) {
 		res.count = 1;
