@@ -124,6 +124,10 @@
 			"token": {
 				"enable": false,
 				"useforrequest": false,
+				"authorizationHeader": "OO-AUTH-TOKEN",
+				"authorizationHeaderPrefix": "Bearer ",
+				"algorithmRequest": "HS256",
+				"expiresRequest": "5m",
 				"expiresSession": "1d"
 			}
 		}

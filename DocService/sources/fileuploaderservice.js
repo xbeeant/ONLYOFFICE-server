@@ -32,6 +32,8 @@
 
 var multiparty = require('multiparty');
 var co = require('co');
+var jwt = require('jsonwebtoken');
+var jwa = require('jwa');
 var taskResult = require('./taskresult');
 var docsCoServer = require('./DocsCoServer');
 var utils = require('./../../Common/sources/utils');
@@ -46,16 +48,45 @@ var configUtils = config.get('services.CoAuthoring.utils');
 var cfgImageSize = configServer.get('limits_image_size');
 var cfgTypesUpload = configUtils.get('limits_image_types_upload');
 var cfgSignatureEnable = config.get('services.CoAuthoring.token.enable');
+var cfgSignatureUseForRequest = config.get('services.CoAuthoring.token.useforrequest');
 
 exports.uploadTempFile = function(req, res) {
   return co(function* () {
     var docId = 'null';
     try {
-      docId = req.query['key'];
-      var vkey = req.query['vkey'];
+      docId = req.query.key;
       logger.debug('Start uploadTempFile: docId = %s', docId);
+      if (cfgSignatureEnable && cfgSignatureUseForRequest) {
+        var authError = constants.VKEY;
+        var checkJwtRes = docsCoServer.checkJwtHeader(docId, req);
+        if (checkJwtRes) {
+          if (checkJwtRes.decoded) {
+            authError = constants.NO_ERROR;
+            if (!utils.isEmptyObject(checkJwtRes.decoded.query)) {
+              docId = checkJwtRes.decoded.query.key;
+            }
+            if (checkJwtRes.decoded.payloadhash && req.body && Buffer.isBuffer(req.body)) {
+              var decoded = jwt.decode(checkJwtRes.token, {complete: true});
+              const hmac = jwa(decoded.header.alg);
+              var secret = utils.getSecret(docId, null, checkJwtRes.token);
+              const signature = hmac.sign(req.body, secret);
+              if (checkJwtRes.decoded.payloadhash !== signature) {
+                authError = constants.VKEY_KEY;
+              }
+            }
+          } else {
+            if (constants.JWT_EXPIRED_CODE == checkJwtRes.code) {
+              authError = constants.VKEY_KEY_EXPIRE;
+            }
+          }
+        }
+        if (authError !== constants.NO_ERROR) {
+          utils.fillXmlResponse(res, undefined, authError);
+          return;
+        }
+      }
+
       if (docId && req.body && Buffer.isBuffer(req.body)) {
-        //todo vkey
         var task = yield* taskResult.addRandomKeyTask(docId);
         var strPath = task.key + '/' + docId + '.tmp';
         yield storageBase.putObject(strPath, req.body, req.body.length);
@@ -72,9 +103,9 @@ exports.uploadTempFile = function(req, res) {
     }
   });
 };
-function checkJwt(docId, errorName, jwt){
+function checkJwtUpload(docId, errorName, token){
   var res = {err: true, docId: null, userid: null};
-  var checkJwtRes = docsCoServer.checkJwt(docId, jwt);
+  var checkJwtRes = docsCoServer.checkJwt(docId, token);
   if (checkJwtRes.decoded) {
     var doc = checkJwtRes.decoded.document;
     var edit = checkJwtRes.decoded.editorConfig;
@@ -97,7 +128,7 @@ exports.uploadImageFileOld = function(req, res) {
   logger.debug('Start uploadImageFileOld: docId = %s', docId);
   var userid = req.params.userid;
   if (cfgSignatureEnable) {
-    var checkJwtRes = checkJwt(docId, 'uploadImageFileOld', req.params.jwt);
+    var checkJwtRes = checkJwtUpload(docId, 'uploadImageFileOld', req.params.jwt);
     if(!checkJwtRes.err){
       docId = checkJwtRes.docId || docId;
       userid = checkJwtRes.userid || userid;
@@ -184,7 +215,7 @@ exports.uploadImageFile = function(req, res) {
 
       var isValidJwt = true;
       if (cfgSignatureEnable) {
-        var checkJwtRes = checkJwt(docId, 'uploadImageFile', req.params.jwt);
+        var checkJwtRes = checkJwtUpload(docId, 'uploadImageFile', req.params.jwt);
         if (!checkJwtRes.err) {
           docId = checkJwtRes.docId || docId;
           userid = checkJwtRes.userid || userid;

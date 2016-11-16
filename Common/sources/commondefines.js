@@ -741,7 +741,9 @@ var c_oAscServerCommandErrors = {
   ParseError: 2,
   UnknownError: 3,
   NotModify: 4,
-  UnknownCommand: 5
+  UnknownCommand: 5,
+  Token: 6,
+  TokenExpire: 7
 };
 
 const buildVersion = '4.1.2';

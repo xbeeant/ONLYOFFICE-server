@@ -47,6 +47,8 @@ var statsDClient = require('./../../Common/sources/statsdclient');
 var cfgHealthCheckFilePath = config.get('services.CoAuthoring.server.healthcheckfilepath');
 var cfgVisibilityTimeout = config.get('queue.visibilityTimeout');
 var cfgQueueRetentionPeriod = config.get('queue.retentionPeriod');
+var cfgSignatureEnable = config.get('services.CoAuthoring.token.enable');
+var cfgSignatureUseForRequest = config.get('services.CoAuthoring.token.useforrequest');
 
 var CONVERT_TIMEOUT = 1.5 * (cfgVisibilityTimeout + cfgQueueRetentionPeriod) * 1000;
 var CONVERT_ASYNC_DELAY = 1000;
@@ -147,27 +149,35 @@ function convertHealthCheck(req, res) {
     var output = false;
     try {
       logger.debug('Start convertHealthCheck');
-      var task = yield* taskResult.addRandomKeyTask('healthcheck');
-      var docId = task.key;
-      //put test file to storage
-      var data = yield utils.readFile(cfgHealthCheckFilePath);
-      var format = 'docx';
-      yield storage.putObject(docId + '/origin.' + format, data, data.length);
-      //convert
-      var cmd = new commonDefines.InputCommand();
-      cmd.setCommand('conv');
-      cmd.setSaveKey(docId);
-      cmd.setFormat(format);
-      cmd.setDocId(docId);
-      cmd.setTitle('Editor.bin');
-      cmd.setOutputFormat(constants.AVS_OFFICESTUDIO_FILE_CANVAS);
-
-      var status = yield* convertByCmd(cmd, false, utils.getBaseUrlByRequest(req), true);
-      if (status && constants.NO_ERROR == status.err) {
-        output = true;
+      if (cfgSignatureEnable && cfgSignatureUseForRequest) {
+        var checkJwtRes = docsCoServer.checkJwtHeader('convertHealthCheck', req);
+        if (!(checkJwtRes && checkJwtRes.decoded)) {
+          output = false;
+        }
       }
-      //clean up
-      yield canvasService.cleanupCache(docId);
+      if (output) {
+        var task = yield* taskResult.addRandomKeyTask('healthcheck');
+        var docId = task.key;
+        //put test file to storage
+        var data = yield utils.readFile(cfgHealthCheckFilePath);
+        var format = 'docx';
+        yield storage.putObject(docId + '/origin.' + format, data, data.length);
+        //convert
+        var cmd = new commonDefines.InputCommand();
+        cmd.setCommand('conv');
+        cmd.setSaveKey(docId);
+        cmd.setFormat(format);
+        cmd.setDocId(docId);
+        cmd.setTitle('Editor.bin');
+        cmd.setOutputFormat(constants.AVS_OFFICESTUDIO_FILE_CANVAS);
+
+        var status = yield* convertByCmd(cmd, false, utils.getBaseUrlByRequest(req), true);
+        if (status && constants.NO_ERROR == status.err) {
+          output = true;
+        }
+        //clean up
+        yield canvasService.cleanupCache(docId);
+      }
       logger.debug('End convertHealthCheck');
     } catch (e) {
       logger.error('Error convertHealthCheck\r\n%s', e.stack);
@@ -194,25 +204,57 @@ function* convertFromChanges(docId, baseUrl, lastSave, userdata) {
 
 function convertRequest(req, res) {
   return co(function* () {
-    var docId = 'null';
+    var docId = 'convertRequest';
     try {
+      var params;
+      if (cfgSignatureEnable && cfgSignatureUseForRequest) {
+        var authError = constants.VKEY;
+        var checkJwtRes = docsCoServer.checkJwtHeader(docId, req);
+        if (checkJwtRes) {
+          if (checkJwtRes.decoded) {
+            if (!utils.isEmptyObject(checkJwtRes.decoded.payload)) {
+              params = checkJwtRes.decoded.payload;
+              authError = constants.NO_ERROR;
+            } else if (!utils.isEmptyObject(checkJwtRes.decoded.query)) {
+              params = checkJwtRes.decoded.query;
+              authError = constants.NO_ERROR;
+            }
+          } else {
+            if (constants.JWT_EXPIRED_CODE == checkJwtRes.code) {
+              authError = constants.VKEY_KEY_EXPIRE;
+            }
+          }
+        }
+        if (authError !== constants.NO_ERROR) {
+          utils.fillXmlResponse(res, undefined, authError);
+          return;
+        }
+      } else if (req.body && Buffer.isBuffer(req.body)) {
+        params = JSON.parse(req.body.toString('utf8'));
+      } else {
+        params = req.query;
+      }
+
       var cmd = new commonDefines.InputCommand();
       cmd.setCommand('conv');
-      cmd.setUrl(req.query['url']);
-      cmd.setEmbeddedFonts(false);//req.query['embeddedfonts'];
-      cmd.setFormat(req.query['filetype']);
-      var outputtype = req.query['outputtype'] || '';
-      docId = 'conv_' + req.query['key'] + '_' + outputtype;
+      cmd.setUrl(params.url);
+      cmd.setEmbeddedFonts(false);//params.embeddedfonts'];
+      cmd.setFormat(params.filetype);
+      var outputtype = params.outputtype || '';
+      docId = 'conv_' + params.key + '_' + outputtype;
       cmd.setDocId(docId);
       cmd.setTitle(constants.OUTPUT_NAME + '.' + outputtype);
       cmd.setOutputFormat(formatChecker.getFormatFromString(outputtype));
-      cmd.setCodepage(commonDefines.c_oAscEncodingsMap[req.query['codePage']] || commonDefines.c_oAscCodePageUtf8);
-      cmd.setDelimiter(req.query['delimiter'] || commonDefines.c_oAscCsvDelimiter.Comma);
-      cmd.setDoctParams(req.query['doctparams']);
-      cmd.setPassword(req.query['password']);
-      var thumbnail = req.query['thumbnail'];
+      cmd.setCodepage(commonDefines.c_oAscEncodingsMap[params.codePage] || commonDefines.c_oAscCodePageUtf8);
+      cmd.setDelimiter(params.delimiter || commonDefines.c_oAscCsvDelimiter.Comma);
+      cmd.setDoctParams(params.doctparams);
+      cmd.setPassword(params.password);
+      var thumbnail = params.thumbnail;
       if (thumbnail) {
-        var thumbnailData = new commonDefines.CThumbnailData(JSON.parse(req.query['thumbnail']));
+        if(typeof thumbnail === 'string'){
+          thumbnail = JSON.parse(thumbnail);
+        }
+        var thumbnailData = new commonDefines.CThumbnailData(thumbnail);
         //constants from CXIMAGE_FORMAT_
         switch (cmd.getOutputFormat()) {
           case constants.AVS_OFFICESTUDIO_FILE_IMAGE_JPG:
@@ -231,14 +273,14 @@ function convertRequest(req, res) {
         cmd.setThumbnail(thumbnailData);
         cmd.setOutputFormat(constants.AVS_OFFICESTUDIO_FILE_IMAGE);
       }
-      var async = 'true' == req.query['async'];
+      var async = 'true' == params.async;
 
       if (constants.AVS_OFFICESTUDIO_FILE_UNKNOWN !== cmd.getOutputFormat()) {
         var status = yield* convertByCmd(cmd, async, utils.getBaseUrlByRequest(req));
         utils.fillXmlResponse(res, status.url, status.err);
       } else {
         var addresses = forwarded(req);
-        logger.error('Error convert unknown outputtype: query = %s from = %s docId = %s', JSON.stringify(req.query), addresses, docId);
+        logger.error('Error convert unknown outputtype: query = %j from = %s docId = %s', params, addresses, docId);
         utils.fillXmlResponse(res, undefined, constants.UNKNOWN);
       }
     }

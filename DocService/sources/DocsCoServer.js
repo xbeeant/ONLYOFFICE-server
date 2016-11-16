@@ -80,7 +80,6 @@ var cron = require('cron');
 var co = require('co');
 const jwt = require('jsonwebtoken');
 const ms = require('ms');
-const NodeCache = require( "node-cache" );
 var storage = require('./../../Common/sources/storage-base');
 var logger = require('./../../Common/sources/logger');
 const constants = require('./../../Common/sources/constants');
@@ -117,13 +116,13 @@ var cfgExpDocumentsCron = config.get('expire.documentsCron');
 var cfgExpSessionIdle = ms(config.get('expire.sessionidle'));
 var cfgExpSessionAbsolute = ms(config.get('expire.sessionabsolute'));
 var cfgExpSessionCloseCommand = ms(config.get('expire.sessionclosecommand'));
-var cfgExpPemStdTtl = config.get('expire.pemStdTTL');
-var cfgExpPemCheckPeriod = config.get('expire.pemCheckPeriod');
 var cfgSockjsUrl = config.get('server.sockjsUrl');
 var cfgSignatureEnable = config.get('token.enable');
-var cfgSignatureSecretExpiresSession = ms(config.get('token.expiresSession'));
-var cfgSignatureSecretPublic = config.get('secret.public');
-var cfgSignatureSecretTenants = config.get('secret.tenants');
+var cfgSignatureExpiresSession = ms(config.get('token.expiresSession'));
+var cfgSignatureUseForRequest = config.get('token.useforrequest');
+var cfgSignatureAuthorizationHeader = config.get('token.authorizationHeader');
+var cfgSignatureAuthorizationHeaderPrefix = config.get('token.authorizationHeaderPrefix');
+var cfgSignatureSecretAlgorithmRequest = config.get('token.algorithmRequest');
 
 var redisKeySaveLock = cfgRedisPrefix + constants.REDIS_KEY_SAVE_LOCK;
 var redisKeyPresenceHash = cfgRedisPrefix + constants.REDIS_KEY_PRESENCE_HASH;
@@ -151,8 +150,6 @@ var queue;
 var clientStatsD = statsDClient.getClient();
 var licenseInfo = {type: constants.LICENSE_RESULT.Error, light: false, branding: false};
 var shutdownFlag = false;
-var isEmptySecretTenants = !Object.keys(cfgSignatureSecretTenants).length;
-const pemfileCache = new NodeCache({stdTTL: ms(cfgExpPemStdTtl) / 1000, checkperiod: ms(cfgExpPemCheckPeriod) / 1000, errorOnMissing: false, useClones: true});
 
 var asc_coAuthV = '3.0.9';				// Версия сервера совместного редактирования
 
@@ -565,9 +562,13 @@ function* getOriginalParticipantsId(docId) {
   return result;
 }
 
-function* sendServerRequest(docId, uri, postData) {
-  logger.debug('postData request: docId = %s;url = %s;data = %s', docId, uri, postData);
-  var res = yield utils.postRequestPromise(uri, postData, cfgCallbackRequestTimeout * 1000);
+function* sendServerRequest(docId, uri, dataObject) {
+  logger.debug('postData request: docId = %s;url = %s;data = %j', docId, uri, dataObject);
+  var authorization;
+  if (cfgSignatureEnable && cfgSignatureUseForRequest) {
+    authorization = utils.fillJwtByUrl(docId, uri, dataObject);
+  }
+  var res = yield utils.postRequestPromise(uri, JSON.stringify(dataObject), cfgCallbackRequestTimeout * 1000, authorization);
   logger.debug('postData response: docId = %s;data = %s', docId, res);
   return res;
 }
@@ -696,12 +697,11 @@ function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl, 
   }
   var uri = callback.href;
   var replyData = null;
-  var postData = JSON.stringify(sendData);
   try {
-    replyData = yield* sendServerRequest(docId, uri, postData);
+    replyData = yield* sendServerRequest(docId, uri, sendData);
   } catch (err) {
     replyData = null;
-    logger.error('postData error: docId = %s;url = %s;data = %s\r\n%s', docId, uri, postData, err.stack);
+    logger.error('postData error: docId = %s;url = %s;data = %j\r\n%s', docId, uri, sendData, err.stack);
   }
   yield* onReplySendStatusDocument(docId, replyData);
 }
@@ -826,43 +826,10 @@ function* _createSaveTimer(docId, opt_userId, opt_queue, opt_noDelay) {
     logger.debug('_createSaveTimer updateIf no effect');
   }
 }
-function getSecret(docId, opt_iss, opt_token){
-  var secretElem = cfgSignatureSecretPublic;
-  if (!isEmptySecretTenants) {
-    var iss;
-    if (opt_token) {
-      //look for issuer
-      var decodedTemp = jwt.decode(opt_token);
-      if (decodedTemp && decodedTemp.iss) {
-        iss = decodedTemp.iss;
-      }
-    } else {
-      iss = opt_iss;
-    }
-    if (iss) {
-      secretElem = cfgSignatureSecretTenants[iss];
-      if (!secretElem) {
-        logger.error('getSecret unknown issuer: docId = %s iss = %s', docId, iss);
-      }
-    }
-  }
-  var secret;
-  if (secretElem) {
-    if (secretElem.string) {
-      secret = secretElem.string;
-    } else if (secretElem.file) {
-      secret = pemfileCache.get(secretElem.file);
-      if (!secret) {
-        secret = fs.readFileSync(secretElem.file);
-        pemfileCache.set(secretElem.file, secret);
-      }
-    }
-  }
-  return secret;
-}
+
 function checkJwt(docId, token) {
-  var res = {decoded: null, description: null, code: null};
-  var secret = getSecret(docId, null, token);
+  var res = {decoded: null, description: null, code: null, token: token};
+  var secret = utils.getSecret(docId, null, token);
   if (undefined == secret) {
     logger.error('empty secret: docId = %s token = %s', docId, token);
   }
@@ -880,6 +847,14 @@ function checkJwt(docId, token) {
     }
   }
   return res;
+}
+function checkJwtHeader(docId, req) {
+  var authorization = req.get(cfgSignatureAuthorizationHeader);
+  if (authorization && authorization.startsWith(cfgSignatureAuthorizationHeaderPrefix)) {
+    var token = authorization.substring(cfgSignatureAuthorizationHeaderPrefix.length);
+    return checkJwt(docId, token);
+  }
+  return null;
 }
 
 exports.version = asc_coAuthV;
@@ -901,6 +876,7 @@ exports.cleanDocumentOnExitPromise = co.wrap(cleanDocumentOnExit);
 exports.cleanDocumentOnExitNoChangesPromise = co.wrap(cleanDocumentOnExitNoChanges);
 exports.setForceSave= setForceSave;
 exports.checkJwt = checkJwt;
+exports.checkJwtHeader = checkJwtHeader;
 exports.install = function(server, callbackFunction) {
   'use strict';
   var sockjs_opts = {sockjs_url: cfgSockjsUrl},
@@ -997,7 +973,7 @@ exports.install = function(server, callbackFunction) {
             var checkJwtRes = checkJwt(docId, data.jwt);
             if (checkJwtRes.decoded) {
               if (checkJwtRes.decoded.document.key == conn.docId) {
-                sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgSignatureSecretExpiresSession});
+                sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgSignatureExpiresSession});
               } else {
                 conn.close(constants.ACCESS_DENIED_CODE, constants.ACCESS_DENIED_REASON);
               }
@@ -1073,7 +1049,7 @@ exports.install = function(server, callbackFunction) {
       conn.isCloseCoAuthoring = true;
       yield* updatePresence(docId, tmpUser.id, getConnectionInfo(conn));
       if (cfgSignatureEnable) {
-        sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgSignatureSecretExpiresSession});
+        sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgSignatureExpiresSession});
       }
     }
 
@@ -1147,7 +1123,7 @@ exports.install = function(server, callbackFunction) {
       conn.docId = docIdNew;
       yield* updatePresence(docIdNew, tmpUser.id, getConnectionInfo(conn));
       if (cfgSignatureEnable) {
-        sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgSignatureSecretExpiresSession});
+        sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgSignatureExpiresSession});
       }
     }
     //open
@@ -1519,8 +1495,8 @@ exports.install = function(server, callbackFunction) {
     edit.ds_view = conn.user.view;
     edit.ds_isCloseCoAuthoring = conn.isCloseCoAuthoring;
 
-    var options = {expiresIn: cfgSignatureSecretExpiresSession / 1000, issuer: conn.iss};
-    var secret = getSecret(docId, conn.iss, null);
+    var options = {algorithm: cfgSignatureSecretAlgorithmRequest, expiresIn: cfgSignatureExpiresSession / 1000, issuer: conn.iss};
+    var secret = utils.getSecret(docId, conn.iss, null);
     return jwt.sign(payload, secret, options);
   }
 
@@ -1778,7 +1754,7 @@ exports.install = function(server, callbackFunction) {
       changes: objChangesDocument,
       changesIndex: changesIndex,
       indexUser: conn.user.indexUser,
-      jwt: cfgSignatureEnable ? {token: fillJwtByConnection(conn), expires: cfgSignatureSecretExpiresSession} : undefined,
+      jwt: cfgSignatureEnable ? {token: fillJwtByConnection(conn), expires: cfgSignatureExpiresSession} : undefined,
       g_cAscSpellCheckUrl: cfgSpellcheckerUrl
     };
     sendData(conn, sendObject);//Or 0 if fails
@@ -2459,20 +2435,38 @@ exports.setLicenseInfo = function(data) {
 exports.commandFromServer = function (req, res) {
   return co(function* () {
     var result = commonDefines.c_oAscServerCommandErrors.NoError;
-    var docId = 'null';
+    var docId = 'commandFromServer';
     try {
       var version = undefined;
       var params;
-      if (req.body && Buffer.isBuffer(req.body)) {
+      if (cfgSignatureEnable && cfgSignatureUseForRequest) {
+        result = commonDefines.c_oAscServerCommandErrors.Token;
+        var checkJwtRes = checkJwtHeader(docId, req);
+        if (checkJwtRes) {
+          if (checkJwtRes.decoded) {
+            if (!utils.isEmptyObject(checkJwtRes.decoded.payload)) {
+              params = checkJwtRes.decoded.payload;
+              result = commonDefines.c_oAscServerCommandErrors.NoError;
+            } else if (!utils.isEmptyObject(checkJwtRes.decoded.query)) {
+              params = checkJwtRes.decoded.query;
+              result = commonDefines.c_oAscServerCommandErrors.NoError;
+            }
+          } else {
+            if (constants.JWT_EXPIRED_CODE == checkJwtRes.code) {
+              result = commonDefines.c_oAscServerCommandErrors.TokenExpire;
+            }
+          }
+        }
+      } else if (req.body && Buffer.isBuffer(req.body)) {
         params = JSON.parse(req.body.toString('utf8'));
       } else {
         params = req.query;
       }
       // Ключ id-документа
       docId = params.key;
-      if (null == docId && 'version' != params.c) {
+      if (commonDefines.c_oAscServerCommandErrors.NoError === result && null == docId && 'version' != params.c) {
         result = commonDefines.c_oAscServerCommandErrors.DocumentIdError;
-      } else {
+      } else if(commonDefines.c_oAscServerCommandErrors.NoError === result) {
         logger.debug('Start commandFromServer: docId = %s c = %s', docId, params.c);
         switch (params.c) {
           case 'info':
