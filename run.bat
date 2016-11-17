@@ -68,6 +68,9 @@ start /min /b node gc.js
 cd "%RUN_DIR%\FileConverter\sources"
 start /min /b node convertermaster.js
 
+rem cd "%RUN_DIR%\SpellChecker\sources"
+rem start /min /b node server.js
+
 :ERROR
 :SUCCESS
 pause
