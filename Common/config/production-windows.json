@@ -23,6 +23,11 @@
             "name": "/web-apps",
             "path": "../../../web-apps",
             "options": {"maxAge": "7d"}
+          },
+          {
+            "name": "/welcome",
+            "path": "../../welcome",
+            "options": {"maxAge": "7d"}
           }
         ]
       },

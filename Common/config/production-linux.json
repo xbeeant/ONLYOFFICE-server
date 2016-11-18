@@ -23,6 +23,11 @@
             "name": "/web-apps",
             "path": "/var/www/onlyoffice/documentserver/web-apps",
             "options": {"maxAge": "7d"}
+          },
+          {
+            "name": "/welcome",
+            "path": "/var/www/onlyoffice/documentserver/server/welcome",
+            "options": {"maxAge": "7d"}
           }
         ]
       },
