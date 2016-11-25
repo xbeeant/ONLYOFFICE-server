@@ -33,7 +33,6 @@
 var multiparty = require('multiparty');
 var co = require('co');
 var jwt = require('jsonwebtoken');
-var jwa = require('jwa');
 var taskResult = require('./taskresult');
 var docsCoServer = require('./DocsCoServer');
 var utils = require('./../../Common/sources/utils');
@@ -62,17 +61,12 @@ exports.uploadTempFile = function(req, res) {
         if (checkJwtRes) {
           if (checkJwtRes.decoded) {
             authError = constants.NO_ERROR;
-            if (!utils.isEmptyObject(checkJwtRes.decoded.query)) {
+            if (checkJwtRes.decoded.query && checkJwtRes.decoded.query.key) {
               docId = checkJwtRes.decoded.query.key;
             }
-            if (checkJwtRes.decoded.payloadhash && req.body && Buffer.isBuffer(req.body)) {
-              var decoded = jwt.decode(checkJwtRes.token, {complete: true});
-              const hmac = jwa(decoded.header.alg);
-              var secret = utils.getSecret(docId, null, checkJwtRes.token);
-              const signature = hmac.sign(req.body, secret);
-              if (checkJwtRes.decoded.payloadhash !== signature) {
-                authError = constants.VKEY_KEY;
-              }
+            if (checkJwtRes.decoded.payloadhash &&
+              !docsCoServer.checkJwtPayloadHash(docId, checkJwtRes.decoded.payloadhash, req.body, checkJwtRes.token)) {
+              authError = constants.VKEY;
             }
           } else {
             if (constants.JWT_EXPIRED_CODE == checkJwtRes.code) {

@@ -79,6 +79,7 @@ const fs = require('fs');
 var cron = require('cron');
 var co = require('co');
 const jwt = require('jsonwebtoken');
+const jwa = require('jwa');
 const ms = require('ms');
 var storage = require('./../../Common/sources/storage-base');
 var logger = require('./../../Common/sources/logger');
@@ -857,6 +858,17 @@ function checkJwtHeader(docId, req) {
   }
   return null;
 }
+function checkJwtPayloadHash(docId, hash, body, token) {
+  var res = false;
+  if (body && Buffer.isBuffer(body)) {
+    var decoded = jwt.decode(token, {complete: true});
+    var hmac = jwa(decoded.header.alg);
+    var secret = utils.getSecret(docId, null, token);
+    var signature = hmac.sign(body, secret);
+    res = (hash === signature);
+  }
+  return res;
+}
 
 exports.version = asc_coAuthV;
 exports.c_oAscServerStatus = c_oAscServerStatus;
@@ -878,6 +890,7 @@ exports.cleanDocumentOnExitNoChangesPromise = co.wrap(cleanDocumentOnExitNoChang
 exports.setForceSave= setForceSave;
 exports.checkJwt = checkJwt;
 exports.checkJwtHeader = checkJwtHeader;
+exports.checkJwtPayloadHash = checkJwtPayloadHash;
 exports.install = function(server, callbackFunction) {
   'use strict';
   var sockjs_opts = {sockjs_url: cfgSockjsUrl},
@@ -2455,16 +2468,25 @@ exports.commandFromServer = function (req, res) {
     try {
       var version = undefined;
       var params;
+      if (req.body && Buffer.isBuffer(req.body)) {
+        params = JSON.parse(req.body.toString('utf8'));
+      } else {
+        params = req.query;
+      }
       if (cfgSignatureEnable && cfgSignatureUseForRequest) {
         result = commonDefines.c_oAscServerCommandErrors.Token;
         var checkJwtRes = checkJwtHeader(docId, req);
         if (checkJwtRes) {
           if (checkJwtRes.decoded) {
             if (!utils.isEmptyObject(checkJwtRes.decoded.payload)) {
-              params = checkJwtRes.decoded.payload;
+              Object.assign(params, checkJwtRes.decoded.payload);
               result = commonDefines.c_oAscServerCommandErrors.NoError;
+            } else if (checkJwtRes.decoded.payloadhash) {
+              if (checkJwtPayloadHash(docId, checkJwtRes.decoded.payloadhash, req.body, checkJwtRes.token)) {
+                result = commonDefines.c_oAscServerCommandErrors.NoError;
+              }
             } else if (!utils.isEmptyObject(checkJwtRes.decoded.query)) {
-              params = checkJwtRes.decoded.query;
+              Object.assign(params, checkJwtRes.decoded.query);
               result = commonDefines.c_oAscServerCommandErrors.NoError;
             }
           } else {
@@ -2473,10 +2495,6 @@ exports.commandFromServer = function (req, res) {
             }
           }
         }
-      } else if (req.body && Buffer.isBuffer(req.body)) {
-        params = JSON.parse(req.body.toString('utf8'));
-      } else {
-        params = req.query;
       }
       // Ключ id-документа
       docId = params.key;
