@@ -70,6 +70,8 @@
  *-----------------------------------------------------------------------------------------------------------------------
  * */
 
+'use strict';
+
 var sockjs = require('sockjs');
 var _ = require('underscore');
 var https = require('https');
@@ -730,7 +732,7 @@ function* onReplySendStatusDocument(docId, replyData) {
 function* dropUsersFromDocument(docId, replyData) {
   var oData = parseReplyData(docId, replyData);
   if (oData) {
-    users = Array.isArray(oData) ? oData : oData.users;
+    var users = Array.isArray(oData) ? oData : oData.users;
     if (Array.isArray(users)) {
       yield* publish({type: commonDefines.c_oPublishType.drop, docId: docId, users: users, description: ''});
     }
@@ -893,7 +895,6 @@ exports.checkJwt = checkJwt;
 exports.checkJwtHeader = checkJwtHeader;
 exports.checkJwtPayloadHash = checkJwtPayloadHash;
 exports.install = function(server, callbackFunction) {
-  'use strict';
   var sockjs_opts = {sockjs_url: cfgSockjsUrl},
     sockjs_echo = sockjs.createServer(sockjs_opts),
     urlParse = new RegExp("^/doc/([" + constants.DOC_ID_PATTERN + "]*)/c.+", 'i');

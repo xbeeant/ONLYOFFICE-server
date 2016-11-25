@@ -29,6 +29,9 @@
  * terms at http://creativecommons.org/licenses/by-sa/4.0/legalcode
  *
  */
+
+'use strict';
+
 var config = require('config');
 var fs = require('fs');
 var path = require('path');
