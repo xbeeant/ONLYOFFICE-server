@@ -1571,6 +1571,10 @@ exports.install = function(server, callbackFunction) {
         upsertRes = yield canvasService.commandOpenStartPromise(docId, cmd, true);
         upsertRes.affectedRows == 1 ? curIndexUser = 1 : curIndexUser = upsertRes.insertId;
       }
+      if (constants.CONN_CLOSED === conn.readyState) {
+        //closing could happen during async action
+        return;
+      }
 
       var curUserId = user.id + curIndexUser;
       conn.docId = data.docid;
@@ -2420,7 +2424,7 @@ exports.install = function(server, callbackFunction) {
               continue;
             }
           }
-          if (3 === conn.readyState) {
+          if (constants.CONN_CLOSED === conn.readyState) {
             logger.error('expireDoc connection closed docId = %s', conn.docId);
           }
           idSet.add(conn.docId);

@@ -198,3 +198,5 @@ exports.JWT_ERROR_REASON = 'token:';
 
 exports.CONTENT_DISPOSITION_INLINE = 'inline';
 exports.CONTENT_DISPOSITION_ATTACHMENT = 'attachment';
+
+exports.CONN_CLOSED = 3;
