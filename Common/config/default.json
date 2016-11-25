@@ -118,20 +118,32 @@
 				"errorcode": 401
 			},
 			"secret": {
-				"inboxPublic": {"string": "secret", "file": ""},
-				"inboxTenants": {},
+				"inbox": {"string": "secret", "file": "", "tenants": {}},
 				"outbox": {"string": "secret", "file": ""},
 				"session": {"string": "secret", "file": ""}
 			},
 			"token": {
-				"enable": false,
-				"useforrequest": false,
-				"authorizationHeader": "Authorization",
-				"authorizationHeaderPrefix": "Bearer ",
-				"algorithmOutbox": "HS256",
-				"algorithmSession": "HS256",
-				"expiresOutbox": "5m",
-				"expiresSession": "5m"
+				"enable": {
+					"browser": false,
+					"request": {
+						"inbox": false,
+						"outbox": false
+					}
+				},
+				"inbox": {
+					"header": "Authorization",
+					"prefix": "Bearer "
+				},
+				"outbox": {
+					"header": "Authorization",
+					"prefix": "Bearer ",
+					"algorithm": "HS256",
+					"expires": "5m"
+				},
+				"session": {
+					"algorithm": "HS256",
+					"expires": "5m"
+				}
 			}
 		}
 	},

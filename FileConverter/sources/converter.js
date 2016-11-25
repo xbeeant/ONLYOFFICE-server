@@ -58,9 +58,7 @@ var cfgPresentationThemesDir = configConverter.get('presentationThemesDir');
 var cfgFilePath = configConverter.get('filePath');
 var cfgArgs = configConverter.get('args');
 var cfgErrorFiles = configConverter.get('errorfiles');
-var cfgSignatureEnable = config.get('services.CoAuthoring.token.enable');
-var cfgSignatureUseForRequest = config.get('services.CoAuthoring.token.useforrequest');
-var cfgSignatureUseForRequest = config.get('services.CoAuthoring.token.useforrequest');
+var cfgTokenEnableRequestOutbox = config.get('services.CoAuthoring.token.enable.request.outbox');
 
 //windows limit 512(2048) https://msdn.microsoft.com/en-us/library/6e3b887c.aspx
 //Ubuntu 14.04 limit 4096 http://underyx.me/2015/05/18/raising-the-maximum-number-of-file-descriptors.html
@@ -194,7 +192,7 @@ function* downloadFile(docId, uri, fileFrom) {
     while (!res && downloadAttemptCount++ < cfgDownloadAttemptMaxCount) {
       try {
         let authorization;
-        if (cfgSignatureEnable && cfgSignatureUseForRequest) {
+        if (cfgTokenEnableRequestOutbox) {
           authorization = utils.fillJwtForRequest();
         }
         data = yield utils.downloadUrlPromise(uri, cfgDownloadTimeout * 1000, cfgDownloadMaxBytes, authorization);

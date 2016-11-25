@@ -54,13 +54,12 @@ var cfgIpFilterRules = configIpFilter.get('rules');
 var cfgIpFilterErrorCode = configIpFilter.get('errorcode');
 var cfgExpPemStdTtl = config.get('services.CoAuthoring.expire.pemStdTTL');
 var cfgExpPemCheckPeriod = config.get('services.CoAuthoring.expire.pemCheckPeriod');
-var cfgSignatureAuthorizationHeader = config.get('services.CoAuthoring.token.authorizationHeader');
-var cfgSignatureAuthorizationHeaderPrefix = config.get('services.CoAuthoring.token.authorizationHeaderPrefix');
-var cfgSignatureExpiresOutbox = config.get('services.CoAuthoring.token.expiresOutbox');
-var cfgSignatureSecretInboxPublic = config.get('services.CoAuthoring.secret.inboxPublic');
-var cfgSignatureSecretInboxTenants = config.get('services.CoAuthoring.secret.inboxTenants');
+var cfgTokenOutboxHeader = config.get('services.CoAuthoring.token.outbox.header');
+var cfgTokenOutboxPrefix = config.get('services.CoAuthoring.token.outbox.prefix');
+var cfgTokenOutboxAlgorithm = config.get('services.CoAuthoring.token.outbox.algorithm');
+var cfgTokenOutboxExpires = config.get('services.CoAuthoring.token.outbox.expires');
+var cfgSignatureSecretInbox = config.get('services.CoAuthoring.secret.inbox');
 var cfgSignatureSecretOutbox = config.get('services.CoAuthoring.secret.outbox');
-var cfgSignatureSecretAlgorithmOutbox = config.get('services.CoAuthoring.token.algorithmOutbox');
 
 var ANDROID_SAFE_FILENAME = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ._-+,@£$€!½§~\'=()[]{}0123456789';
 
@@ -74,7 +73,7 @@ var g_oIpFilterRules = function() {
   }
   return res;
 }();
-var isEmptySecretTenants = isEmptyObject(cfgSignatureSecretInboxTenants);
+var isEmptySecretTenants = isEmptyObject(cfgSignatureSecretInbox.tenants);
 const pemfileCache = new NodeCache({stdTTL: ms(cfgExpPemStdTtl) / 1000, checkperiod: ms(cfgExpPemCheckPeriod) / 1000, errorOnMissing: false, useClones: true});
 
 exports.addSeconds = function(date, sec) {
@@ -237,7 +236,7 @@ function downloadUrlPromise(uri, optTimeout, optLimit, opt_Authorization) {
     var options = {uri: urlParsed, encoding: null, timeout: optTimeout};
     if (opt_Authorization) {
       options.headers = {};
-      options.headers[cfgSignatureAuthorizationHeader] = cfgSignatureAuthorizationHeaderPrefix + opt_Authorization;
+      options.headers[cfgTokenOutboxHeader] = cfgTokenOutboxPrefix + opt_Authorization;
     }
     //TODO: Check how to correct handle a ssl link
     urlParsed.rejectUnauthorized = false;
@@ -270,7 +269,7 @@ function postRequestPromise(uri, postData, optTimeout, opt_Authorization) {
     var urlParsed = url.parse(uri);
     var headers = {'Content-Type': 'application/json'};
     if (opt_Authorization) {
-      headers[cfgSignatureAuthorizationHeader] = cfgSignatureAuthorizationHeaderPrefix + opt_Authorization;
+      headers[cfgTokenOutboxHeader] = cfgTokenOutboxPrefix + opt_Authorization;
     }
     var options = {uri: urlParsed, body: postData, encoding: 'utf8', headers: headers, timeout: optTimeout};
 
@@ -600,7 +599,7 @@ function getSecretByElem(secretElem) {
 }
 exports.getSecretByElem = getSecretByElem;
 function getSecret(docId, opt_iss, opt_token) {
-  var secretElem = cfgSignatureSecretInboxPublic;
+  var secretElem = cfgSignatureSecretInbox;
   if (!isEmptySecretTenants) {
     var iss;
     if (opt_token) {
@@ -613,7 +612,7 @@ function getSecret(docId, opt_iss, opt_token) {
       iss = opt_iss;
     }
     if (iss) {
-      secretElem = cfgSignatureSecretInboxTenants[iss];
+      secretElem = cfgSignatureSecretInbox.tenants[iss];
       if (!secretElem) {
         logger.error('getSecret unknown issuer: docId = %s iss = %s', docId, iss);
       }
@@ -628,7 +627,7 @@ function fillJwtForRequest(opt_payload) {
     data.payload = opt_payload;
   }
 
-  let options = {algorithm: cfgSignatureSecretAlgorithmOutbox, expiresIn: cfgSignatureExpiresOutbox};
+  let options = {algorithm: cfgTokenOutboxAlgorithm, expiresIn: cfgTokenOutboxExpires};
   let secret = getSecretByElem(cfgSignatureSecretOutbox);
   return jwt.sign(data, secret, options);
 }

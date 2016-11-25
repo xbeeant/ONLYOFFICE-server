@@ -47,8 +47,7 @@ var statsDClient = require('./../../Common/sources/statsdclient');
 var cfgHealthCheckFilePath = config.get('services.CoAuthoring.server.healthcheckfilepath');
 var cfgVisibilityTimeout = config.get('queue.visibilityTimeout');
 var cfgQueueRetentionPeriod = config.get('queue.retentionPeriod');
-var cfgSignatureEnable = config.get('services.CoAuthoring.token.enable');
-var cfgSignatureUseForRequest = config.get('services.CoAuthoring.token.useforrequest');
+var cfgTokenEnableRequestInbox = config.get('services.CoAuthoring.token.enable.request.inbox');
 
 var CONVERT_TIMEOUT = 1.5 * (cfgVisibilityTimeout + cfgQueueRetentionPeriod) * 1000;
 var CONVERT_ASYNC_DELAY = 1000;
@@ -204,7 +203,7 @@ function convertRequest(req, res) {
       } else {
         params = req.query;
       }
-      if (cfgSignatureEnable && cfgSignatureUseForRequest) {
+      if (cfgTokenEnableRequestInbox) {
         var authError = constants.VKEY;
         var checkJwtRes = docsCoServer.checkJwtHeader(docId, req);
         if (checkJwtRes) {

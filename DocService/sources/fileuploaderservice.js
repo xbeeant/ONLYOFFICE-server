@@ -46,8 +46,8 @@ var configUtils = config.get('services.CoAuthoring.utils');
 
 var cfgImageSize = configServer.get('limits_image_size');
 var cfgTypesUpload = configUtils.get('limits_image_types_upload');
-var cfgSignatureEnable = config.get('services.CoAuthoring.token.enable');
-var cfgSignatureUseForRequest = config.get('services.CoAuthoring.token.useforrequest');
+var cfgTokenEnableBrowser = config.get('services.CoAuthoring.token.enable.browser');
+var cfgTokenEnableRequestInbox = config.get('services.CoAuthoring.token.enable.request.inbox');
 
 exports.uploadTempFile = function(req, res) {
   return co(function* () {
@@ -55,7 +55,7 @@ exports.uploadTempFile = function(req, res) {
     try {
       docId = req.query.key;
       logger.debug('Start uploadTempFile: docId = %s', docId);
-      if (cfgSignatureEnable && cfgSignatureUseForRequest) {
+      if (cfgTokenEnableRequestInbox) {
         var authError = constants.VKEY;
         var checkJwtRes = docsCoServer.checkJwtHeader(docId, req);
         if (checkJwtRes) {
@@ -121,7 +121,7 @@ exports.uploadImageFileOld = function(req, res) {
   var docId = req.params.docid;
   logger.debug('Start uploadImageFileOld: docId = %s', docId);
   var userid = req.params.userid;
-  if (cfgSignatureEnable) {
+  if (cfgTokenEnableBrowser) {
     var checkJwtRes = checkJwtUpload(docId, 'uploadImageFileOld', req.params.jwt);
     if(!checkJwtRes.err){
       docId = checkJwtRes.docId || docId;
@@ -208,7 +208,7 @@ exports.uploadImageFile = function(req, res) {
       logger.debug('Start uploadImageFile: docId = %s', docId);
 
       var isValidJwt = true;
-      if (cfgSignatureEnable) {
+      if (cfgTokenEnableBrowser) {
         var checkJwtRes = checkJwtUpload(docId, 'uploadImageFile', req.params.jwt);
         if (!checkJwtRes.err) {
           docId = checkJwtRes.docId || docId;

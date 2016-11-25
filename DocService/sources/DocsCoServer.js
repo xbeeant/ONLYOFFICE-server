@@ -118,13 +118,14 @@ var cfgExpSessionIdle = ms(config.get('expire.sessionidle'));
 var cfgExpSessionAbsolute = ms(config.get('expire.sessionabsolute'));
 var cfgExpSessionCloseCommand = ms(config.get('expire.sessionclosecommand'));
 var cfgSockjsUrl = config.get('server.sockjsUrl');
-var cfgSignatureEnable = config.get('token.enable');
-var cfgSignatureExpiresSession = ms(config.get('token.expiresSession'));
-var cfgSignatureUseForRequest = config.get('token.useforrequest');
-var cfgSignatureAuthorizationHeader = config.get('token.authorizationHeader');
-var cfgSignatureAuthorizationHeaderPrefix = config.get('token.authorizationHeaderPrefix');
-var cfgSignatureTokenAlgorithmSession = config.get('token.algorithmSession');
-var cfgSignatureSecretSession = config.get('secret.session');
+var cfgTokenEnableBrowser = config.get('token.enable.browser');
+var cfgTokenEnableRequestInbox = config.get('token.enable.request.inbox');
+var cfgTokenEnableRequestOutbox = config.get('token.enable.request.outbox');
+var cfgTokenSessionAlgorithm = config.get('token.session.algorithm');
+var cfgTokenSessionExpires = ms(config.get('token.session.expires'));
+var cfgTokenInboxHeader = config.get('token.inbox.header');
+var cfgTokenInboxPrefix = config.get('token.inbox.prefix');
+var cfgSecretSession = config.get('secret.session');
 
 var redisKeySaveLock = cfgRedisPrefix + constants.REDIS_KEY_SAVE_LOCK;
 var redisKeyPresenceHash = cfgRedisPrefix + constants.REDIS_KEY_PRESENCE_HASH;
@@ -567,7 +568,7 @@ function* getOriginalParticipantsId(docId) {
 function* sendServerRequest(docId, uri, dataObject) {
   logger.debug('postData request: docId = %s;url = %s;data = %j', docId, uri, dataObject);
   var authorization;
-  if (cfgSignatureEnable && cfgSignatureUseForRequest) {
+  if (cfgTokenEnableRequestOutbox) {
     authorization = utils.fillJwtForRequest(dataObject);
   }
   var res = yield utils.postRequestPromise(uri, JSON.stringify(dataObject), cfgCallbackRequestTimeout * 1000, authorization);
@@ -851,9 +852,9 @@ function checkJwt(docId, token) {
   return res;
 }
 function checkJwtHeader(docId, req) {
-  var authorization = req.get(cfgSignatureAuthorizationHeader);
-  if (authorization && authorization.startsWith(cfgSignatureAuthorizationHeaderPrefix)) {
-    var token = authorization.substring(cfgSignatureAuthorizationHeaderPrefix.length);
+  var authorization = req.get(cfgTokenInboxHeader);
+  if (authorization && authorization.startsWith(cfgTokenInboxPrefix)) {
+    var token = authorization.substring(cfgTokenInboxPrefix.length);
     return checkJwt(docId, token);
   }
   return null;
@@ -987,7 +988,7 @@ exports.install = function(server, callbackFunction) {
             var checkJwtRes = checkJwt(docId, data.jwt);
             if (checkJwtRes.decoded) {
               if (checkJwtRes.decoded.document.key == conn.docId) {
-                sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgSignatureExpiresSession});
+                sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgTokenSessionExpires});
               } else {
                 conn.close(constants.ACCESS_DENIED_CODE, constants.ACCESS_DENIED_REASON);
               }
@@ -1065,8 +1066,8 @@ exports.install = function(server, callbackFunction) {
         tmpUser.view = true;
         conn.isCloseCoAuthoring = true;
         yield* updatePresence(docId, tmpUser.id, getConnectionInfo(conn));
-        if (cfgSignatureEnable) {
-          sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgSignatureExpiresSession});
+        if (cfgTokenEnableBrowser) {
+          sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgTokenSessionExpires});
         }
       }
     }
@@ -1144,8 +1145,8 @@ exports.install = function(server, callbackFunction) {
       //apply new
       conn.docId = docIdNew;
       yield* updatePresence(docIdNew, tmpUser.id, getConnectionInfo(conn));
-      if (cfgSignatureEnable) {
-        sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgSignatureExpiresSession});
+      if (cfgTokenEnableBrowser) {
+        sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgTokenSessionExpires});
       }
     }
     //open
@@ -1521,8 +1522,8 @@ exports.install = function(server, callbackFunction) {
     edit.ds_view = conn.user.view;
     edit.ds_isCloseCoAuthoring = conn.isCloseCoAuthoring;
 
-    var options = {algorithm: cfgSignatureTokenAlgorithmSession, expiresIn: cfgSignatureExpiresSession / 1000, issuer: conn.iss};
-    var secret = utils.getSecretByElem(cfgSignatureSecretSession);
+    var options = {algorithm: cfgTokenSessionAlgorithm, expiresIn: cfgTokenSessionExpires / 1000, issuer: conn.iss};
+    var secret = utils.getSecretByElem(cfgSecretSession);
     return jwt.sign(payload, secret, options);
   }
 
@@ -1537,7 +1538,7 @@ exports.install = function(server, callbackFunction) {
     if (data.token && data.user) {
       var docId = data.docid;
       //check jwt
-      if (cfgSignatureEnable) {
+      if (cfgTokenEnableBrowser) {
         var checkJwtRes = checkJwt(docId, data.jwt);
         if (checkJwtRes.decoded) {
           fillDataFromJwt(checkJwtRes.decoded, data);
@@ -1780,7 +1781,7 @@ exports.install = function(server, callbackFunction) {
       changes: objChangesDocument,
       changesIndex: changesIndex,
       indexUser: conn.user.indexUser,
-      jwt: cfgSignatureEnable ? {token: fillJwtByConnection(conn), expires: cfgSignatureExpiresSession} : undefined,
+      jwt: cfgTokenEnableBrowser ? {token: fillJwtByConnection(conn), expires: cfgTokenSessionExpires} : undefined,
       g_cAscSpellCheckUrl: cfgSpellcheckerUrl
     };
     sendData(conn, sendObject);//Or 0 if fails
@@ -2473,7 +2474,7 @@ exports.commandFromServer = function (req, res) {
       } else {
         params = req.query;
       }
-      if (cfgSignatureEnable && cfgSignatureUseForRequest) {
+      if (cfgTokenEnableRequestInbox) {
         result = commonDefines.c_oAscServerCommandErrors.Token;
         var checkJwtRes = checkJwtHeader(docId, req);
         if (checkJwtRes) {
