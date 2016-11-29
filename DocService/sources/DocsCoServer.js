@@ -2391,6 +2391,8 @@ exports.install = function(server, callbackFunction) {
     var cronJob = this;
     return co(function* () {
       try {
+        var countEdit = 0;
+        var countView = 0;
         logger.debug('expireDoc connections.length = %d', connections.length);
         var commands = [];
         var idSet = new Set();
@@ -2429,6 +2431,11 @@ exports.install = function(server, callbackFunction) {
           }
           idSet.add(conn.docId);
           updatePresenceCommandsToArray(commands, conn.docId, conn.user.id, getConnectionInfo(conn));
+          if (conn.user && conn.user.view) {
+            countView++;
+          } else {
+            countEdit++;
+          }
         }
         var expireAt = new Date().getTime() + cfgExpPresence * 1000;
         idSet.forEach(function(value1, value2, set) {
@@ -2437,6 +2444,11 @@ exports.install = function(server, callbackFunction) {
         if (commands.length > 0) {
           var multi = redisClient.multi(commands);
           yield utils.promiseRedis(multi, multi.exec);
+        }
+        if (clientStatsD) {
+          clientStatsD.gauge('expireDoc.connections.all', countEdit + countView);
+          clientStatsD.gauge('expireDoc.connections.edit', countEdit);
+          clientStatsD.gauge('expireDoc.connections.view', countView);
         }
       } catch (err) {
         logger.error('expireDoc error:\r\n%s', err.stack);
