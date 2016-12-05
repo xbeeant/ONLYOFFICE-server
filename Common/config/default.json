@@ -118,17 +118,32 @@
 				"errorcode": 401
 			},
 			"secret": {
-				"public": {"string": "secret", "file": ""},
-				"tenants": {}
+				"inbox": {"string": "secret", "file": "", "tenants": {}},
+				"outbox": {"string": "secret", "file": ""},
+				"session": {"string": "secret", "file": ""}
 			},
 			"token": {
-				"enable": false,
-				"useforrequest": false,
-				"authorizationHeader": "OO-AUTH-TOKEN",
-				"authorizationHeaderPrefix": "Bearer ",
-				"algorithmRequest": "HS256",
-				"expiresRequest": "5m",
-				"expiresSession": "1d"
+				"enable": {
+					"browser": false,
+					"request": {
+						"inbox": false,
+						"outbox": false
+					}
+				},
+				"inbox": {
+					"header": "Authorization",
+					"prefix": "Bearer "
+				},
+				"outbox": {
+					"header": "Authorization",
+					"prefix": "Bearer ",
+					"algorithm": "HS256",
+					"expires": "5m"
+				},
+				"session": {
+					"algorithm": "HS256",
+					"expires": "5m"
+				}
 			}
 		}
 	},

@@ -47,8 +47,7 @@ var statsDClient = require('./../../Common/sources/statsdclient');
 var cfgHealthCheckFilePath = config.get('services.CoAuthoring.server.healthcheckfilepath');
 var cfgVisibilityTimeout = config.get('queue.visibilityTimeout');
 var cfgQueueRetentionPeriod = config.get('queue.retentionPeriod');
-var cfgSignatureEnable = config.get('services.CoAuthoring.token.enable');
-var cfgSignatureUseForRequest = config.get('services.CoAuthoring.token.useforrequest');
+var cfgTokenEnableRequestInbox = config.get('services.CoAuthoring.token.enable.request.inbox');
 
 var CONVERT_TIMEOUT = 1.5 * (cfgVisibilityTimeout + cfgQueueRetentionPeriod) * 1000;
 var CONVERT_ASYNC_DELAY = 1000;
@@ -199,16 +198,25 @@ function convertRequest(req, res) {
     var docId = 'convertRequest';
     try {
       var params;
-      if (cfgSignatureEnable && cfgSignatureUseForRequest) {
+      if (req.body && Buffer.isBuffer(req.body)) {
+        params = JSON.parse(req.body.toString('utf8'));
+      } else {
+        params = req.query;
+      }
+      if (cfgTokenEnableRequestInbox) {
         var authError = constants.VKEY;
         var checkJwtRes = docsCoServer.checkJwtHeader(docId, req);
         if (checkJwtRes) {
           if (checkJwtRes.decoded) {
             if (!utils.isEmptyObject(checkJwtRes.decoded.payload)) {
-              params = checkJwtRes.decoded.payload;
+              Object.assign(params, checkJwtRes.decoded.payload);
               authError = constants.NO_ERROR;
+            } else if (checkJwtRes.decoded.payloadhash) {
+              if (docsCoServer.checkJwtPayloadHash(docId, checkJwtRes.decoded.payloadhash, req.body, checkJwtRes.token)) {
+                authError = constants.NO_ERROR;
+              }
             } else if (!utils.isEmptyObject(checkJwtRes.decoded.query)) {
-              params = checkJwtRes.decoded.query;
+              Object.assign(params, checkJwtRes.decoded.query);
               authError = constants.NO_ERROR;
             }
           } else {
@@ -221,10 +229,6 @@ function convertRequest(req, res) {
           utils.fillXmlResponse(res, undefined, authError);
           return;
         }
-      } else if (req.body && Buffer.isBuffer(req.body)) {
-        params = JSON.parse(req.body.toString('utf8'));
-      } else {
-        params = req.query;
       }
 
       var cmd = new commonDefines.InputCommand();
