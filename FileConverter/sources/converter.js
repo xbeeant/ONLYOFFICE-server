@@ -372,7 +372,24 @@ function* processUploadToStorageChunk(list, dir, storagePath) {
     return storage.putObject(localValue, data, data.length);
   }));
 }
-
+function writeProcessOutputToLog(docId, childRes, isDebug) {
+  if (childRes) {
+    if (childRes.stdout) {
+      if (isDebug) {
+        logger.debug('stdout (id=%s):%s', docId, childRes.stdout);
+      } else {
+        logger.error('stdout (id=%s):%s', docId, childRes.stdout);
+      }
+    }
+    if (childRes.stderr) {
+      if (isDebug) {
+        logger.debug('stderr (id=%s):%s', docId, childRes.stderr);
+      } else {
+        logger.error('stderr (id=%s):%s', docId, childRes.stderr);
+      }
+    }
+  }
+}
 function* postProcess(cmd, dataConvert, tempDirs, childRes, error) {
   var exitCode = 0;
   var exitSignal = null;
@@ -382,9 +399,6 @@ function* postProcess(cmd, dataConvert, tempDirs, childRes, error) {
     exitSignal = childRes.signal;
     if (childRes.error) {
       errorCode = childRes.error.code;
-    }
-    if (childRes.stdout) {
-      logger.debug('stdout (id=' + dataConvert.key + '):' + childRes.stdout.toString());
     }
   }
   if (0 !== exitCode || null !== exitSignal) {
@@ -396,18 +410,18 @@ function* postProcess(cmd, dataConvert, tempDirs, childRes, error) {
       error = constants.CONVERT;
     }
     if (-1 !== exitCodesMinorError.indexOf(error)) {
+      writeProcessOutputToLog(dataConvert.key, childRes, true);
       logger.debug('ExitCode (code=%d;signal=%s;error:%d;id=%s)', exitCode, exitSignal, error, dataConvert.key);
     } else {
-      if (childRes && childRes.stderr) {
-        logger.error('stderr (id=' + dataConvert.key + '):' + childRes.stderr.toString());
-      }
+      writeProcessOutputToLog(dataConvert.key, childRes, false);
       logger.error('ExitCode (code=%d;signal=%s;error:%d;id=%s)', exitCode, exitSignal, error, dataConvert.key);
       if (cfgErrorFiles) {
         yield* processUploadToStorage(tempDirs.temp, cfgErrorFiles + '/' + dataConvert.key);
         logger.debug('processUploadToStorage error complete(id=%s)', dataConvert.key);
       }
     }
-  } else{
+  } else {
+    writeProcessOutputToLog(dataConvert.key, childRes, true);
     logger.debug('ExitCode (code=%d;signal=%s;error:%d;id=%s)', exitCode, exitSignal, error, dataConvert.key);
   }
   if (-1 !== exitCodesUpload.indexOf(error)) {
