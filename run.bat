@@ -30,9 +30,9 @@ copy "..\..\..\core\build\bin\win_%OS%\x2t.exe" "."
 
 "..\..\..\core\build\bin\AllFontsGen\win_%OS%.exe" "%windir%\Fonts" "%~dp0\..\sdkjs\common\AllFonts.js" "%~dp0\..\sdkjs\common\Images" "%~dp0\FileConverter\bin\font_selection.bin"
 
-rem mkdir "%~dp0\SpellChecker\dictionaries"
-rem cd /D "%~dp0\SpellChecker" || goto ERROR
-rem xcopy /s/e/k/c/y/q "..\..\dictionaries" ".\dictionaries"
+mkdir "%~dp0\SpellChecker\dictionaries"
+cd /D "%~dp0\SpellChecker" || goto ERROR
+xcopy /s/e/k/c/y/q "..\..\dictionaries" ".\dictionaries"
 
 ECHO.
 ECHO ----------------------------------------
@@ -72,8 +72,8 @@ start /min /b node gc.js
 cd "%RUN_DIR%\FileConverter\sources"
 start /min /b node convertermaster.js
 
-rem cd "%RUN_DIR%\SpellChecker\sources"
-rem start /min /b node server.js
+cd "%RUN_DIR%\SpellChecker\sources"
+start /min /b node server.js
 
 :ERROR
 :SUCCESS

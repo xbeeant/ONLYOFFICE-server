@@ -14,7 +14,7 @@
       "server": {
         "port": 8001,
         "sockjsUrl": "/web-apps/vendor/sockjs/sockjs.min.js",
-        "editor_settings_spellchecker_url": "",
+        "editor_settings_spellchecker_url": "http://127.0.0.1:8080",
         "static_content": [
           {
             "name": "/sdkjs",
