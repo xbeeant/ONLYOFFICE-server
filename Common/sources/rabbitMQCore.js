@@ -36,32 +36,14 @@ var amqp = require('amqplib/callback_api');
 var logger = require('./logger');
 
 var cfgRabbitUrl = config.get('rabbitmq.url');
-var cfgRabbitLogin = config.get('rabbitmq.login');
-var cfgRabbitPassword = config.get('rabbitmq.password');
-var cfgRabbitConnectionTimeout = config.get('rabbitmq.connectionTimeout');
-var cfgRabbitAuthMechanism = config.get('rabbitmq.authMechanism');
-var cfgRabbitVhost = config.get('rabbitmq.vhost');
-var cfgRabbitNoDelay = config.get('rabbitmq.noDelay');
-var cfgRabbitSslEnabled = config.get('rabbitmq.sslenabled');
+var cfgRabbitSocketOptions = config.get('rabbitmq.socketOptions');
 
 var RECONNECT_TIMEOUT = 1000;
-
-var connetOptions = {
-  login: cfgRabbitLogin,
-  password: cfgRabbitPassword,
-  connectionTimeout: cfgRabbitConnectionTimeout,
-  authMechanism: cfgRabbitAuthMechanism,
-  vhost: cfgRabbitVhost,
-  noDelay: cfgRabbitNoDelay,
-  ssl: {
-    enabled: cfgRabbitSslEnabled
-  }
-};
 
 function connetPromise(closeCallback) {
   return new Promise(function(resolve, reject) {
     function startConnect() {
-      amqp.connect(cfgRabbitUrl, connetOptions, function(err, conn) {
+      amqp.connect(cfgRabbitUrl, cfgRabbitSocketOptions, function(err, conn) {
         if (null != err) {
           logger.error('[AMQP] %s', err.stack);
           setTimeout(startConnect, RECONNECT_TIMEOUT);
