@@ -359,25 +359,45 @@ exports.mapAscServerErrorToOldError = function(error) {
   }
   return res;
 };
-exports.fillXmlResponse = function(res, uri, error) {
+function fillXmlResponse(val) {
   var xml = '<?xml version="1.0" encoding="utf-8"?><FileResult>';
-  if (constants.NO_ERROR != error) {
-    xml += '<Error>' + exports.encodeXml(exports.mapAscServerErrorToOldError(error).toString()) + '</Error>';
+  if (undefined != val.error) {
+    xml += '<Error>' + exports.encodeXml(val.error.toString()) + '</Error>';
   } else {
-    if (uri) {
-      xml += '<FileUrl>' + exports.encodeXml(uri) + '</FileUrl>';
+    if (val.fileUrl) {
+      xml += '<FileUrl>' + exports.encodeXml(val.fileUrl) + '</FileUrl>';
     } else {
       xml += '<FileUrl/>';
     }
-    xml += '<Percent>' + (uri ? '100' : '0') + '</Percent>';
-    xml += '<EndConvert>' + (uri ? 'True' : 'False') + '</EndConvert>';
+    xml += '<Percent>' + val.percent + '</Percent>';
+    xml += '<EndConvert>' + (val.endConvert ? 'True' : 'False') + '</EndConvert>';
   }
   xml += '</FileResult>';
-  var body = new Buffer(xml, 'utf-8');
-  res.setHeader('Content-Type', 'text/xml; charset=UTF-8');
+  return xml;
+}
+function fillResponse(req, res, uri, error) {
+  var data;
+  var contentType;
+  var output;
+  if (constants.NO_ERROR != error) {
+    output = {error: exports.mapAscServerErrorToOldError(error)};
+  } else {
+    output = {fileUrl: uri, percent: (uri ? 100 : 0), endConvert: !!uri};
+  }
+  var accept = req.get('Accept');
+  if (accept && -1 != accept.toLowerCase().indexOf('application/json')) {
+    data = JSON.stringify(output);
+    contentType = 'application/json';
+  } else {
+    data = fillXmlResponse(output);
+    contentType = 'text/xml';
+  }
+  var body = new Buffer(data, 'utf-8');
+  res.setHeader('Content-Type', contentType + '; charset=UTF-8');
   res.setHeader('Content-Length', body.length);
   res.send(body);
-};
+}
+exports.fillResponse = fillResponse;
 function promiseCreateWriteStream(strPath, optOptions) {
   return new Promise(function(resolve, reject) {
     var file = fs.createWriteStream(strPath, optOptions);

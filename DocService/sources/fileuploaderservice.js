@@ -75,7 +75,7 @@ exports.uploadTempFile = function(req, res) {
           }
         }
         if (authError !== constants.NO_ERROR) {
-          utils.fillXmlResponse(res, undefined, authError);
+          utils.fillResponse(req, res, undefined, authError);
           return;
         }
       }
@@ -85,15 +85,15 @@ exports.uploadTempFile = function(req, res) {
         var strPath = task.key + '/' + docId + '.tmp';
         yield storageBase.putObject(strPath, req.body, req.body.length);
         var url = yield storageBase.getSignedUrl(utils.getBaseUrlByRequest(req), strPath);
-        utils.fillXmlResponse(res, url, constants.NO_ERROR);
+        utils.fillResponse(req, res, url, constants.NO_ERROR);
       } else {
-        utils.fillXmlResponse(res, undefined, constants.UNKNOWN);
+        utils.fillResponse(req, res, undefined, constants.UNKNOWN);
       }
       logger.debug('End uploadTempFile: docId = %s', docId);
     }
     catch (e) {
       logger.error('Error uploadTempFile: docId = %s\r\n%s', docId, e.stack);
-      utils.fillXmlResponse(res, undefined, constants.UNKNOWN);
+      utils.fillResponse(req, res, undefined, constants.UNKNOWN);
     }
   });
 };

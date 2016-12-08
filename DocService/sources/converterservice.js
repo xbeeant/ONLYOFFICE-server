@@ -226,7 +226,7 @@ function convertRequest(req, res) {
           }
         }
         if (authError !== constants.NO_ERROR) {
-          utils.fillXmlResponse(res, undefined, authError);
+          utils.fillResponse(req, res, undefined, authError);
           return;
         }
       }
@@ -273,16 +273,16 @@ function convertRequest(req, res) {
 
       if (constants.AVS_OFFICESTUDIO_FILE_UNKNOWN !== cmd.getOutputFormat()) {
         var status = yield* convertByCmd(cmd, async, utils.getBaseUrlByRequest(req));
-        utils.fillXmlResponse(res, status.url, status.err);
+        utils.fillResponse(req, res, status.url, status.err);
       } else {
         var addresses = forwarded(req);
         logger.error('Error convert unknown outputtype: query = %j from = %s docId = %s', params, addresses, docId);
-        utils.fillXmlResponse(res, undefined, constants.UNKNOWN);
+        utils.fillResponse(req, res, undefined, constants.UNKNOWN);
       }
     }
     catch (e) {
       logger.error('Error convert: docId = %s\r\n%s', docId, e.stack);
-      utils.fillXmlResponse(res, undefined, constants.UNKNOWN);
+      utils.fillResponse(req, res, undefined, constants.UNKNOWN);
     }
   });
 }
