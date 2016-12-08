@@ -69,8 +69,8 @@ if (cluster.isMaster) {
 		logger.warn('worker %s started.', worker.pid);
 	}
 
-	cluster.on('exit', function(worker) {
-		logger.warn('worker %s died. restart...', worker.process.pid);
+	cluster.on('exit', (worker, code, signal) => {
+		logger.warn('worker %s died (code = %s; signal = %s). restart...', worker.process.pid, code, signal);
 		clearInterval(idCheckInterval);
 		endCheckHealth();
 		canStartCheck = true;

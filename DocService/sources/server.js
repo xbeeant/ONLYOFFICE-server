@@ -88,8 +88,8 @@ if (cluster.isMaster) {
   cluster.on('fork', (worker) => {
     updateLicenseWorker(worker);
   });
-  cluster.on('exit', (worker) => {
-    logger.warn('worker %s died.', worker.process.pid);
+  cluster.on('exit', (worker, code, signal) => {
+    logger.warn('worker %s died (code = %s; signal = %s).', worker.process.pid, code, signal);
     updateWorkers();
   });
 
