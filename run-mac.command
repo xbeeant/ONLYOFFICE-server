@@ -36,8 +36,8 @@ CreateDir "$BASEDIR/FileConverter/bin/HtmlFileInternal"
 
 cd "$BASEDIR/FileConverter/bin"
 
-cp -v "../../../core/build/bin/mac/icudtl_dat.S" "."
-cp -v "../../../core/build/bin/mac/x2t" "."
+cp -v "../../../core/build/bin/mac_64/icudtl_dat.S" "."
+cp -v "../../../core/build/bin/mac_64/x2t" "."
 cp -v "../../../core/build/bin/icu/mac_64/libicudata.55.1.dylib" "."
 cp -v "../../../core/build/bin/icu/mac_64/libicuuc.55.1.dylib" "."
 cp -v "../../../core/build/lib/mac_64/libDjVuFile.dylib" "."
