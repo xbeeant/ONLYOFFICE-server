@@ -178,7 +178,7 @@ function convertHealthCheck(req, res) {
   });
 }
 
-function* convertFromChanges(docId, baseUrl, lastSave, userdata) {
+function* convertFromChanges(docId, baseUrl, forceSave, userdata) {
   var cmd = new commonDefines.InputCommand();
   cmd.setCommand('sfcm');
   cmd.setDocId(docId);
@@ -186,7 +186,7 @@ function* convertFromChanges(docId, baseUrl, lastSave, userdata) {
   cmd.setEmbeddedFonts(false);
   cmd.setCodepage(commonDefines.c_oAscCodePageUtf8);
   cmd.setDelimiter(commonDefines.c_oAscCsvDelimiter.Comma);
-  cmd.setLastSave(lastSave);
+  cmd.setForceSave(forceSave);
   cmd.setUserData(userdata);
 
   yield* canvasService.commandSfctByCmd(cmd);

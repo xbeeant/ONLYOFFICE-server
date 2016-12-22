@@ -245,11 +245,17 @@ exports.getChangesPromise = function (docId, optStartIndex, optEndIndex) {
     });
   });
 };
-exports.getChanges = function (docId, callback) {
-	lockCriticalSection(docId, function () {_getChanges(docId, callback);});
+exports.getChanges = function (docId, opt_time, opt_index, callback) {
+	lockCriticalSection(docId, function () {_getChanges(docId, opt_time, opt_index, callback);});
 };
-function _getChanges (docId, callback) {
-	getDataFromTable(c_oTableId.changes, "*", "id='" + docId + "' ORDER BY change_id ASC",
+function _getChanges (docId, opt_time, opt_index, callback) {
+  var getCondition = "id='" + docId + "'";
+  if (null != opt_time && null != opt_index) {
+    getCondition += " AND change_date<=" + baseConnector.sqlEscape(_getDateTime(opt_time));
+    getCondition += " AND change_id<" + baseConnector.sqlEscape(opt_index);
+  }
+  getCondition += " ORDER BY change_id ASC";
+	getDataFromTable(c_oTableId.changes, "*", getCondition,
 		function (error, result) {unLockCriticalSection(docId); if (callback) callback(error, result);});
 }
 

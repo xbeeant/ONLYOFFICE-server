@@ -67,7 +67,11 @@ function InputCommand(data) {
     this['docconnectionid'] = data['docconnectionid'];
     this['doctparams'] = data['doctparams'];
     this['useractionid'] = data['useractionid'];
-    this['lastsave'] = data['lastsave'];
+    if (data['forcesave']) {
+      this['forcesave'] = new CForceSaveData(data['forcesave']);
+    } else {
+      this['forcesave'] = undefined;
+    }
     this['userdata'] = data['userdata'];
     this['inline'] = data['inline'];
     this['password'] = data['password'];
@@ -101,7 +105,7 @@ function InputCommand(data) {
     this['docconnectionid'] = undefined;//string internal
     this['doctparams'] = undefined;//int doctRenderer
     this['useractionid'] = undefined;
-    this['lastsave'] = undefined;//string key
+    this['forcesave'] = undefined;
     this['userdata'] = undefined;
     this['inline'] = undefined;//content disposition
     this['password'] = undefined;
@@ -249,11 +253,11 @@ InputCommand.prototype = {
   setUserActionId: function(data) {
     this['useractionid'] = data;
   },
-  getLastSave: function() {
-    return this['lastsave'];
+  getForceSave: function() {
+    return this['forcesave'];
   },
-  setLastSave: function(data) {
-    this['lastsave'] = data;
+  setForceSave: function(data) {
+    this['forcesave'] = data;
   },
   getUserData: function() {
     return this['userdata'];
@@ -274,6 +278,37 @@ InputCommand.prototype = {
     this['password'] = data;
   }
 };
+
+function CForceSaveData(obj) {
+  if (obj) {
+    this['iscommand'] = obj['iscommand'];
+    this['time'] = obj['time'];
+    this['index'] = obj['index'];
+  } else {
+    this['isCommand'] = null;
+    this['time'] = null;
+    this['index'] = null;
+  }
+}
+CForceSaveData.prototype.getIsCommand = function() {
+  return this['iscommand']
+};
+CForceSaveData.prototype.setIsCommand = function(v) {
+  this['iscommand'] = v;
+};
+CForceSaveData.prototype.getTime = function() {
+  return this['time']
+};
+CForceSaveData.prototype.setTime = function(v) {
+  this['time'] = v;
+};
+CForceSaveData.prototype.getIndex = function() {
+  return this['index']
+};
+CForceSaveData.prototype.setIndex = function(v) {
+  this['index'] = v;
+};
+
 function CThumbnailData(obj) {
   if (obj) {
     this['format'] = obj['format'];
@@ -521,6 +556,7 @@ function OutputSfcData() {
   this['actions'] = undefined;
   this['mailMerge'] = undefined;
   this['userdata'] = undefined;
+  this['confirm'] = undefined;
 }
 OutputSfcData.prototype.getKey = function() {
   return this['key'];
@@ -575,6 +611,12 @@ OutputSfcData.prototype.getUserData= function() {
 };
 OutputSfcData.prototype.setUserData = function(data) {
   return this['userdata'] = data;
+};
+OutputSfcData.prototype.getConfirm = function() {
+  return this['confirm'];
+};
+OutputSfcData.prototype.setConfirm = function(data) {
+  return this['confirm'] = data;
 };
 function OutputMailMerge(mailMergeSendData) {
   if (mailMergeSendData) {
@@ -752,6 +794,7 @@ const buildNumber = 37;
 exports.TaskQueueData = TaskQueueData;
 exports.CMailMergeSendData = CMailMergeSendData;
 exports.CThumbnailData = CThumbnailData;
+exports.CForceSaveData = CForceSaveData;
 exports.InputCommand = InputCommand;
 exports.OutputSfcData = OutputSfcData;
 exports.OutputMailMerge = OutputMailMerge;

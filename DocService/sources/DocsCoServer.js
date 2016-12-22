@@ -192,7 +192,9 @@ var c_oAscServerStatus = {
   Closed: 4,
   MailMerge: 5,
   MustSaveForce: 6,
-  CorruptedForce: 7
+  CorruptedForce: 7,
+  MustSaveButton: 8,
+  CorruptedButton: 9
 };
 
 var c_oAscChangeBase = {
@@ -645,8 +647,47 @@ function* getChangesIndex(docId) {
   }
   return res;
 }
-function* setForceSave(docId, lastSave, savePathDoc) {
+function getForceSaveIndex(time, index) {
+  return JSON.stringify({time: time, index: index});
+}
+function* setForceSave(docId, forceSave, savePathDoc) {
+  var lastSave = getForceSaveIndex(forceSave.getTime(), forceSave.getIndex());
   yield utils.promiseRedis(redisClient, redisClient.hset, redisKeyForceSave + docId, lastSave, savePathDoc);
+}
+function* startForceSave(docId, baseUrl, isCommand, userdata) {
+  logger.debug('startForceSave start:docId = %s', docId);
+  var res = commonDefines.c_oAscServerCommandErrors.NoError;
+  var lastSave = null;
+  if (!shutdownFlag) {
+    lastSave = yield utils.promiseRedis(redisClient, redisClient.get, redisKeyLastSave + docId);
+  }
+  if (lastSave) {
+    logger.debug('startForceSave lastSave:docId = %s; lastSave = %s', docId, lastSave);
+    var multi = redisClient.multi([
+                                    ['hsetnx', redisKeyForceSave + docId, lastSave, ""],
+                                    ['expire', redisKeyForceSave + docId, cfgExpForceSave]
+                                  ]);
+    var execRes = yield utils.promiseRedis(multi, multi.exec);
+    //hsetnx 0 if field already exists
+    if (0 == execRes[0]) {
+      res = commonDefines.c_oAscServerCommandErrors.NotModify;
+      logger.debug('startForceSave NotModify:docId = %s', docId);
+    } else {
+      var forceSave = new commonDefines.CForceSaveData(JSON.parse(lastSave));
+      forceSave.setIsCommand(isCommand);
+      //start new convert
+      var status = yield* converterService.convertFromChanges(docId, baseUrl, forceSave, userdata);
+      if (constants.NO_ERROR !== status.err) {
+        res = commonDefines.c_oAscServerCommandErrors.UnknownError;
+      }
+      logger.debug('startForceSave convertFromChanges:docId = %s; status = %d', docId, status.err);
+    }
+  } else {
+    res = commonDefines.c_oAscServerCommandErrors.NotModify;
+    logger.debug('startForceSave NotModify no changes:docId = %s', docId);
+  }
+  logger.debug('startForceSave end:docId = %s', docId);
+  return res;
 }
 /**
  * Отправка статуса, чтобы знать когда документ начал редактироваться, а когда закончился
@@ -895,6 +936,7 @@ exports.getIsShutdown = getIsShutdown;
 exports.getChangesIndexPromise = co.wrap(getChangesIndex);
 exports.cleanDocumentOnExitPromise = co.wrap(cleanDocumentOnExit);
 exports.cleanDocumentOnExitNoChangesPromise = co.wrap(cleanDocumentOnExitNoChanges);
+exports.getForceSaveIndex = getForceSaveIndex;
 exports.setForceSave= setForceSave;
 exports.checkJwt = checkJwt;
 exports.checkJwtHeader = checkJwtHeader;
@@ -1002,6 +1044,9 @@ exports.install = function(server, callbackFunction) {
             } else {
               conn.close(checkJwtRes.code, checkJwtRes.description);
             }
+            break;
+          case 'forcesave' :
+            yield* startForceSave(docId, utils.getBaseUrlByConnection(conn), false);
             break;
           default:
             logger.debug("unknown command %s", message);
@@ -2015,8 +2060,8 @@ exports.install = function(server, callbackFunction) {
       }
       // Автоматически снимаем lock сами и посылаем индекс для сохранения
       yield* unSaveLock(conn, changesIndex);
-      yield utils.promiseRedis(redisClient, redisClient.setex, redisKeyLastSave + docId, cfgExpLastSave, (new Date()).toISOString() + '_' + puckerIndex);
-
+      var lastSave = getForceSaveIndex(Date.now(), puckerIndex);
+      yield utils.promiseRedis(redisClient, redisClient.setex, redisKeyLastSave + docId, cfgExpLastSave, lastSave);
     } else {
       var changesToSend = arrNewDocumentChanges;
       if(changesToSend.length > cfgPubSubMaxChanges) {
@@ -2555,31 +2600,7 @@ exports.commandFromServer = function (req, res) {
             }
             break;
           case 'forcesave':
-            //проверяем хеш состоящий из времени и индекса последнего изменения, если мы его не собирали, то запускаем сборку
-            var lastSave = null;
-            if (!shutdownFlag) {
-              lastSave = yield utils.promiseRedis(redisClient, redisClient.get, redisKeyLastSave + docId);
-            }
-            if (lastSave) {
-              var baseUrl = utils.getBaseUrlByRequest(req);
-              var multi = redisClient.multi([
-                ['hsetnx', redisKeyForceSave + docId, lastSave, ""],
-                ['expire', redisKeyForceSave + docId, cfgExpForceSave]
-              ]);
-              var execRes = yield utils.promiseRedis(multi, multi.exec);
-              //hsetnx 0 if field already exists
-              if (0 == execRes[0]) {
-                result = commonDefines.c_oAscServerCommandErrors.NotModify;
-              } else {
-                //start new convert
-                var status = yield* converterService.convertFromChanges(docId, baseUrl, lastSave, params.userdata);
-                if (constants.NO_ERROR !== status.err) {
-                  result = commonDefines.c_oAscServerCommandErrors.UnknownError;
-                }
-              }
-            } else {
-              result = commonDefines.c_oAscServerCommandErrors.NotModify;
-            }
+            result = yield* startForceSave(docId, utils.getBaseUrlByRequest(req), true, params.userdata);
             break;
           case 'meta':
             if (params.meta) {

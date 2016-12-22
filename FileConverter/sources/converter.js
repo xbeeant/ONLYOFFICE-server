@@ -218,9 +218,15 @@ function* downloadFile(docId, uri, fileFrom) {
   }
   return res;
 }
-function promiseGetChanges(key) {
+function promiseGetChanges(key, forceSave) {
   return new Promise(function(resolve, reject) {
-    baseConnector.getChanges(key, function(err, result) {
+    var time;
+    var index;
+    if (forceSave) {
+      time = forceSave.getTime();
+      index = forceSave.getIndex();
+    }
+    baseConnector.getChanges(key, time, index, function(err, result) {
       if (err) {
         reject(err);
       } else {
@@ -317,7 +323,7 @@ function* processDownloadFromStorage(dataConvert, cmd, task, tempDirs) {
     };
     //todo writeable stream
     let changesBuffers = null;
-    let changes = yield promiseGetChanges(cmd.getDocId());
+    let changes = yield promiseGetChanges(cmd.getDocId(), cmd.getForceSave());
     for (var i = 0; i < changes.length; ++i) {
       var change = changes[i];
       if (null === changesAuthor || changesAuthor !== change.user_id_original) {
