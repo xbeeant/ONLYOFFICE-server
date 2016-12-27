@@ -178,7 +178,7 @@ function convertHealthCheck(req, res) {
   });
 }
 
-function* convertFromChanges(docId, baseUrl, forceSave, userdata) {
+function* convertFromChanges(docId, baseUrl, forceSave, opt_userdata, opt_userConnectionId) {
   var cmd = new commonDefines.InputCommand();
   cmd.setCommand('sfcm');
   cmd.setDocId(docId);
@@ -187,7 +187,12 @@ function* convertFromChanges(docId, baseUrl, forceSave, userdata) {
   cmd.setCodepage(commonDefines.c_oAscCodePageUtf8);
   cmd.setDelimiter(commonDefines.c_oAscCsvDelimiter.Comma);
   cmd.setForceSave(forceSave);
-  cmd.setUserData(userdata);
+  if (opt_userdata) {
+    cmd.setUserData(opt_userdata);
+  }
+  if (opt_userConnectionId) {
+    cmd.setUserConnectionId(opt_userConnectionId);
+  }
 
   yield* canvasService.commandSfctByCmd(cmd);
   return yield* convertByCmd(cmd, true, baseUrl);

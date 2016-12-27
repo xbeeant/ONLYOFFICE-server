@@ -648,13 +648,24 @@ function* getChangesIndex(docId) {
   return res;
 }
 function getForceSaveIndex(time, index) {
-  return JSON.stringify({time: time, index: index});
+  return JSON.stringify({lastsave: time, index: index});
 }
 function* setForceSave(docId, forceSave, savePathDoc) {
-  var lastSave = getForceSaveIndex(forceSave.getTime(), forceSave.getIndex());
+  var lastSave = getForceSaveIndex(forceSave.getLastSave(), forceSave.getIndex());
   yield utils.promiseRedis(redisClient, redisClient.hset, redisKeyForceSave + docId, lastSave, savePathDoc);
 }
-function* startForceSave(docId, baseUrl, isCommand, userdata) {
+function* getLastForceSave(docId) {
+  var lastSave = yield utils.promiseRedis(redisClient, redisClient.get, redisKeyLastSave + docId);
+  if (lastSave) {
+    var forceSave = yield utils.promiseRedis(redisClient, redisClient.hget, redisKeyForceSave + docId, lastSave);
+    //forceSave is filled before sendServerRequest
+    if (forceSave) {
+      return new commonDefines.CForceSaveData(JSON.parse(lastSave));
+    }
+  }
+  return null;
+}
+function* startForceSave(docId, baseUrl, isCommand, opt_userdata, opt_userConnectionId, opt_saveId) {
   logger.debug('startForceSave start:docId = %s', docId);
   var res = commonDefines.c_oAscServerCommandErrors.NoError;
   var lastSave = null;
@@ -670,21 +681,22 @@ function* startForceSave(docId, baseUrl, isCommand, userdata) {
     var execRes = yield utils.promiseRedis(multi, multi.exec);
     //hsetnx 0 if field already exists
     if (0 == execRes[0]) {
-      res = commonDefines.c_oAscServerCommandErrors.NotModify;
-      logger.debug('startForceSave NotModify:docId = %s', docId);
+      res = commonDefines.c_oAscServerCommandErrors.NotModified;
+      logger.debug('startForceSave NotModified:docId = %s', docId);
     } else {
       var forceSave = new commonDefines.CForceSaveData(JSON.parse(lastSave));
       forceSave.setIsCommand(isCommand);
+      forceSave.setSaveId(opt_saveId);
       //start new convert
-      var status = yield* converterService.convertFromChanges(docId, baseUrl, forceSave, userdata);
+      var status = yield* converterService.convertFromChanges(docId, baseUrl, forceSave, opt_userdata, opt_userConnectionId);
       if (constants.NO_ERROR !== status.err) {
         res = commonDefines.c_oAscServerCommandErrors.UnknownError;
       }
       logger.debug('startForceSave convertFromChanges:docId = %s; status = %d', docId, status.err);
     }
   } else {
-    res = commonDefines.c_oAscServerCommandErrors.NotModify;
-    logger.debug('startForceSave NotModify no changes:docId = %s', docId);
+    res = commonDefines.c_oAscServerCommandErrors.NotModified;
+    logger.debug('startForceSave NotModified no changes:docId = %s', docId);
   }
   logger.debug('startForceSave end:docId = %s', docId);
   return res;
@@ -937,7 +949,8 @@ exports.getChangesIndexPromise = co.wrap(getChangesIndex);
 exports.cleanDocumentOnExitPromise = co.wrap(cleanDocumentOnExit);
 exports.cleanDocumentOnExitNoChangesPromise = co.wrap(cleanDocumentOnExitNoChanges);
 exports.getForceSaveIndex = getForceSaveIndex;
-exports.setForceSave= setForceSave;
+exports.setForceSave = setForceSave;
+exports.getLastForceSave = getLastForceSave;
 exports.checkJwt = checkJwt;
 exports.checkJwtHeader = checkJwtHeader;
 exports.checkJwtPayloadHash = checkJwtPayloadHash;
@@ -1046,7 +1059,13 @@ exports.install = function(server, callbackFunction) {
             }
             break;
           case 'forcesave' :
-            yield* startForceSave(docId, utils.getBaseUrlByConnection(conn), false);
+            var code;
+            if (conn.user) {
+              code = yield* startForceSave(docId, utils.getBaseUrlByConnection(conn), false, undefined, conn.user.id, data.saveid);
+            } else {
+              code = commonDefines.c_oAscServerCommandErrors.UnknownError;
+            }
+            sendData(conn, {type: "forcesave", messages: {code: code, saveid: data.saveid}});
             break;
           default:
             logger.debug("unknown command %s", message);

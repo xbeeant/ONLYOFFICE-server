@@ -282,12 +282,14 @@ InputCommand.prototype = {
 function CForceSaveData(obj) {
   if (obj) {
     this['iscommand'] = obj['iscommand'];
-    this['time'] = obj['time'];
+    this['lastsave'] = obj['lastsave'];
     this['index'] = obj['index'];
+    this['saveid'] = obj['saveid'];
   } else {
     this['isCommand'] = null;
-    this['time'] = null;
+    this['lastsave'] = null;
     this['index'] = null;
+    this['saveid'] = null;
   }
 }
 CForceSaveData.prototype.getIsCommand = function() {
@@ -296,17 +298,23 @@ CForceSaveData.prototype.getIsCommand = function() {
 CForceSaveData.prototype.setIsCommand = function(v) {
   this['iscommand'] = v;
 };
-CForceSaveData.prototype.getTime = function() {
-  return this['time']
+CForceSaveData.prototype.getLastSave = function() {
+  return this['lastsave']
 };
-CForceSaveData.prototype.setTime = function(v) {
-  this['time'] = v;
+CForceSaveData.prototype.setLastSave = function(v) {
+  this['lastsave'] = v;
 };
 CForceSaveData.prototype.getIndex = function() {
   return this['index']
 };
 CForceSaveData.prototype.setIndex = function(v) {
   this['index'] = v;
+};
+CForceSaveData.prototype.getSaveId = function() {
+  return this['saveid']
+};
+CForceSaveData.prototype.setSaveId = function(v) {
+  this['saveid'] = v;
 };
 
 function CThumbnailData(obj) {
@@ -557,6 +565,8 @@ function OutputSfcData() {
   this['mailMerge'] = undefined;
   this['userdata'] = undefined;
   this['confirm'] = undefined;
+  this['lastsave'] = undefined;
+  this['notmodified'] = undefined;
 }
 OutputSfcData.prototype.getKey = function() {
   return this['key'];
@@ -618,6 +628,19 @@ OutputSfcData.prototype.getConfirm = function() {
 OutputSfcData.prototype.setConfirm = function(data) {
   return this['confirm'] = data;
 };
+OutputSfcData.prototype.getLastSave = function() {
+  return this['lastsave']
+};
+OutputSfcData.prototype.setLastSave = function(v) {
+  this['lastsave'] = v;
+};
+OutputSfcData.prototype.getNotModified = function() {
+  return this['notmodified']
+};
+OutputSfcData.prototype.setNotModified = function(v) {
+  this['notmodified'] = v;
+};
+
 function OutputMailMerge(mailMergeSendData) {
   if (mailMergeSendData) {
     this['from'] = mailMergeSendData.getFrom();
@@ -782,7 +805,7 @@ var c_oAscServerCommandErrors = {
   DocumentIdError: 1,
   ParseError: 2,
   UnknownError: 3,
-  NotModify: 4,
+  NotModified: 4,
   UnknownCommand: 5,
   Token: 6,
   TokenExpire: 7
