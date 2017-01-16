@@ -1758,6 +1758,10 @@ exports.install = function(server, callbackFunction) {
     var res = true;
     var docId = conn.docId;
     var tmpUser = conn.user;
+    if (constants.CONN_CLOSED === conn.readyState) {
+      //closing could happen during async action
+      return false;
+    }
     connections.push(conn);
     yield* updatePresence(docId, tmpUser.id, getConnectionInfo(conn));
     var firstParticipantNoView, countNoView = 0;

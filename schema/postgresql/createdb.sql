@@ -4,13 +4,6 @@
 
 -- CREATE DATABASE onlyoffice ENCODING = 'UTF8' CONNECTION LIMIT = -1;
 
---
--- Drop tables
---
-DROP TABLE IF EXISTS "public"."doc_callbacks";
-DROP TABLE IF EXISTS "public"."doc_changes";
-DROP TABLE IF EXISTS "public"."task_result";
-
 -- ----------------------------
 -- Table structure for doc_callbacks
 -- ----------------------------
@@ -51,10 +44,6 @@ CREATE TABLE IF NOT EXISTS "public"."task_result" (
 PRIMARY KEY ("id")
 )
 WITH (OIDS=FALSE);
-
---https://www.postgresql.org/docs/current/static/plpgsql-control-structures.html#PLPGSQL-UPSERT-EXAMPLE
-DROP FUNCTION IF EXISTS merge_db(_id varchar(255), _status int2, _status_info int8, _last_open_date timestamp without time zone, _title varchar(255), _user_index int8, _change_id int8, OUT isupdate char(5), OUT userindex int8) CASCADE;
-DROP FUNCTION IF EXISTS merge_db(_id varchar(255), _status int2, _status_info int4, _last_open_date timestamp without time zone, _title varchar(255), _user_index int4, _change_id int4, OUT isupdate char(5), OUT userindex int4) CASCADE;
 
 CREATE OR REPLACE FUNCTION merge_db(_id varchar(255), _status int2, _status_info int4, _last_open_date timestamp without time zone, _title varchar(255), _user_index int4, _change_id int4, OUT isupdate char(5), OUT userindex int4) AS
 $$
