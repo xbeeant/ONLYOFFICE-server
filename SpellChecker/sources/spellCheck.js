@@ -110,8 +110,8 @@ exports.install = function (server, callbackFunction) {
 			oSpellInfo.arrTimes[index] = new Date();
 			logger.info('start %s word = %s, lang = %s', data.type, word, lang);
 			var oDictionary = arrDictionaries[lang];
-			if (undefined === oDictionary) {
-				data.usrCorrect[index] = false;
+			if (!oDictionary) {
+				data.usrCorrect[index] = true;
 				--data.usrWordsLength;
 				checkEnd();
 			} else if ("spell" === data.type) {
