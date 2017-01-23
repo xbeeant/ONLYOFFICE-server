@@ -139,13 +139,13 @@ exports.insertCallback = function(id, href, baseUrl, callbackFunction) {
 function getUpsertString(task) {
   task.completeDefaults();
   var dateNow = sqlBase.getDateTime(new Date());
-  var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.title, task.userIndex, task.changeId];
+  var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.userIndex, task.changeId];
   var commandArgEsc = commandArg.map(function(curVal) {
     return exports.sqlEscape(curVal)
   });
   if (isSupportOnConflict) {
     //http://stackoverflow.com/questions/34762732/how-to-find-out-if-an-upsert-was-an-update-with-postgresql-9-5-upsert
-    return "INSERT INTO task_result (id, status, status_info, last_open_date, title, user_index, change_id) SELECT " +
+    return "INSERT INTO task_result (id, status, status_info, last_open_date, user_index, change_id) SELECT " +
       commandArgEsc.join(', ') +
       " WHERE 'false' = set_config('myapp.isupdate', 'false', true) ON CONFLICT (id) DO UPDATE SET  last_open_date = " +
       sqlBase.baseConnector.sqlEscape(dateNow) +
