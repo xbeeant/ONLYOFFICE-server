@@ -75,7 +75,7 @@ if (cluster.isMaster) {
       try {
         yield* readLicense();
         logger.warn('update cluster with %s workers', workersCount);
-        for (let i in cluster.workers) {
+        for (var i in cluster.workers) {
           updateLicenseWorker(cluster.workers[i]);
         }
         updateWorkers();
@@ -95,7 +95,7 @@ if (cluster.isMaster) {
 
   updateLicense();
 
-  fs.watch(configCommon.get('license').get('license_file'), updateLicense);
+  fs.watchFile(configCommon.get('license').get('license_file'), updateLicense);
   setInterval(updateLicense, 86400000);
 } else {
   const express = require('express');
