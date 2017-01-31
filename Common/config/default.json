@@ -213,7 +213,8 @@
 			{"name": "en_AU", "id": 3081},
 			{"name": "es_ES", "id": 3082},
 			{"name": "en_CA", "id": 4105},
-			{"name": "en_ZA", "id": 7177}
+			{"name": "en_ZA", "id": 7177},
+			{"name": "sr_Latn_RS", "id": 9242},
 		]	
 	}
 }
