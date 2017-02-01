@@ -22,13 +22,6 @@ CREATE DATABASE IF NOT EXISTS onlyoffice DEFAULT CHARACTER SET utf8 DEFAULT COLL
 USE onlyoffice;
 
 --
--- Drop tables
---
-DROP TABLE IF EXISTS `doc_callbacks`;
-DROP TABLE IF EXISTS `doc_changes`;
-DROP TABLE IF EXISTS `task_result`;
-
---
 -- Definition of table `doc_changes`
 --
 
