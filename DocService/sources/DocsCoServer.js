@@ -608,14 +608,10 @@ function parseUrl(callbackUrl) {
   return result;
 }
 
-function* deleteCallback(id) {
-  // Нужно удалить из базы callback-ов
-  yield sqlBase.deleteCallbackPromise(id);
-}
 function* getCallback(id) {
   var callbackUrl = null;
   var baseUrl = null;
-  var selectRes = yield sqlBase.getCallbackPromise(id);
+  var selectRes = yield taskResult.select(id);
   if (selectRes.length > 0) {
     var row = selectRes[0];
     if (row.callback) {
@@ -630,9 +626,6 @@ function* getCallback(id) {
   } else {
     return null;
   }
-}
-function* addCallback(id, href, baseUrl) {
-  yield sqlBase.insertCallbackPromise(id, href, baseUrl);
 }
 function* getChangesIndex(docId) {
   var res = 0;
@@ -734,10 +727,20 @@ function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl, 
   if (c_oAscChangeBase.No !== bChangeBase) {
     if (c_oAscServerStatus.Editing === status && c_oAscChangeBase.All === bChangeBase) {
       // Добавить в базу
-      yield* addCallback(docId, callback.href, baseUrl);
-    } else if (c_oAscServerStatus.Closed === status) {
-      // Удалить из базы
-      yield* deleteCallback(docId);
+      var updateMask = new taskResult.TaskResultData();
+      updateMask.key = docId;
+      updateMask.callback = '';
+      updateMask.baseurl = '';
+      var updateTask = new taskResult.TaskResultData();
+      updateTask.key = docId;
+      updateTask.callback = callback.href;
+      updateTask.baseurl = baseUrl;
+      var updateIfRes = yield taskResult.updateIf(updateTask, updateMask);
+      if (updateIfRes.affectedRows > 0) {
+        logger.debug('sendStatusDocument updateIf: docId = %s', docId);
+      } else {
+        logger.debug('sendStatusDocument updateIf no effect: docId = %s', docId);
+      }
     }
   }
 
@@ -839,8 +842,6 @@ function* cleanDocumentOnExit(docId, deleteChanges) {
   var redisArgs = [redisClient, redisClient.del, redisKeyLocks + docId,
       redisKeyMessage + docId, redisKeyChangeIndex + docId, redisKeyForceSave + docId, redisKeyLastSave + docId];
   utils.promiseRedis.apply(this, redisArgs);
-  //remove callback
-  yield* deleteCallback(docId);
   //remove changes
   if (deleteChanges) {
     sqlBase.deleteChanges(docId, null);
@@ -1628,7 +1629,7 @@ exports.install = function(server, callbackFunction) {
         // Если восстанавливаем, индекс тоже восстанавливаем
         curIndexUser = user.indexUser;
       } else {
-        upsertRes = yield canvasService.commandOpenStartPromise(docId, cmd, true);
+        upsertRes = yield canvasService.commandOpenStartPromise(docId, cmd, true, data.documentCallbackUrl, utils.getBaseUrlByConnection(conn));
         upsertRes.affectedRows == 1 ? curIndexUser = 1 : curIndexUser = upsertRes.insertId;
       }
       if (constants.CONN_CLOSED === conn.readyState) {

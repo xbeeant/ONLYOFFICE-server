@@ -29,24 +29,6 @@ DROP TABLE IF EXISTS `doc_changes`;
 DROP TABLE IF EXISTS `task_result`;
 
 --
--- Definition of table `doc_callbacks`
---
-
-CREATE TABLE IF NOT EXISTS `doc_callbacks` (
-  `id` varchar(255) NOT NULL,
-  `callback` text NOT NULL,
-  `baseurl` text NOT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
---
--- Dumping data for table `doc_callbacks`
---
-
-/*!40000 ALTER TABLE `doc_callbacks` DISABLE KEYS */;
-/*!40000 ALTER TABLE `doc_callbacks` ENABLE KEYS */;
-
---
 -- Definition of table `doc_changes`
 --
 
@@ -79,6 +61,8 @@ CREATE TABLE IF NOT EXISTS `task_result` (
   `last_open_date` datetime NOT NULL,
   `user_index` int(10) unsigned NOT NULL DEFAULT 1,
   `change_id` int(10) unsigned NOT NULL DEFAULT 0,
+  `callback` text NOT NULL,
+  `baseurl` text NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 

@@ -39,7 +39,6 @@ var config = require('config').get('services.CoAuthoring.sql');
 var baseConnector = (sqlDataBaseType.mySql === config.get('type')) ? require('./mySqlBaseConnector') : require('./postgreSqlBaseConnector');
 
 var tableChanges = config.get('tableChanges'),
-	tableCallbacks = config.get('tableCallbacks'),
 	tableResult = config.get('tableResult');
 
 var g_oCriticalSection = {};
@@ -64,9 +63,6 @@ var c_oTableId = {
 function getTableById (id) {
 	var res;
 	switch (id) {
-		case c_oTableId.callbacks:
-			res = tableCallbacks;
-			break;
 		case c_oTableId.changes:
 			res = tableChanges;
 			break;
@@ -80,20 +76,6 @@ exports.loadTable = function (tableId, callbackFunction) {
 	var table = getTableById(tableId);
 	var sqlCommand = "SELECT * FROM " + table + ";";
 	baseConnector.sqlQuery(sqlCommand, callbackFunction);
-};
-exports.insertCallback = function(id, href, baseUrl, callbackFunction) {
-  baseConnector.insertCallback(id, href, baseUrl, callbackFunction);
-};
-exports.insertCallbackPromise = function(id, href, baseUrl) {
-  return new Promise(function(resolve, reject) {
-    exports.insertCallback(id, href, baseUrl, function(error, result) {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(result);
-      }
-    });
-  });
 };
 exports.insertChanges = function (objChanges, docId, index, user) {
 	lockCriticalSection(docId, function () {_insertChanges(0, objChanges, docId, index, user);});
@@ -185,34 +167,6 @@ exports.deleteChanges = function (docId, deleteIndex) {
 function _deleteChanges (docId, deleteIndex) {
   exports.deleteChangesCallback(docId, deleteIndex, function () {unLockCriticalSection(docId);});
 }
-exports.getCallback = function(docId, callback) {
-  getDataFromTable(c_oTableId.callbacks, "*", "id='" + docId + "'", callback);
-};
-exports.getCallbackPromise = function(docId) {
-  return new Promise(function(resolve, reject) {
-    exports.getCallback(docId, function(error, result) {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(result);
-      }
-    });
-  });
-};
-exports.deleteCallback = function (docId, callback) {
-  deleteFromTable(c_oTableId.callbacks, "id='" + docId + "'", callback);
-};
-exports.deleteCallbackPromise = function (docId) {
-  return new Promise(function(resolve, reject) {
-    exports.deleteCallback(docId, function(error, result) {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(result);
-      }
-    });
-  });
-};
 exports.getChangesIndex = function(docId, callback) {
   var table = getTableById(c_oTableId.changes);
   var sqlCommand = 'SELECT MAX(change_id) as change_id FROM ' + table + ' WHERE id=' + baseConnector.sqlEscape(docId) + ';';

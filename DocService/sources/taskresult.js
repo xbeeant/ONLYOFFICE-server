@@ -57,6 +57,8 @@ function TaskResultData() {
   this.lastOpenDate = null;
   this.userIndex = null;
   this.changeId = null;
+  this.callback = null;
+  this.baseurl = null;
 }
 TaskResultData.prototype.completeDefaults = function() {
   if (!this.key) {
@@ -76,6 +78,12 @@ TaskResultData.prototype.completeDefaults = function() {
   }
   if (!this.changeId) {
     this.changeId = 0;
+  }
+  if (!this.callback) {
+    this.callback = '';
+  }
+  if (!this.baseurl) {
+    this.baseurl = '';
   }
 };
 
@@ -115,6 +123,12 @@ function toUpdateArray(task, updateTime) {
   }
   if (null != task.changeId) {
     res.push('change_id=' + sqlBase.baseConnector.sqlEscape(task.changeId));
+  }
+  if (null != task.callback) {
+    res.push('callback=' + sqlBase.baseConnector.sqlEscape(task.callback));
+  }
+  if (null != task.baseurl) {
+    res.push('baseurl=' + sqlBase.baseConnector.sqlEscape(task.baseurl));
   }
   return res;
 }
@@ -160,12 +174,12 @@ function updateIf(task, mask) {
 function getInsertString(task) {
   var dateNow = sqlBase.getDateTime(new Date());
   task.completeDefaults();
-  var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.userIndex, task.changeId];
+  var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.userIndex, task.changeId, task.callback, task.baseurl];
   var commandArgEsc = commandArg.map(function(curVal) {
     return sqlBase.baseConnector.sqlEscape(curVal)
   });
-  return 'INSERT INTO task_result ( id, status, status_info, last_open_date, user_index, change_id) VALUES (' +
-    commandArgEsc.join(', ') + ');';
+  return 'INSERT INTO task_result ( id, status, status_info, last_open_date, user_index, change_id, callback,' +
+    ' baseurl) VALUES (' + commandArgEsc.join(', ') + ');';
 }
 function addRandomKey(task) {
   return new Promise(function(resolve, reject) {
