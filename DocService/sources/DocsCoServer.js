@@ -2607,6 +2607,8 @@ exports.commandFromServer = function (req, res) {
             } else if (params.users) {
               var users = (typeof params.users === 'string') ? JSON.parse(params.users) : params.users;
               yield* dropUsersFromDocument(docId, users);
+            } else {
+              result = commonDefines.c_oAscServerCommandErrors.UnknownCommand;
             }
             break;
           case 'saved':
@@ -2626,7 +2628,7 @@ exports.commandFromServer = function (req, res) {
             if (params.meta) {
               yield* publish({type: commonDefines.c_oPublishType.meta, docId: docId, meta: params.meta});
             } else {
-              result = commonDefines.c_oAscServerCommandErrors.UnknownError;
+              result = commonDefines.c_oAscServerCommandErrors.UnknownCommand;
             }
             break;
           case 'version':
