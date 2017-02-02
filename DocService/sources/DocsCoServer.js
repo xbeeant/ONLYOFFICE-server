@@ -1413,14 +1413,14 @@ exports.install = function(server, callbackFunction) {
     return resultLock;
   }
 
-  function* authRestore(conn, sessionId) {
+  function* authRestore(conn, sessionId, documentCallbackUrl) {
     conn.sessionId = sessionId;//restore old
     //Kill previous connections
     connections = _.reject(connections, function(el) {
       return el.sessionId === sessionId;//Delete this connection
     });
 
-    yield* endAuth(conn, true);
+    yield* endAuth(conn, true, documentCallbackUrl);
   }
 
   function fillUsername(data) {
@@ -1666,7 +1666,7 @@ exports.install = function(server, callbackFunction) {
               var arrayBlocks = data['block'];
               var getLockRes = yield* getLock(conn, data, true);
               if (arrayBlocks && (0 === arrayBlocks.length || getLockRes)) {
-                yield* authRestore(conn, data.sessionId);
+                yield* authRestore(conn, data.sessionId, data.documentCallbackUrl);
               } else {
                 sendFileError(conn, 'Restore error. Locks not checked.');
               }
@@ -1678,7 +1678,7 @@ exports.install = function(server, callbackFunction) {
             sendFileError(conn, 'DataBase error');
           }
         } else {
-          yield* authRestore(conn, data.sessionId);
+          yield* authRestore(conn, data.sessionId, data.documentCallbackUrl);
         }
       } else {
         conn.sessionId = conn.id;
