@@ -80,6 +80,7 @@ WELCOME = $(OUTPUT)/$(WELCOME_DIR)/
 
 .PHONY: all clean install uninstall build-date htmlfileinternal
 
+.NOTPARALLEL:
 all: $(FILE_CONVERTER) $(SPELLCHECKER_DICTIONARIES) $(TOOLS) $(SCHEMA) $(LICENSE) $(WELCOME) build-date
 
 build-date: $(GRUNT_FILES)
