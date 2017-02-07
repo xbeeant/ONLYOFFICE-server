@@ -1023,7 +1023,7 @@ exports.install = function(server, callbackFunction) {
             yield* getMessages(conn, data);
             break;
           case 'unLockDocument'    :
-            yield* checkEndAuthLock(data.isSave, docId, conn.user.id, conn);
+            yield* checkEndAuthLock(data.unlock, data.isSave, docId, conn.user.id, conn);
             break;
           case 'close':
             yield* closeDocument(conn, false);
@@ -1189,7 +1189,7 @@ exports.install = function(server, callbackFunction) {
         }
 
         // Для данного пользователя снимаем Lock с документа
-        yield* checkEndAuthLock(false, docId, conn.user.id);
+        yield* checkEndAuthLock(true, false, docId, conn.user.id);
       }
     }
   }
@@ -1287,23 +1287,28 @@ exports.install = function(server, callbackFunction) {
     return participantsMap;
   }
 
-	function* checkEndAuthLock(isSave, docId, userId, currentConnection) {
-		var result = false;
-		var lockDocument = yield utils.promiseRedis(redisClient, redisClient.get, redisKeyLockDoc + docId);
-		if (lockDocument && userId === JSON.parse(lockDocument).id) {
-			yield utils.promiseRedis(redisClient, redisClient.del, redisKeyLockDoc + docId);
+	function* checkEndAuthLock(unlock, isSave, docId, userId, currentConnection) {
+		let result = false;
+		if (unlock) {
+			const lockDocument = yield utils.promiseRedis(redisClient, redisClient.get, redisKeyLockDoc + docId);
+			if (lockDocument && userId === JSON.parse(lockDocument).id) {
+				yield utils.promiseRedis(redisClient, redisClient.del, redisKeyLockDoc + docId);
 
-			var participantsMap = yield* getParticipantMap(docId);
-			yield* publish({
-				type: commonDefines.c_oPublishType.auth, docId: docId, userId: userId, participantsMap: participantsMap
-			}, docId, userId);
+				const participantsMap = yield* getParticipantMap(docId);
+				yield* publish({
+					type: commonDefines.c_oPublishType.auth,
+					docId: docId,
+					userId: userId,
+					participantsMap: participantsMap
+				}, docId, userId);
 
-			result = true;
+				result = true;
+			}
 		}
 
 		//Release locks
 		if (isSave) {
-			var userLocks = yield* getUserLocks(docId, currentConnection.sessionId);
+			const userLocks = yield* getUserLocks(docId, currentConnection.sessionId);
 			if (0 < userLocks.length) {
 				sendReleaseLock(currentConnection, userLocks);
 				yield* publish(
@@ -2005,16 +2010,16 @@ exports.install = function(server, callbackFunction) {
 
   // Для Excel необходимо делать пересчет lock-ов при добавлении/удалении строк/столбцов
   function* saveChanges(conn, data) {
-    var docId = conn.docId, userId = conn.user.id;
+    const docId = conn.docId, userId = conn.user.id;
     logger.info("Start saveChanges docid: %s", docId);
 
-    var puckerIndex = yield* getChangesIndex(docId);
+    let puckerIndex = yield* getChangesIndex(docId);
 
-    var deleteIndex = -1;
+    let deleteIndex = -1;
     if (data.startSaveChanges && null != data.deleteIndex) {
       deleteIndex = data.deleteIndex;
       if (-1 !== deleteIndex) {
-        var deleteCount = puckerIndex - deleteIndex;
+        const deleteCount = puckerIndex - deleteIndex;
         if (0 < deleteCount) {
           puckerIndex -= deleteCount;
           yield sqlBase.deleteChangesPromise(docId, deleteIndex);
@@ -2025,15 +2030,15 @@ exports.install = function(server, callbackFunction) {
     }
 
     // Стартовый индекс изменения при добавлении
-    var startIndex = puckerIndex;
+    const startIndex = puckerIndex;
 
-    var newChanges = JSON.parse(data.changes);
-    var arrNewDocumentChanges = [];
+    const newChanges = JSON.parse(data.changes);
+    let arrNewDocumentChanges = [];
     logger.info("saveChanges docid: %s ; deleteIndex: %s ; startIndex: %s ; length: %s", docId, deleteIndex, startIndex, newChanges.length);
     if (0 < newChanges.length) {
-      var oElement = null;
+      let oElement = null;
 
-      for (var i = 0; i < newChanges.length; ++i) {
+      for (let i = 0; i < newChanges.length; ++i) {
         oElement = newChanges[i];
         arrNewDocumentChanges.push({docid: docId, change: JSON.stringify(oElement), time: Date.now(),
           user: userId, useridoriginal: conn.user.idOriginal});
@@ -2043,20 +2048,20 @@ exports.install = function(server, callbackFunction) {
       yield sqlBase.insertChangesPromise(arrNewDocumentChanges, docId, startIndex, conn.user);
     }
     yield* setChangesIndex(docId, puckerIndex);
-    var changesIndex = (-1 === deleteIndex && data.startSaveChanges) ? startIndex : -1;
+    const changesIndex = (-1 === deleteIndex && data.startSaveChanges) ? startIndex : -1;
     if (data.endSaveChanges) {
       // Для Excel нужно пересчитать индексы для lock-ов
       if (data.isExcel && false !== data.isCoAuthoring && data.excelAdditionalInfo) {
-        var tmpAdditionalInfo = JSON.parse(data.excelAdditionalInfo);
+        const tmpAdditionalInfo = JSON.parse(data.excelAdditionalInfo);
         // Это мы получили recalcIndexColumns и recalcIndexRows
-        var oRecalcIndexColumns = _addRecalcIndex(tmpAdditionalInfo["indexCols"]);
-        var oRecalcIndexRows = _addRecalcIndex(tmpAdditionalInfo["indexRows"]);
+        const oRecalcIndexColumns = _addRecalcIndex(tmpAdditionalInfo["indexCols"]);
+        const oRecalcIndexRows = _addRecalcIndex(tmpAdditionalInfo["indexRows"]);
         // Теперь нужно пересчитать индексы для lock-элементов
         if (null !== oRecalcIndexColumns || null !== oRecalcIndexRows) {
-          var docLock = yield* getAllLocks(docId);
+          const docLock = yield* getAllLocks(docId);
           if (_recalcLockArray(userId, docLock, oRecalcIndexColumns, oRecalcIndexRows)) {
-            var toCache = [];
-            for (var i = 0; i < docLock.length; ++i) {
+            let toCache = [];
+            for (let i = 0; i < docLock.length; ++i) {
               toCache.push(JSON.stringify(docLock[i]));
             }
             yield* addLocks(docId, toCache, true);
@@ -2065,11 +2070,11 @@ exports.install = function(server, callbackFunction) {
       }
 
       //Release locks
-      var userLocks = yield* getUserLocks(docId, conn.sessionId);
-      // Для данного пользователя снимаем Lock с документа
-      var checkEndAuthLockRes = yield* checkEndAuthLock(false, docId, userId);
+      const userLocks = yield* getUserLocks(docId, conn.sessionId);
+      // Для данного пользователя снимаем Lock с документа, если пришел флаг unlock
+      const checkEndAuthLockRes = yield* checkEndAuthLock(data.unlock, false, docId, userId);
       if (!checkEndAuthLockRes) {
-        var arrLocks = _.map(userLocks, function(e) {
+        const arrLocks = _.map(userLocks, function(e) {
           return {
             block: e.block,
             user: e.user,
@@ -2077,7 +2082,7 @@ exports.install = function(server, callbackFunction) {
             changes: null
           };
         });
-        var changesToSend = arrNewDocumentChanges;
+        let changesToSend = arrNewDocumentChanges;
         if(changesToSend.length > cfgPubSubMaxChanges) {
           changesToSend = null;
         }
@@ -2087,10 +2092,10 @@ exports.install = function(server, callbackFunction) {
       }
       // Автоматически снимаем lock сами и посылаем индекс для сохранения
       yield* unSaveLock(conn, changesIndex);
-      var lastSave = getForceSaveIndex(Date.now(), puckerIndex);
+      const lastSave = getForceSaveIndex(Date.now(), puckerIndex);
       yield utils.promiseRedis(redisClient, redisClient.setex, redisKeyLastSave + docId, cfgExpLastSave, lastSave);
     } else {
-      var changesToSend = arrNewDocumentChanges;
+		let changesToSend = arrNewDocumentChanges;
       if(changesToSend.length > cfgPubSubMaxChanges) {
         changesToSend = null;
       }
@@ -2103,11 +2108,11 @@ exports.install = function(server, callbackFunction) {
 
   // Можем ли мы сохранять ?
   function* isSaveLock(conn) {
-    var isSaveLock = true;
-    var exist = yield utils.promiseRedis(redisClient, redisClient.setnx, redisKeySaveLock + conn.docId, conn.user.id);
+    let isSaveLock = true;
+    const exist = yield utils.promiseRedis(redisClient, redisClient.setnx, redisKeySaveLock + conn.docId, conn.user.id);
     if (exist) {
       isSaveLock = false;
-      var saveLock = yield utils.promiseRedis(redisClient, redisClient.expire, redisKeySaveLock + conn.docId, cfgExpSaveLock);
+      const saveLock = yield utils.promiseRedis(redisClient, redisClient.expire, redisKeySaveLock + conn.docId, cfgExpSaveLock);
     }
 
     // Отправляем только тому, кто спрашивал (всем отправлять нельзя)
@@ -2116,7 +2121,7 @@ exports.install = function(server, callbackFunction) {
 
   // Снимаем лок с сохранения
   function* unSaveLock(conn, index) {
-    var saveLock = yield utils.promiseRedis(redisClient, redisClient.get, redisKeySaveLock + conn.docId);
+    const saveLock = yield utils.promiseRedis(redisClient, redisClient.get, redisKeySaveLock + conn.docId);
     // ToDo проверка null === saveLock это заглушка на подключение второго пользователя в документ (не делается saveLock в этот момент, но идет сохранение и снять его нужно)
     if (null === saveLock || conn.user.id == saveLock) {
       yield utils.promiseRedis(redisClient, redisClient.del, redisKeySaveLock + conn.docId);
@@ -2126,8 +2131,8 @@ exports.install = function(server, callbackFunction) {
 
   // Возвращаем все сообщения для документа
   function* getMessages(conn) {
-    var allMessages = yield utils.promiseRedis(redisClient, redisClient.lrange, redisKeyMessage + conn.docId, 0, -1);
-    var allMessagesParsed = undefined;
+    const allMessages = yield utils.promiseRedis(redisClient, redisClient.lrange, redisKeyMessage + conn.docId, 0, -1);
+    let allMessagesParsed = undefined;
     if(allMessages && allMessages.length > 0) {
       allMessagesParsed = allMessages.map(function (val) {
         return JSON.parse(val);
