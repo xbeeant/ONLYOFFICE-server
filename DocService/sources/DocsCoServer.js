@@ -1287,29 +1287,36 @@ exports.install = function(server, callbackFunction) {
     return participantsMap;
   }
 
-  function* checkEndAuthLock(isSave, docId, userId, currentConnection) {
-    var result = false;
-    var lockDocument = yield utils.promiseRedis(redisClient, redisClient.get, redisKeyLockDoc + docId);
-    if (lockDocument && userId === JSON.parse(lockDocument).id) {
-      yield utils.promiseRedis(redisClient, redisClient.del, redisKeyLockDoc + docId);
+	function* checkEndAuthLock(isSave, docId, userId, currentConnection) {
+		var result = false;
+		var lockDocument = yield utils.promiseRedis(redisClient, redisClient.get, redisKeyLockDoc + docId);
+		if (lockDocument && userId === JSON.parse(lockDocument).id) {
+			yield utils.promiseRedis(redisClient, redisClient.del, redisKeyLockDoc + docId);
 
-      var participantsMap = yield* getParticipantMap(docId);
-      yield* publish({type: commonDefines.c_oPublishType.auth, docId: docId, userId: userId, participantsMap: participantsMap}, docId, userId);
+			var participantsMap = yield* getParticipantMap(docId);
+			yield* publish({
+				type: commonDefines.c_oPublishType.auth, docId: docId, userId: userId, participantsMap: participantsMap
+			}, docId, userId);
 
-      result = true;
-    } else if (isSave) {
-      //Release locks
-      var userLocks = yield* getUserLocks(docId, currentConnection.sessionId);
-      if (0 < userLocks.length) {
-        sendReleaseLock(currentConnection, userLocks);
-        yield* publish({type: commonDefines.c_oPublishType.releaseLock, docId: docId, userId: userId, locks: userLocks}, docId, userId);
-      }
+			result = true;
+		}
 
-      // Автоматически снимаем lock сами
-      yield* unSaveLock(currentConnection, -1);
-    }
-    return result;
-  }
+		//Release locks
+		if (isSave) {
+			var userLocks = yield* getUserLocks(docId, currentConnection.sessionId);
+			if (0 < userLocks.length) {
+				sendReleaseLock(currentConnection, userLocks);
+				yield* publish(
+					{type: commonDefines.c_oPublishType.releaseLock, docId: docId, userId: userId, locks: userLocks},
+					docId, userId);
+			}
+
+			// Автоматически снимаем lock сами
+			yield* unSaveLock(currentConnection, -1);
+		}
+
+		return result;
+	}
 
   function sendParticipantsState(participants, data) {
     _.each(participants, function(participant) {
