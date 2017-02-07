@@ -156,7 +156,7 @@ var clientStatsD = statsDClient.getClient();
 var licenseInfo = {type: constants.LICENSE_RESULT.Error, light: false, branding: false};
 var shutdownFlag = false;
 
-var asc_coAuthV = '3.0.9';				// Версия сервера совместного редактирования
+var asc_coAuthV = '4.3.0';				// Версия сервера совместного редактирования
 
 function getIsShutdown() {
   return shutdownFlag;
