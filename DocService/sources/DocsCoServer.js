@@ -667,8 +667,7 @@ function* setForceSave(docId, forceSave, cmd, success) {
     yield utils.promiseRedis(redisClient, redisClient.hset, redisKeyForceSave + docId, forceSaveIndex, true);
 
     let forceSaveType = forceSave.getType();
-    if ((commonDefines.c_oAscForceSaveTypes.Button === forceSaveType ||
-      commonDefines.c_oAscForceSaveTypes.Timeout === forceSaveType)) {
+    if (cfgForceSaveTimeout > 0 || commonDefines.c_oAscForceSaveTypes.Button === forceSaveType) {
       yield* publish({
                        type: commonDefines.c_oPublishType.forceSave, docId: docId,
                        data: {type: forceSaveType, time: forceSave.getTime()}
@@ -1938,8 +1937,11 @@ exports.install = function(server, callbackFunction) {
       lastForceSaveTime = -1;
       //todo multi with messages
       let lastSave = yield* getLastSave(docId);
-      if (lastSave && lastSave.end) {
-        lastForceSaveTime = lastSave.time;
+      if (lastSave) {
+        let notModified = yield* getLastForceSave(docId, lastSave);
+        if (notModified) {
+          lastForceSaveTime = lastSave.time;
+        }
       }
     }
     var sendObject = {
