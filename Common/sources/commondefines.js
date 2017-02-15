@@ -281,40 +281,32 @@ InputCommand.prototype = {
 
 function CForceSaveData(obj) {
   if (obj) {
-    this['iscommand'] = obj['iscommand'];
-    this['lastsave'] = obj['lastsave'];
+    this['type'] = obj['type'];
+    this['time'] = obj['time'];
     this['index'] = obj['index'];
-    this['saveid'] = obj['saveid'];
   } else {
-    this['isCommand'] = null;
-    this['lastsave'] = null;
+    this['type'] = null;
+    this['time'] = null;
     this['index'] = null;
-    this['saveid'] = null;
   }
 }
-CForceSaveData.prototype.getIsCommand = function() {
-  return this['iscommand']
+CForceSaveData.prototype.getType = function() {
+  return this['type']
 };
-CForceSaveData.prototype.setIsCommand = function(v) {
-  this['iscommand'] = v;
+CForceSaveData.prototype.setType = function(v) {
+  this['type'] = v;
 };
-CForceSaveData.prototype.getLastSave = function() {
-  return this['lastsave']
+CForceSaveData.prototype.getTime = function() {
+  return this['time']
 };
-CForceSaveData.prototype.setLastSave = function(v) {
-  this['lastsave'] = v;
+CForceSaveData.prototype.setTime = function(v) {
+  this['time'] = v;
 };
 CForceSaveData.prototype.getIndex = function() {
   return this['index']
 };
 CForceSaveData.prototype.setIndex = function(v) {
   this['index'] = v;
-};
-CForceSaveData.prototype.getSaveId = function() {
-  return this['saveid']
-};
-CForceSaveData.prototype.setSaveId = function(v) {
-  this['saveid'] = v;
 };
 
 function CThumbnailData(obj) {
@@ -564,7 +556,6 @@ function OutputSfcData() {
   this['actions'] = undefined;
   this['mailMerge'] = undefined;
   this['userdata'] = undefined;
-  this['confirm'] = undefined;
   this['lastsave'] = undefined;
   this['notmodified'] = undefined;
 }
@@ -621,12 +612,6 @@ OutputSfcData.prototype.getUserData= function() {
 };
 OutputSfcData.prototype.setUserData = function(data) {
   return this['userdata'] = data;
-};
-OutputSfcData.prototype.getConfirm = function() {
-  return this['confirm'];
-};
-OutputSfcData.prototype.setConfirm = function(data) {
-  return this['confirm'] = data;
 };
 OutputSfcData.prototype.getLastSave = function() {
   return this['lastsave']
@@ -712,7 +697,8 @@ var c_oPublishType = {
   warning: 8,
   cursor: 9,
   shutdown: 10,
-  meta: 11
+  meta: 11,
+  forceSave: 12
 };
 var c_oAscCsvDelimiter = {
   None: 0,
@@ -810,6 +796,11 @@ var c_oAscServerCommandErrors = {
   Token: 6,
   TokenExpire: 7
 };
+var c_oAscForceSaveTypes = {
+  Command: 0,
+  Button: 1,
+  Timeout: 2
+};
 
 const buildVersion = '4.1.2';
 const buildNumber = 37;
@@ -829,5 +820,6 @@ exports.c_oAscEncodingsMap = c_oAscEncodingsMap;
 exports.c_oAscCodePageUtf8 = c_oAscCodePageUtf8;
 exports.c_oAscUserAction = c_oAscUserAction;
 exports.c_oAscServerCommandErrors = c_oAscServerCommandErrors;
+exports.c_oAscForceSaveTypes = c_oAscForceSaveTypes;
 exports.buildVersion = buildVersion;
 exports.buildNumber = buildNumber;

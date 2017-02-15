@@ -220,13 +220,13 @@ function* downloadFile(docId, uri, fileFrom) {
 }
 function promiseGetChanges(key, forceSave) {
   return new Promise(function(resolve, reject) {
-    var lastSave;
+    var time;
     var index;
     if (forceSave) {
-      lastSave = forceSave.getLastSave();
+      time = forceSave.getTime();
       index = forceSave.getIndex();
     }
-    baseConnector.getChanges(key, lastSave, index, function(err, result) {
+    baseConnector.getChanges(key, time, index, function(err, result) {
       if (err) {
         reject(err);
       } else {

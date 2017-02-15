@@ -30,9 +30,12 @@
  *
  */
 
+'use strict';
+
 var config = require('config').get('services.CoAuthoring');
 var co = require('co');
 var cron = require('cron');
+var ms = require('ms');
 var taskResult = require('./taskresult');
 var docsCoServer = require('./DocsCoServer');
 var canvasService = require('./canvasservice');
@@ -40,6 +43,7 @@ var storage = require('./../../Common/sources/storage-base');
 var utils = require('./../../Common/sources/utils');
 var logger = require('./../../Common/sources/logger');
 var constants = require('./../../Common/sources/constants');
+var commondefines = require('./../../Common/sources/commondefines');
 var pubsubRedis = require('./pubsubRedis.js');
 var queueService = require('./../../Common/sources/taskqueueRabbitMQ');
 
@@ -48,8 +52,10 @@ var cfgExpFilesCron = config.get('expire.filesCron');
 var cfgExpDocumentsCron = config.get('expire.documentsCron');
 var cfgExpFiles = config.get('expire.files');
 var cfgExpFilesRemovedAtOnce = config.get('expire.filesremovedatonce');
+var cfgForceSaveTimeoutQuantum = ms(config.get('forcesave.quantum'));
 
 var redisKeyDocuments = cfgRedisPrefix + constants.REDIS_KEY_DOCUMENTS;
+var redisForceSaveTimeout = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_TIMEOUT;
 
 var checkFileExpire = function() {
   return co(function* () {
@@ -129,6 +135,51 @@ var checkDocumentExpire = function() {
     }
   });
 };
+let forceSaveTimeout = function() {
+  return co(function* () {
+    let queue = null;
+    try {
+      logger.debug('forceSaveTimeout start');
+      let redisClient = pubsubRedis.getClientRedis();
+
+      let now = (new Date()).getTime();
+      let multi = redisClient.multi([
+        ['zrangebyscore', redisForceSaveTimeout, 0, now],
+        ['zremrangebyscore', redisForceSaveTimeout, 0, now]
+      ]);
+      let execRes = yield utils.promiseRedis(multi, multi.exec);
+      let expiredKeys = execRes[0];
+      if (expiredKeys.length > 0) {
+        queue = new queueService();
+        yield queue.initPromise(true, false, false, false);
+
+        let actions = [];
+        for (let i = 0; i < expiredKeys.length; ++i) {
+          let docId = expiredKeys[i];
+          if (docId) {
+            let action = yield docsCoServer.startForceSavePromise(docId, commondefines.c_oAscForceSaveTypes.Timeout,
+                                                            undefined, undefined, undefined, queue);
+            actions.push(action);
+          }
+        }
+        yield Promise.all(actions);
+        logger.debug('forceSaveTimeout actions.length %d', actions.length);
+      }
+    } catch (e) {
+      logger.error('forceSaveTimeout error:\r\n%s', e.stack);
+    } finally {
+      try {
+        if (queue) {
+          yield queue.close();
+        }
+      } catch (e) {
+        logger.error('checkDocumentExpire error:\r\n%s', e.stack);
+      }
+      setTimeout(forceSaveTimeout, cfgForceSaveTimeoutQuantum);
+    }
+  });
+};
+
 var documentExpireJob = function(opt_isStart) {
   if (!opt_isStart) {
     logger.warn('checkDocumentExpire restart');
@@ -144,3 +195,7 @@ var fileExpireJob = function(opt_isStart) {
   new cron.CronJob(cfgExpFilesCron, checkFileExpire, fileExpireJob, true);
 };
 fileExpireJob(true);
+
+if(cfgForceSaveTimeoutQuantum > 0){
+  setTimeout(forceSaveTimeout, cfgForceSaveTimeoutQuantum);
+}

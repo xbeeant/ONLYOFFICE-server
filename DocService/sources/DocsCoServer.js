@@ -89,7 +89,8 @@ const constants = require('./../../Common/sources/constants');
 var utils = require('./../../Common/sources/utils');
 var commonDefines = require('./../../Common/sources/commondefines');
 var statsDClient = require('./../../Common/sources/statsdclient');
-var config = require('config').get('services.CoAuthoring');
+const configCommon = require('config');
+const config = configCommon.get('services.CoAuthoring');
 var sqlBase = require('./baseConnector');
 var canvasService = require('./canvasservice');
 var converterService = require('./converterservice');
@@ -128,6 +129,9 @@ var cfgTokenSessionExpires = ms(config.get('token.session.expires'));
 var cfgTokenInboxHeader = config.get('token.inbox.header');
 var cfgTokenInboxPrefix = config.get('token.inbox.prefix');
 var cfgSecretSession = config.get('secret.session');
+var cfgForceSaveTimeout = ms(config.get('forcesave.timeout'));
+var cfgForceSaveMinExpiration = ms(config.get('forcesave.minRetentionPeriod'));
+var cfgQueueRetentionPeriod = configCommon.get('queue.retentionPeriod');
 
 var redisKeySaveLock = cfgRedisPrefix + constants.REDIS_KEY_SAVE_LOCK;
 var redisKeyPresenceHash = cfgRedisPrefix + constants.REDIS_KEY_PRESENCE_HASH;
@@ -139,6 +143,7 @@ var redisKeyMessage = cfgRedisPrefix + constants.REDIS_KEY_MESSAGE;
 var redisKeyDocuments = cfgRedisPrefix + constants.REDIS_KEY_DOCUMENTS;
 var redisKeyLastSave = cfgRedisPrefix + constants.REDIS_KEY_LAST_SAVE;
 var redisKeyForceSave = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE;
+var redisKeyForceSaveTimeout = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_TIMEOUT;
 var redisKeySaved = cfgRedisPrefix + constants.REDIS_KEY_SAVED;
 
 var EditorTypes = {
@@ -157,6 +162,9 @@ var licenseInfo = {type: constants.LICENSE_RESULT.Error, light: false, branding:
 var shutdownFlag = false;
 
 var asc_coAuthV = '4.3.0';				// Версия сервера совместного редактирования
+
+const FORCE_SAVE_EXPIRATION = Math.min(Math.max(cfgForceSaveTimeout, cfgForceSaveMinExpiration),
+                                       cfgQueueRetentionPeriod * 1000);
 
 function getIsShutdown() {
   return shutdownFlag;
@@ -192,9 +200,7 @@ var c_oAscServerStatus = {
   Closed: 4,
   MailMerge: 5,
   MustSaveForce: 6,
-  CorruptedForce: 7,
-  MustSaveButton: 8,
-  CorruptedButton: 9
+  CorruptedForce: 7
 };
 
 var c_oAscChangeBase = {
@@ -546,9 +552,9 @@ function* publish(data, optDocId, optUserId) {
     pubsub.publish(msg);
   }
 }
-function* addTask(data, priority, opt_queue) {
+function* addTask(data, priority, opt_queue, opt_expiration) {
   var realQueue = opt_queue ? opt_queue : queue;
-  yield realQueue.addTask(data, priority);
+  yield realQueue.addTask(data, priority, opt_expiration);
 }
 function* removeResponse(data) {
   yield queue.removeResponse(data);
@@ -640,59 +646,127 @@ function* getChangesIndex(docId) {
   }
   return res;
 }
-function getForceSaveIndex(time, index) {
-  return JSON.stringify({lastsave: time, index: index});
-}
-function* setForceSave(docId, forceSave, savePathDoc) {
-  var lastSave = getForceSaveIndex(forceSave.getLastSave(), forceSave.getIndex());
-  yield utils.promiseRedis(redisClient, redisClient.hset, redisKeyForceSave + docId, lastSave, savePathDoc);
-}
-function* getLastForceSave(docId) {
-  var lastSave = yield utils.promiseRedis(redisClient, redisClient.get, redisKeyLastSave + docId);
-  if (lastSave) {
-    var forceSave = yield utils.promiseRedis(redisClient, redisClient.hget, redisKeyForceSave + docId, lastSave);
-    //forceSave is filled before sendServerRequest
-    if (forceSave) {
-      return new commonDefines.CForceSaveData(JSON.parse(lastSave));
+function* getLastSave(docId) {
+  var res = yield utils.promiseRedis(redisClient, redisClient.hgetall, redisKeyLastSave + docId);
+  if (res) {
+    if (res.time) {
+      res.time = parseInt(res.time);
+    }
+    if (res.index) {
+      res.index = parseInt(res.index);
     }
   }
-  return null;
+  return res;
 }
-function* startForceSave(docId, baseUrl, isCommand, opt_userdata, opt_userConnectionId, opt_saveId) {
-  logger.debug('startForceSave start:docId = %s', docId);
-  var res = commonDefines.c_oAscServerCommandErrors.NoError;
-  var lastSave = null;
-  if (!shutdownFlag) {
-    lastSave = yield utils.promiseRedis(redisClient, redisClient.get, redisKeyLastSave + docId);
-  }
-  if (lastSave) {
-    logger.debug('startForceSave lastSave:docId = %s; lastSave = %s', docId, lastSave);
-    var multi = redisClient.multi([
-                                    ['hsetnx', redisKeyForceSave + docId, lastSave, ""],
-                                    ['expire', redisKeyForceSave + docId, cfgExpForceSave]
-                                  ]);
-    var execRes = yield utils.promiseRedis(multi, multi.exec);
-    //hsetnx 0 if field already exists
-    if (0 == execRes[0]) {
-      res = commonDefines.c_oAscServerCommandErrors.NotModified;
-      logger.debug('startForceSave NotModified:docId = %s', docId);
-    } else {
-      var forceSave = new commonDefines.CForceSaveData(JSON.parse(lastSave));
-      forceSave.setIsCommand(isCommand);
-      forceSave.setSaveId(opt_saveId);
-      //start new convert
-      var status = yield* converterService.convertFromChanges(docId, baseUrl, forceSave, opt_userdata, opt_userConnectionId);
-      if (constants.NO_ERROR !== status.err) {
-        res = commonDefines.c_oAscServerCommandErrors.UnknownError;
-      }
-      logger.debug('startForceSave convertFromChanges:docId = %s; status = %d', docId, status.err);
+function getForceSaveIndex(time, index) {
+  return time + '_' + index;
+}
+function* setForceSave(docId, forceSave, cmd, success) {
+  let forceSaveIndex = getForceSaveIndex(forceSave.getTime(), forceSave.getIndex());
+  if (success) {
+    yield utils.promiseRedis(redisClient, redisClient.hset, redisKeyForceSave + docId, forceSaveIndex, true);
+
+    let forceSaveType = forceSave.getType();
+    if ((commonDefines.c_oAscForceSaveTypes.Button === forceSaveType ||
+      commonDefines.c_oAscForceSaveTypes.Timeout === forceSaveType)) {
+      yield* publish({
+                       type: commonDefines.c_oPublishType.forceSave, docId: docId,
+                       data: {type: forceSaveType, time: forceSave.getTime()}
+                     }, cmd.getUserConnectionId());
     }
   } else {
-    res = commonDefines.c_oAscServerCommandErrors.NotModified;
+    yield utils.promiseRedis(redisClient, redisClient.hdel, redisKeyForceSave + docId, forceSaveIndex);
+  }
+}
+function* getLastForceSave(docId, lastSave) {
+  let res = false;
+  if (lastSave) {
+    let forceSaveIndex = getForceSaveIndex(lastSave.time, lastSave.index);
+    let forceSave = yield utils.promiseRedis(redisClient, redisClient.hget, redisKeyForceSave + docId, forceSaveIndex);
+    if (forceSave) {
+      res = true;
+    }
+  }
+  return res;
+}
+function* startForceSave(docId, type, opt_userdata, opt_userConnectionId, opt_baseUrl, opt_queue) {
+  logger.debug('startForceSave start:docId = %s', docId);
+  let res = {code: commonDefines.c_oAscServerCommandErrors.NoError, time: null};
+  let lastSave = null;
+  if (!shutdownFlag) {
+    lastSave = yield* getLastSave(docId);
+    if (lastSave && undefined !== lastSave.time && undefined !== lastSave.index) {
+      let forceSaveIndex = getForceSaveIndex(lastSave.time, lastSave.index);
+      let multi = redisClient.multi([
+                                      ['hsetnx', redisKeyForceSave + docId, forceSaveIndex, false],
+                                      ['expire', redisKeyForceSave + docId, cfgExpForceSave]
+                                    ]);
+      let execRes = yield utils.promiseRedis(multi, multi.exec);
+      //hsetnx 0 if field already exists
+      if (0 == execRes[0]) {
+        lastSave = null;
+      }
+    } else {
+      lastSave = null;
+    }
+  }
+  if (lastSave) {
+    logger.debug('startForceSave lastSave:docId = %s; lastSave = %j', docId, lastSave);
+    let baseUrl = opt_baseUrl || lastSave.baseUrl;
+    let forceSave = new commonDefines.CForceSaveData(lastSave);
+    forceSave.setType(type);
+
+    let priority;
+    let expiration;
+    if (commonDefines.c_oAscForceSaveTypes.Timeout === type) {
+      priority = constants.QUEUE_PRIORITY_VERY_LOW;
+      expiration = FORCE_SAVE_EXPIRATION;
+    } else {
+      priority = constants.QUEUE_PRIORITY_LOW;
+    }
+    //start new convert
+    let status = yield* converterService.convertFromChanges(docId, baseUrl, forceSave, opt_userdata,
+                                                            opt_userConnectionId, priority, expiration, opt_queue);
+    if (constants.NO_ERROR === status.err) {
+      res.time = forceSave.getTime();
+    } else {
+      res.code = commonDefines.c_oAscServerCommandErrors.UnknownError;
+    }
+    logger.debug('startForceSave convertFromChanges:docId = %s; status = %d', docId, status.err);
+  } else {
+    res.code = commonDefines.c_oAscServerCommandErrors.NotModified;
     logger.debug('startForceSave NotModified no changes:docId = %s', docId);
   }
   logger.debug('startForceSave end:docId = %s', docId);
   return res;
+}
+function handleDeadLetter(data) {
+  return co(function*() {
+    let docId = 'null';
+    try {
+      logger.debug('handleDeadLetter start: docId = %s %s', docId, data);
+      var isRequeued = false;
+      let task = new commonDefines.TaskQueueData(JSON.parse(data));
+      if (task) {
+        let cmd = task.getCmd();
+        docId = cmd.getDocId();
+        let forceSave = cmd.getForceSave();
+        //todo requeue other tasks
+        if (forceSave && commonDefines.c_oAscForceSaveTypes.Timeout == forceSave.getType()) {
+          let lastSave = yield* getLastSave(docId);
+          //check that there are no new changes
+          if (lastSave && forceSave.getTime() === lastSave.time && forceSave.getIndex() === lastSave.index) {
+            //requeue task
+            yield* addTask(task, constants.QUEUE_PRIORITY_VERY_LOW, undefined, FORCE_SAVE_EXPIRATION);
+            isRequeued = true;
+          }
+        }
+      }
+      logger.debug('handleDeadLetter end: docId = %s; requeue = %s', docId, isRequeued);
+    } catch (err) {
+      logger.debug('handleDeadLetter error: docId = %s\r\n%s', docId, err.stack);
+    }
+  });
 }
 /**
  * Отправка статуса, чтобы знать когда документ начал редактироваться, а когда закончился
@@ -945,9 +1019,10 @@ exports.getIsShutdown = getIsShutdown;
 exports.getChangesIndexPromise = co.wrap(getChangesIndex);
 exports.cleanDocumentOnExitPromise = co.wrap(cleanDocumentOnExit);
 exports.cleanDocumentOnExitNoChangesPromise = co.wrap(cleanDocumentOnExitNoChanges);
-exports.getForceSaveIndex = getForceSaveIndex;
 exports.setForceSave = setForceSave;
+exports.getLastSave = getLastSave;
 exports.getLastForceSave = getLastForceSave;
+exports.startForceSavePromise = co.wrap(startForceSave);
 exports.checkJwt = checkJwt;
 exports.checkJwtHeader = checkJwtHeader;
 exports.checkJwtPayloadHash = checkJwtPayloadHash;
@@ -1017,7 +1092,7 @@ exports.install = function(server, callbackFunction) {
             yield* isSaveLock(conn, data);
             break;
           case 'unSaveLock'      :
-            yield* unSaveLock(conn, -1);
+            yield* unSaveLock(conn, -1, -1);
             break;	// Индекс отправляем -1, т.к. это экстренное снятие без сохранения
           case 'getMessages'      :
             yield* getMessages(conn, data);
@@ -1055,14 +1130,14 @@ exports.install = function(server, callbackFunction) {
               conn.close(checkJwtRes.code, checkJwtRes.description);
             }
             break;
-          case 'forcesave' :
-            var code;
+          case 'forceSaveStart' :
+            var forceSaveRes;
             if (conn.user) {
-              code = yield* startForceSave(docId, utils.getBaseUrlByConnection(conn), false, undefined, conn.user.id, data.saveid);
+              forceSaveRes = yield* startForceSave(docId, commonDefines.c_oAscForceSaveTypes.Button, undefined, conn.user.id);
             } else {
-              code = commonDefines.c_oAscServerCommandErrors.UnknownError;
+              forceSaveRes = {code: commonDefines.c_oAscServerCommandErrors.UnknownError, time: null};
             }
-            sendData(conn, {type: "forcesave", messages: {code: code, saveid: data.saveid}});
+            sendData(conn, {type: "forceSaveStart", messages: forceSaveRes});
             break;
           default:
             logger.debug("unknown command %s", message);
@@ -1317,7 +1392,7 @@ exports.install = function(server, callbackFunction) {
 			}
 
 			// Автоматически снимаем lock сами
-			yield* unSaveLock(currentConnection, -1);
+			yield* unSaveLock(currentConnection, -1, -1);
 		}
 
 		return result;
@@ -1858,6 +1933,15 @@ exports.install = function(server, callbackFunction) {
         return JSON.parse(val);
       });
     }
+    let lastForceSaveTime = null;
+    if (cfgForceSaveTimeout > 0) {
+      lastForceSaveTime = -1;
+      //todo multi with messages
+      let lastSave = yield* getLastSave(docId);
+      if (lastSave && lastSave.end) {
+        lastForceSaveTime = lastSave.time;
+      }
+    }
     var sendObject = {
       type: 'auth',
       result: 1,
@@ -1870,7 +1954,8 @@ exports.install = function(server, callbackFunction) {
       changesIndex: changesIndex,
       indexUser: conn.user.indexUser,
       jwt: cfgTokenEnableBrowser ? {token: fillJwtByConnection(conn), expires: cfgTokenSessionExpires} : undefined,
-      g_cAscSpellCheckUrl: cfgSpellcheckerUrl
+      g_cAscSpellCheckUrl: cfgSpellcheckerUrl,
+      lastForceSaveTime: lastForceSaveTime
     };
     sendData(conn, sendObject);//Or 0 if fails
   }
@@ -2033,6 +2118,7 @@ exports.install = function(server, callbackFunction) {
     const startIndex = puckerIndex;
 
     const newChanges = JSON.parse(data.changes);
+    let newChangesLastTime = null;
     let arrNewDocumentChanges = [];
     logger.info("saveChanges docid: %s ; deleteIndex: %s ; startIndex: %s ; length: %s", docId, deleteIndex, startIndex, newChanges.length);
     if (0 < newChanges.length) {
@@ -2040,7 +2126,8 @@ exports.install = function(server, callbackFunction) {
 
       for (let i = 0; i < newChanges.length; ++i) {
         oElement = newChanges[i];
-        arrNewDocumentChanges.push({docid: docId, change: JSON.stringify(oElement), time: Date.now(),
+        newChangesLastTime = Date.now();
+        arrNewDocumentChanges.push({docid: docId, change: JSON.stringify(oElement), time: newChangesLastTime,
           user: userId, useridoriginal: conn.user.idOriginal});
       }
 
@@ -2091,9 +2178,22 @@ exports.install = function(server, callbackFunction) {
           locks: arrLocks, excelAdditionalInfo: data.excelAdditionalInfo}, docId, userId);
       }
       // Автоматически снимаем lock сами и посылаем индекс для сохранения
-      yield* unSaveLock(conn, changesIndex);
-      const lastSave = getForceSaveIndex(Date.now(), puckerIndex);
-      yield utils.promiseRedis(redisClient, redisClient.setex, redisKeyLastSave + docId, cfgExpLastSave, lastSave);
+      yield* unSaveLock(conn, changesIndex, newChangesLastTime);
+      //last save
+      if (newChangesLastTime) {
+        let commands = [
+          ['del', redisKeyForceSave + docId],
+          ['hmset', redisKeyLastSave + docId, 'time', newChangesLastTime, 'index', puckerIndex,
+            'baseUrl', utils.getBaseUrlByConnection(conn)],
+          ['expire', redisKeyLastSave + docId, cfgExpLastSave]
+        ];
+        if (cfgForceSaveTimeout > 0) {
+          let expireAt = new Date().getTime() + cfgForceSaveTimeout;
+          commands.push(['zadd', redisKeyForceSaveTimeout, expireAt, docId]);
+        }
+        let multi = redisClient.multi(commands);
+        yield utils.promiseRedis(multi, multi.exec);
+      }
     } else {
 		let changesToSend = arrNewDocumentChanges;
       if(changesToSend.length > cfgPubSubMaxChanges) {
@@ -2120,12 +2220,12 @@ exports.install = function(server, callbackFunction) {
   }
 
   // Снимаем лок с сохранения
-  function* unSaveLock(conn, index) {
+  function* unSaveLock(conn, index, time) {
     const saveLock = yield utils.promiseRedis(redisClient, redisClient.get, redisKeySaveLock + conn.docId);
     // ToDo проверка null === saveLock это заглушка на подключение второго пользователя в документ (не делается saveLock в этот момент, но идет сохранение и снять его нужно)
     if (null === saveLock || conn.user.id == saveLock) {
       yield utils.promiseRedis(redisClient, redisClient.del, redisKeySaveLock + conn.docId);
-      sendData(conn, {type: 'unSaveLock', index: index});
+      sendData(conn, {type: 'unSaveLock', index: index, time: time});
     }
   }
 
@@ -2456,6 +2556,12 @@ exports.install = function(server, callbackFunction) {
               sendDataMeta(participant, data.meta);
             });
             break;
+          case commonDefines.c_oPublishType.forceSave:
+            participants = getParticipants(data.docId, true, data.userId, true);
+            _.each(participants, function(participant) {
+              sendData(participant, {type: "forceSave", messages: data.data});
+            });
+            break;
           default:
             logger.debug('pubsub unknown message type:%s', msg);
         }
@@ -2548,6 +2654,7 @@ exports.install = function(server, callbackFunction) {
     }
 
     queue = new queueService();
+    queue.on('dead', handleDeadLetter);
     queue.on('response', canvasService.receiveTask);
     queue.init(true, false, false, true, function(err){
       if (null != err) {
@@ -2634,7 +2741,8 @@ exports.commandFromServer = function (req, res) {
             }
             break;
           case 'forcesave':
-            result = yield* startForceSave(docId, utils.getBaseUrlByRequest(req), true, params.userdata);
+            let forceSaveRes = yield* startForceSave(docId, commonDefines.c_oAscForceSaveTypes.Command, params.userdata, utils.getBaseUrlByRequest(req));
+            result = forceSaveRes.code;
             break;
           case 'meta':
             if (params.meta) {

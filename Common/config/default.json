@@ -29,9 +29,11 @@
 	"rabbitmq": {
 		"url": "amqp://guest:guest@localhost:5672",
 		"socketOptions": {},
-		"exchangepubsub": "dc.pubsub",
-		"queueconverttask": "dc.converttask",
-		"queueconvertresponse": "dc.convertresponse"
+		"exchangepubsub": "ds.pubsub",
+		"queueconverttask": "ds.converttask",
+		"queueconvertresponse": "ds.convertresponse",
+		"exchangeconvertdead": "ds.exchangeconvertdead",
+		"queueconvertdead": "ds.convertdead"
 	},
 	"dnscache": {
 		"enable" : true,
@@ -54,6 +56,11 @@
 				"healthcheckfilepath": "../public/healthcheck.docx",
 				"savetimeoutdelay": 5000,
 				"edit_singleton": false
+			},
+			"forcesave": {
+				"timeout": "0",
+				"quantum": "1m",
+				"minRetentionPeriod": "1m"
 			},
 			"utils": {
 				"utils_common_fontdir": "null",

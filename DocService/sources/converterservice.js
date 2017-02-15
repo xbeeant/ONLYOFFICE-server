@@ -32,7 +32,6 @@
 
 var config = require('config');
 var co = require('co');
-const forwarded = require('forwarded');
 var taskResult = require('./taskresult');
 var logger = require('./../../Common/sources/logger');
 var utils = require('./../../Common/sources/utils');
@@ -45,11 +44,8 @@ var formatChecker = require('./../../Common/sources/formatchecker');
 var statsDClient = require('./../../Common/sources/statsdclient');
 
 var cfgHealthCheckFilePath = config.get('services.CoAuthoring.server.healthcheckfilepath');
-var cfgVisibilityTimeout = config.get('queue.visibilityTimeout');
-var cfgQueueRetentionPeriod = config.get('queue.retentionPeriod');
 var cfgTokenEnableRequestInbox = config.get('services.CoAuthoring.token.enable.request.inbox');
 
-var CONVERT_TIMEOUT = 1.5 * (cfgVisibilityTimeout + cfgQueueRetentionPeriod) * 1000;
 var CONVERT_ASYNC_DELAY = 1000;
 
 var clientStatsD = statsDClient.getClient();
@@ -80,14 +76,14 @@ function* getConvertStatus(cmd, selectRes, baseUrl, fileTo) {
         break;
     }
     var lastOpenDate = row.last_open_date;
-    if (new Date().getTime() - lastOpenDate.getTime() > CONVERT_TIMEOUT) {
+    if (new Date().getTime() - lastOpenDate.getTime() > utils.CONVERTION_TIMEOUT) {
       status.err = constants.CONVERT_TIMEOUT;
     }
   }
   return status;
 }
 
-function* convertByCmd(cmd, async, baseUrl, fileTo, opt_healthcheck) {
+function* convertByCmd(cmd, async, baseUrl, fileTo, opt_healthcheck, opt_priority, opt_expiration, opt_queue) {
   var docId = cmd.getDocId();
   var startDate = null;
   if (clientStatsD) {
@@ -116,7 +112,8 @@ function* convertByCmd(cmd, async, baseUrl, fileTo, opt_healthcheck) {
     if (opt_healthcheck) {
       queueData.setFromOrigin(true);
     }
-    yield* docsCoServer.addTask(queueData, constants.QUEUE_PRIORITY_LOW);
+    var priority = null != opt_priority ? opt_priority : constants.QUEUE_PRIORITY_LOW
+    yield* docsCoServer.addTask(queueData, priority, opt_queue, opt_expiration);
     status = {url: undefined, err: constants.NO_ERROR};
   }
   //wait
@@ -130,7 +127,7 @@ function* convertByCmd(cmd, async, baseUrl, fileTo, opt_healthcheck) {
       selectRes = yield taskResult.select(docId);
       status = yield* getConvertStatus(cmd, selectRes, baseUrl, fileTo);
       waitTime += CONVERT_ASYNC_DELAY;
-      if (waitTime > CONVERT_TIMEOUT) {
+      if (waitTime > utils.CONVERTION_TIMEOUT) {
         status.err = constants.CONVERT_TIMEOUT;
       }
     }
@@ -176,7 +173,8 @@ function convertHealthCheck(req, res) {
   });
 }
 
-function* convertFromChanges(docId, baseUrl, forceSave, opt_userdata, opt_userConnectionId) {
+function* convertFromChanges(docId, baseUrl, forceSave, opt_userdata, opt_userConnectionId, opt_priority,
+                             opt_expiration, opt_queue) {
   var cmd = new commonDefines.InputCommand();
   cmd.setCommand('sfcm');
   cmd.setDocId(docId);
@@ -192,8 +190,8 @@ function* convertFromChanges(docId, baseUrl, forceSave, opt_userdata, opt_userCo
     cmd.setUserConnectionId(opt_userConnectionId);
   }
 
-  yield* canvasService.commandSfctByCmd(cmd);
-  return yield* convertByCmd(cmd, true, baseUrl, constants.OUTPUT_NAME);
+  yield* canvasService.commandSfctByCmd(cmd, opt_priority, opt_expiration, opt_queue);
+  return yield* convertByCmd(cmd, true, baseUrl, constants.OUTPUT_NAME, undefined, opt_priority, opt_expiration, opt_queue);
 }
 function parseIntParam(val){
   return (typeof val === 'string') ? parseInt(val) : val;

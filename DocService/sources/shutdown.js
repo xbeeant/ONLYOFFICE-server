@@ -41,15 +41,13 @@ var commonDefines = require('./../../Common/sources/commondefines');
 var constants = require('./../../Common/sources/constants');
 var utils = require('./../../Common/sources/utils');
 
-var cfgVisibilityTimeout = config.get('queue.visibilityTimeout');
-var cfgQueueRetentionPeriod = config.get('queue.retentionPeriod');
 var cfgRedisPrefix = configCoAuthoring.get('redis.prefix');
 var redisKeyShutdown = cfgRedisPrefix + constants.REDIS_KEY_SHUTDOWN;
 var redisKeyDocuments = cfgRedisPrefix + constants.REDIS_KEY_DOCUMENTS;
 
 var WAIT_TIMEOUT = 30000;
 var LOOP_TIMEOUT = 1000;
-var EXEC_TIMEOUT = WAIT_TIMEOUT + 1.5 * (cfgVisibilityTimeout + cfgQueueRetentionPeriod) * 1000;
+var EXEC_TIMEOUT = WAIT_TIMEOUT + utils.CONVERTION_TIMEOUT;
 
 (function shutdown() {
   return co(function* () {

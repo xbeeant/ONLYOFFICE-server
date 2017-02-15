@@ -155,10 +155,11 @@ exports.VKEY_TIME_EXPIRE = -124;
 exports.VKEY_TIME_INCORRECT = -125;
 exports.EDITOR_CHANGES = -160;
 
-exports.QUEUE_PRIORITY_LOW = 0;
-exports.QUEUE_PRIORITY_NORMAL = 1;
-exports.QUEUE_PRIORITY_HIGH = 2;
-exports.QUEUE_PRIORITY_RESPONSE = 3;
+exports.QUEUE_PRIORITY_VERY_LOW = 0;
+exports.QUEUE_PRIORITY_LOW = 1;
+exports.QUEUE_PRIORITY_NORMAL = 2;
+exports.QUEUE_PRIORITY_HIGH = 3;
+exports.QUEUE_PRIORITY_VERY_HIGH = 4;
 
 exports.EDITOR_TYPE_WORD = 0;
 exports.EDITOR_TYPE_SPREADSHEET = 1;
@@ -179,6 +180,7 @@ exports.REDIS_KEY_MESSAGE = 'message:';
 exports.REDIS_KEY_DOCUMENTS = 'documents';
 exports.REDIS_KEY_LAST_SAVE = 'lastsave:';
 exports.REDIS_KEY_FORCE_SAVE = 'forcesave:';
+exports.REDIS_KEY_FORCE_SAVE_TIMEOUT = 'forcesavetimeout';
 exports.REDIS_KEY_SAVED = 'saved:';
 exports.REDIS_KEY_SHUTDOWN = 'shutdown';
 exports.REDIS_KEY_LICENSE = 'license';

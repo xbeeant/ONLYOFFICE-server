@@ -43,6 +43,8 @@ var cfgVisibilityTimeout = config.get('queue.visibilityTimeout');
 var cfgQueueRetentionPeriod = config.get('queue.retentionPeriod');
 var cfgRabbitQueueConvertTask = config.get('rabbitmq.queueconverttask');
 var cfgRabbitQueueConvertResponse = config.get('rabbitmq.queueconvertresponse');
+var cfgRabbitExchangeConvertDead = config.get('rabbitmq.exchangeconvertdead');
+var cfgRabbitQueueConvertDead = config.get('rabbitmq.queueconvertdead');
 
 function init(taskqueue, isAddTask, isAddResponse, isAddTaskReceive, isAddResponseReceive, callback) {
   return co(function* () {
@@ -58,9 +60,27 @@ function init(taskqueue, isAddTask, isAddResponse, isAddTaskReceive, isAddRespon
       var bAssertTaskQueue = false;
       var optionsTaskQueue = {
         durable: true,
-        arguments: {'x-max-priority': constants.QUEUE_PRIORITY_HIGH, 'x-message-ttl': cfgQueueRetentionPeriod * 1000}
+        maxPriority: constants.QUEUE_PRIORITY_VERY_HIGH,
+        messageTtl: cfgQueueRetentionPeriod * 1000,
+        deadLetterExchange: cfgRabbitExchangeConvertDead
       };
       if (isAddTask) {
+        taskqueue.channelConvertDead = yield rabbitMQCore.createChannelPromise(conn);
+        yield rabbitMQCore.assertExchangePromise(taskqueue.channelConvertDead, cfgRabbitExchangeConvertDead, 'fanout',
+                                                 {durable: true});
+        var queue = yield rabbitMQCore.assertQueuePromise(taskqueue.channelConvertDead, cfgRabbitQueueConvertDead,
+                                                          {durable: true});
+
+        taskqueue.channelConvertDead.bindQueue(queue, cfgRabbitExchangeConvertDead, '');
+        yield rabbitMQCore.consumePromise(taskqueue.channelConvertDead, queue, function(message) {
+          if (null != taskqueue.channelConvertDead) {
+            if (message) {
+              taskqueue.emit('dead', message.content.toString());
+            }
+            taskqueue.channelConvertDead.ack(message);
+          }
+        }, {noAck: false});
+
         taskqueue.channelConvertTask = yield rabbitMQCore.createConfirmChannelPromise(conn);
         yield rabbitMQCore.assertQueuePromise(taskqueue.channelConvertTask, cfgRabbitQueueConvertTask,
           optionsTaskQueue);
@@ -115,6 +135,7 @@ function init(taskqueue, isAddTask, isAddResponse, isAddTaskReceive, isAddRespon
 function clear(taskqueue) {
   taskqueue.channelConvertTask = null;
   taskqueue.channelConvertTaskReceive = null;
+  taskqueue.channelConvertDead = null;
   taskqueue.channelConvertResponse = null;
   taskqueue.channelConvertResponseReceive = null;
 }
@@ -124,12 +145,15 @@ function repeat(taskqueue) {
   //acknowledge data after reconnect raises an exception 'PRECONDITION_FAILED - unknown delivery tag'
   for (var i = 0; i < taskqueue.addTaskStore.length; ++i) {
     var elem = taskqueue.addTaskStore[i];
-    addTask(taskqueue, elem.task, elem.priority, function () {});
+    addTask(taskqueue, elem.task, elem.priority, function () {}, elem.expiration);
   }
   taskqueue.addTaskStore.length = 0;
 }
-function addTask(taskqueue, content, priority, callback) {
+function addTask(taskqueue, content, priority, callback, opt_expiration) {
   var options = {persistent: true, priority: priority};
+  if (undefined !== opt_expiration) {
+    options.expiration = opt_expiration.toString();
+  }
   taskqueue.channelConvertTask.sendToQueue(cfgRabbitQueueConvertTask, content, options, callback);
 }
 function addResponse(taskqueue, content, callback) {
@@ -148,6 +172,7 @@ function TaskQueueRabbitMQ() {
   this.connection = null;
   this.channelConvertTask = null;
   this.channelConvertTaskReceive = null;
+  this.channelConvertDead = null;
   this.channelConvertResponse = null;
   this.channelConvertResponseReceive = null;
   this.addTaskStore = [];
@@ -168,7 +193,7 @@ TaskQueueRabbitMQ.prototype.initPromise = function(isAddTask, isAddResponse, isA
     });
   });
 };
-TaskQueueRabbitMQ.prototype.addTask = function (task, priority) {
+TaskQueueRabbitMQ.prototype.addTask = function (task, priority, opt_expiration) {
   //todo confirmation mode
   var t = this;
   return new Promise(function (resolve, reject) {
@@ -181,9 +206,9 @@ TaskQueueRabbitMQ.prototype.addTask = function (task, priority) {
         } else {
           resolve();
         }
-      });
+      }, opt_expiration);
     } else {
-      t.addTaskStore.push({task: content, priority: priority});
+      t.addTaskStore.push({task: content, priority: priority, expiration: opt_expiration});
       resolve();
     }
   });

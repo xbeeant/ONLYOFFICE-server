@@ -65,6 +65,8 @@ var cfgTokenOutboxAlgorithm = config.get('services.CoAuthoring.token.outbox.algo
 var cfgTokenOutboxExpires = config.get('services.CoAuthoring.token.outbox.expires');
 var cfgSignatureSecretInbox = config.get('services.CoAuthoring.secret.inbox');
 var cfgSignatureSecretOutbox = config.get('services.CoAuthoring.secret.outbox');
+var cfgVisibilityTimeout = config.get('queue.visibilityTimeout');
+var cfgQueueRetentionPeriod = config.get('queue.retentionPeriod');
 
 var ANDROID_SAFE_FILENAME = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ._-+,@£$€!½§~\'=()[]{}0123456789';
 
@@ -80,6 +82,8 @@ var g_oIpFilterRules = function() {
 }();
 var isEmptySecretTenants = isEmptyObject(cfgSignatureSecretInbox.tenants);
 const pemfileCache = new NodeCache({stdTTL: ms(cfgExpPemStdTtl) / 1000, checkperiod: ms(cfgExpPemCheckPeriod) / 1000, errorOnMissing: false, useClones: true});
+
+exports.CONVERTION_TIMEOUT = 1.5 * (cfgVisibilityTimeout + cfgQueueRetentionPeriod) * 1000;
 
 exports.addSeconds = function(date, sec) {
   date.setSeconds(date.getSeconds() + sec);
