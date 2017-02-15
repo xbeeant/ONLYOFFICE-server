@@ -30,6 +30,8 @@
  *
  */
 
+'use strict';
+
 var mysql = require('mysql');
 var sqlBase = require('./baseConnector');
 var configSql = require('config').get('services.CoAuthoring.sql');

@@ -30,6 +30,8 @@
  *
  */
 
+'use strict';
+
 var pg = require('pg');
 var co = require('co');
 var pgEscape = require('pg-escape');
