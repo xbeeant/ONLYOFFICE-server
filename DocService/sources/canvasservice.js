@@ -152,7 +152,7 @@ function* getOutputData(cmd, outputData, key, status, statusInfo, optConn, optAd
         outputData.setStatus('updateversion');
       }
       var command = cmd.getCommand();
-      if ('open' != command && 'reopen' != command) {
+      if ('open' != command && 'reopen' != command && !cmd.getOutputUrls()) {
         var strPath = key + '/' + cmd.getOutputPath();
         if (optConn) {
           var contentDisposition = cmd.getInline() ? constants.CONTENT_DISPOSITION_INLINE : constants.CONTENT_DISPOSITION_ATTACHMENT;

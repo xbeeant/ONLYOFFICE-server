@@ -77,6 +77,7 @@ function InputCommand(data) {
     this['userdata'] = data['userdata'];
     this['inline'] = data['inline'];
     this['password'] = data['password'];
+    this['outputurls'] = data['outputurls'];
   } else {
     this['c'] = undefined;//string command
     this['id'] = undefined;//string document id
@@ -111,6 +112,7 @@ function InputCommand(data) {
     this['userdata'] = undefined;
     this['inline'] = undefined;//content disposition
     this['password'] = undefined;
+    this['outputurls'] = undefined;
   }
 }
 InputCommand.prototype = {
@@ -278,6 +280,12 @@ InputCommand.prototype = {
   },
   setPassword: function(data) {
     this['password'] = data;
+  },
+  setOutputUrls: function(data) {
+    this['outputurls'] = data;
+  },
+  getOutputUrls: function(data) {
+    return this['outputurls'];
   }
 };
 
