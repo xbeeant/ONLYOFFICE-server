@@ -16,20 +16,17 @@
         "port": 8080,
         "sockjsUrl": "/office/vendor/sockjs/sockjs.min.js",
         "editor_settings_spellchecker_url": "",
-        "static_content": [
-          {
-            "name": "/sdkjs",
+        "static_content": {
+          "/sdkjs": {
             "path": "../../../sdkjs"
           },
-          {
-            "name": "/web-apps",
+          "/web-apps": {
             "path": "../../../web-apps"
           },
-          {
-            "name": "/sdkjs-plugins",
+          "/sdkjs-plugins": {
             "path": "../../../sdkjs-plugins"
           }
-        ]
+        }
       },
       "utils": {
         "utils_common_fontdir": "/Library/Fonts"
