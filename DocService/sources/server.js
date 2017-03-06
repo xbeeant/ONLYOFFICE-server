@@ -231,7 +231,7 @@ if (cluster.isMaster) {
 			res.setHeader('Content-Type', 'application/json');
 			res.send(JSON.stringify(data));
 		};
-		app.get('/plugins.json', utils.checkClientIp, (req, res) => {
+		app.get('/plugins.json', (req, res) => {
 			if (userPlugins && !updatePlugins) {
 				sendUserPlugins(res, userPlugins);
 				return;
