@@ -475,29 +475,36 @@ function updatePresenceCommandsToArray(outCommands, docId, userId, userInfo) {
   );
 }
 function* updatePresence(docId, userId, connInfo) {
-  var commands = [];
+  var multi = redisClient.multi(getUpdatePresenceCommands(docId, userId, connInfo));
+  yield utils.promiseRedis(multi, multi.exec);
+}
+function getUpdatePresenceCommands(docId, userId, connInfo) {
+  let commands = [];
   updatePresenceCommandsToArray(commands, docId, userId, connInfo);
   var expireAt = new Date().getTime() + cfgExpPresence * 1000;
   commands.push(['zadd', redisKeyDocuments, expireAt, docId]);
-  var multi = redisClient.multi(commands);
-  yield utils.promiseRedis(multi, multi.exec);
+  return commands;
 }
-function* getAllPresence(docId) {
-  var now = (new Date()).getTime();
-  var multi = redisClient.multi([
-      ['zrangebyscore', redisKeyPresenceSet + docId, 0, now],
-      ['hvals', redisKeyPresenceHash + docId]
-    ]);
-  var multiRes = yield utils.promiseRedis(multi, multi.exec);
-  var expiredKeys = multiRes[0];
-  var hvals = multiRes[1];
+function* getAllPresence(docId, opt_userId, opt_connInfo) {
+  let now = (new Date()).getTime();
+  let commands;
+  if(null != opt_userId && null != opt_connInfo){
+    commands = getUpdatePresenceCommands(docId, opt_userId, opt_connInfo);
+  } else {
+    commands = [];
+  }
+  commands.push(['zrangebyscore', redisKeyPresenceSet + docId, 0, now], ['hvals', redisKeyPresenceHash + docId]);
+  let multi = redisClient.multi(commands);
+  let multiRes = yield utils.promiseRedis(multi, multi.exec);
+  let expiredKeys = multiRes[multiRes.length - 2];
+  let hvals = multiRes[multiRes.length - 1];
   if (expiredKeys.length > 0) {
-    var commands = [
+    commands = [
       ['zremrangebyscore', redisKeyPresenceSet + docId, 0, now]
     ];
-    var expiredKeysMap = {};
-    for (var i = 0; i < expiredKeys.length; ++i) {
-      var expiredKey = expiredKeys[i];
+    let expiredKeysMap = {};
+    for (let i = 0; i < expiredKeys.length; ++i) {
+      let expiredKey = expiredKeys[i];
       expiredKeysMap[expiredKey] = 1;
       commands.push(['hdel', redisKeyPresenceHash + docId, expiredKey]);
     }
@@ -1367,9 +1374,9 @@ exports.install = function(server, callbackFunction) {
     return userLocks;
   }
 
-  function* getParticipantMap(docId) {
+  function* getParticipantMap(docId, opt_userId, opt_connInfo) {
     var participantsMap = [];
-    var hvals = yield* getAllPresence(docId);
+    var hvals = yield* getAllPresence(docId, opt_userId, opt_connInfo);
     for (var i = 0; i < hvals.length; ++i) {
       var elem = JSON.parse(hvals[i]);
       if (!elem.isCloseCoAuthoring) {
@@ -1875,9 +1882,8 @@ exports.install = function(server, callbackFunction) {
       return false;
     }
     connections.push(conn);
-    yield* updatePresence(docId, tmpUser.id, getConnectionInfo(conn));
     var firstParticipantNoView, countNoView = 0;
-    var participantsMap = yield* getParticipantMap(docId);
+    var participantsMap = yield* getParticipantMap(docId, tmpUser.id, getConnectionInfo(conn));
     for (var i = 0; i < participantsMap.length; ++i) {
       var elem = participantsMap[i];
       if (!elem.view) {
