@@ -28,9 +28,6 @@
           }
         }
       },
-      "autoAssembly": {
-        "enable": false
-      },
       "utils": {
         "utils_common_fontdir": "C:\\Windows\\Fonts"
       },
@@ -39,6 +36,9 @@
         "dbPort": 3306,
         "dbUser": "root",
         "dbPass": "onlyoffice"
+      },
+      "expire": {
+        "sessionidle": "5m"
       }
     }
   },
