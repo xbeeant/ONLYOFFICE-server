@@ -1292,7 +1292,7 @@ exports.install = function(server, callbackFunction) {
         fillVersionHistoryFromJwt(checkJwtRes.decoded, cmd);
         docIdNew = cmd.getDocId();
       } else {
-        if (constants.JWT_EXPIRED_CODE == checkJwtRes.code) {
+        if (constants.JWT_EXPIRED_CODE == checkJwtRes.code && !cmd.getCloseOnError()) {
           sendData(conn, {type: "expiredToken"});
         } else {
           conn.close(checkJwtRes.code, checkJwtRes.description);
@@ -1778,7 +1778,7 @@ exports.install = function(server, callbackFunction) {
       if (data.sessionTimeConnect) {
         conn.sessionTimeConnect = data.sessionTimeConnect;
       }
-      if (data.sessionTimeIdle) {
+      if (data.sessionTimeIdle >= 0) {
         conn.sessionTimeLastAction = new Date().getTime() - data.sessionTimeIdle;
       }
 

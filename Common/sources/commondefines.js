@@ -78,6 +78,7 @@ function InputCommand(data) {
     this['inline'] = data['inline'];
     this['password'] = data['password'];
     this['outputurls'] = data['outputurls'];
+    this['closeonerror'] = data['closeonerror'];
   } else {
     this['c'] = undefined;//string command
     this['id'] = undefined;//string document id
@@ -113,6 +114,7 @@ function InputCommand(data) {
     this['inline'] = undefined;//content disposition
     this['password'] = undefined;
     this['outputurls'] = undefined;
+    this['closeonerror'] = undefined;
   }
 }
 InputCommand.prototype = {
@@ -284,8 +286,14 @@ InputCommand.prototype = {
   setOutputUrls: function(data) {
     this['outputurls'] = data;
   },
-  getOutputUrls: function(data) {
+  getOutputUrls: function() {
     return this['outputurls'];
+  },
+  getCloseOnError: function() {
+    return this['closeonerror'];
+  },
+  setCloseOnError: function(data) {
+    this['closeonerror'] = data;
   }
 };
 
