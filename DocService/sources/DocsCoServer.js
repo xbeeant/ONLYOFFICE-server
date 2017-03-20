@@ -1924,7 +1924,11 @@ exports.install = function(server, callbackFunction) {
       if (!lockDocument) {
         var getRes = yield utils.promiseRedis(redisClient, redisClient.get, redisKeyLockDoc + docId);
         if (getRes) {
-          lockDocument = JSON.parse(getRes);
+          var getResParsed = JSON.parse(getRes);
+          //prevent self locking
+          if (tmpUser.id !== getResParsed.id) {
+            lockDocument = getResParsed;
+          }
         }
       }
 
