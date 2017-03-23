@@ -58,7 +58,7 @@
 				"edit_singleton": false
 			},
 			"autoAssembly": {
-				"enable": true,
+				"enable": false,
 				"intervalWithoutChanges": "1m",
 				"checkInterval": "1m",
 				"minRetentionPeriod": "1m"
