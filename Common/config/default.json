@@ -60,7 +60,7 @@
 			"autoAssembly": {
 				"enable": false,
 				"interval": "5m",
-				"checkInterval": "1m"
+				"step": "1m"
 			},
 			"utils": {
 				"utils_common_fontdir": "null",

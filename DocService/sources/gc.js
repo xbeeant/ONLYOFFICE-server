@@ -53,7 +53,7 @@ var cfgExpFilesCron = config.get('expire.filesCron');
 var cfgExpDocumentsCron = config.get('expire.documentsCron');
 var cfgExpFiles = config.get('expire.files');
 var cfgExpFilesRemovedAtOnce = config.get('expire.filesremovedatonce');
-var cfgForceSaveCheckInterval = ms(config.get('autoAssembly.checkInterval'));
+var cfgForceSaveStep = ms(config.get('autoAssembly.step'));
 
 var redisKeyDocuments = cfgRedisPrefix + constants.REDIS_KEY_DOCUMENTS;
 var redisKeyForceSaveTimer = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_TIMER;
@@ -185,7 +185,7 @@ let forceSaveTimeout = function() {
       } catch (e) {
         logger.error('checkDocumentExpire error:\r\n%s', e.stack);
       }
-      setTimeout(forceSaveTimeout, cfgForceSaveCheckInterval);
+      setTimeout(forceSaveTimeout, cfgForceSaveStep);
     }
   });
 };
@@ -206,6 +206,6 @@ var fileExpireJob = function(opt_isStart) {
 };
 fileExpireJob(true);
 
-if(cfgForceSaveCheckInterval > 0){
-  setTimeout(forceSaveTimeout, cfgForceSaveCheckInterval);
+if(cfgForceSaveStep > 0){
+  setTimeout(forceSaveTimeout, cfgForceSaveStep);
 }

@@ -134,7 +134,7 @@ const cfgTokenInboxPrefix = config.get('token.inbox.prefix');
 const cfgSecretSession = config.get('secret.session');
 const cfgForceSaveEnable = config.get('autoAssembly.enable');
 const cfgForceSaveInterval = ms(config.get('autoAssembly.interval'));
-const cfgForceSaveCheckInterval = ms(config.get('autoAssembly.checkInterval'));
+const cfgForceSaveStep = ms(config.get('autoAssembly.step'));
 const cfgQueueRetentionPeriod = configCommon.get('queue.retentionPeriod');
 
 const redisKeySaveLock = cfgRedisPrefix + constants.REDIS_KEY_SAVE_LOCK;
@@ -2225,7 +2225,7 @@ exports.install = function(server, callbackFunction) {
           ['expire', redisKeyLastSave + docId, cfgExpLastSave]
         ];
         if (cfgForceSaveEnable) {
-          let ttl = Math.ceil((cfgForceSaveInterval + cfgForceSaveCheckInterval) / 1000);
+          let ttl = Math.ceil((cfgForceSaveInterval + cfgForceSaveStep) / 1000);
           let multi = redisClient.multi([
                                           ['setnx', redisKeyForceSaveTimerLock + docId, 1],
                                           ['expire', redisKeyForceSaveTimerLock + docId, ttl]
