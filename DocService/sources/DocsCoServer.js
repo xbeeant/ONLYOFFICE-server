@@ -2675,7 +2675,6 @@ exports.install = function(server, callbackFunction) {
           yield utils.promiseRedis(multi, multi.exec);
         }
         if (clientStatsD) {
-          clientStatsD.gauge('expireDoc.connections.all', countEdit + countView);
           clientStatsD.gauge('expireDoc.connections.edit', countEdit);
           clientStatsD.gauge('expireDoc.connections.view', countView);
         }
