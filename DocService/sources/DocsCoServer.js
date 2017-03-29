@@ -133,8 +133,8 @@ const cfgTokenInboxHeader = config.get('token.inbox.header');
 const cfgTokenInboxPrefix = config.get('token.inbox.prefix');
 const cfgSecretSession = config.get('secret.session');
 const cfgForceSaveEnable = config.get('autoAssembly.enable');
-const cfgForceSaveTimeout = ms(config.get('autoAssembly.intervalWithoutChanges'));
-const cfgForceSaveMinExpiration = ms(config.get('autoAssembly.minRetentionPeriod'));
+const cfgForceSaveInterval = ms(config.get('autoAssembly.interval'));
+const cfgForceSaveCheckInterval = ms(config.get('autoAssembly.checkInterval'));
 const cfgQueueRetentionPeriod = configCommon.get('queue.retentionPeriod');
 
 const redisKeySaveLock = cfgRedisPrefix + constants.REDIS_KEY_SAVE_LOCK;
@@ -147,7 +147,8 @@ const redisKeyMessage = cfgRedisPrefix + constants.REDIS_KEY_MESSAGE;
 const redisKeyDocuments = cfgRedisPrefix + constants.REDIS_KEY_DOCUMENTS;
 const redisKeyLastSave = cfgRedisPrefix + constants.REDIS_KEY_LAST_SAVE;
 const redisKeyForceSave = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE;
-const redisKeyForceSaveTimeout = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_TIMEOUT;
+const redisKeyForceSaveTimer = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_TIMER;
+const redisKeyForceSaveTimerLock = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_TIMER_LOCK;
 const redisKeySaved = cfgRedisPrefix + constants.REDIS_KEY_SAVED;
 
 const EditorTypes = {
@@ -165,7 +166,8 @@ let queue;
 let licenseInfo = {type: constants.LICENSE_RESULT.Error, light: false, branding: false};
 let shutdownFlag = false;
 
-const FORCE_SAVE_EXPIRATION = Math.min(Math.max(cfgForceSaveTimeout, cfgForceSaveMinExpiration),
+const MIN_SAVE_EXPIRATION = 60000;
+const FORCE_SAVE_EXPIRATION = Math.min(Math.max(cfgForceSaveInterval, MIN_SAVE_EXPIRATION),
                                        cfgQueueRetentionPeriod * 1000);
 const HEALTH_CHECK_KEY_MAX = 10000;
 
@@ -2223,8 +2225,16 @@ exports.install = function(server, callbackFunction) {
           ['expire', redisKeyLastSave + docId, cfgExpLastSave]
         ];
         if (cfgForceSaveEnable) {
-          let expireAt = new Date().getTime() + cfgForceSaveTimeout;
-          commands.push(['zadd', redisKeyForceSaveTimeout, expireAt, docId]);
+          let ttl = Math.ceil((cfgForceSaveInterval + cfgForceSaveCheckInterval) / 1000);
+          let multi = redisClient.multi([
+                                          ['setnx', redisKeyForceSaveTimerLock + docId, 1],
+                                          ['expire', redisKeyForceSaveTimerLock + docId, ttl]
+                                        ]);
+          let multiRes = yield utils.promiseRedis(multi, multi.exec);
+          if (multiRes[0]) {
+            let expireAt = newChangesLastTime + cfgForceSaveInterval;
+            commands.push(['zadd', redisKeyForceSaveTimer, expireAt, docId]);
+          }
         }
         let multi = redisClient.multi(commands);
         yield utils.promiseRedis(multi, multi.exec);

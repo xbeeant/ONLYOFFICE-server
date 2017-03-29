@@ -53,10 +53,11 @@ var cfgExpFilesCron = config.get('expire.filesCron');
 var cfgExpDocumentsCron = config.get('expire.documentsCron');
 var cfgExpFiles = config.get('expire.files');
 var cfgExpFilesRemovedAtOnce = config.get('expire.filesremovedatonce');
-var cfgForceSaveTimeoutQuantum = ms(config.get('autoAssembly.checkInterval'));
+var cfgForceSaveCheckInterval = ms(config.get('autoAssembly.checkInterval'));
 
 var redisKeyDocuments = cfgRedisPrefix + constants.REDIS_KEY_DOCUMENTS;
-var redisForceSaveTimeout = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_TIMEOUT;
+var redisKeyForceSaveTimer = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_TIMER;
+var redisKeyForceSaveTimerLock = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_TIMER_LOCK;
 
 var checkFileExpire = function() {
   return co(function* () {
@@ -146,8 +147,8 @@ let forceSaveTimeout = function() {
 
       let now = (new Date()).getTime();
       let multi = redisClient.multi([
-        ['zrangebyscore', redisForceSaveTimeout, 0, now],
-        ['zremrangebyscore', redisForceSaveTimeout, 0, now]
+        ['zrangebyscore', redisKeyForceSaveTimer, 0, now],
+        ['zremrangebyscore', redisKeyForceSaveTimer, 0, now]
       ]);
       let execRes = yield utils.promiseRedis(multi, multi.exec);
       let expiredKeys = execRes[0];
@@ -162,9 +163,9 @@ let forceSaveTimeout = function() {
         for (let i = 0; i < expiredKeys.length; ++i) {
           let docId = expiredKeys[i];
           if (docId) {
-            let action = yield docsCoServer.startForceSavePromise(docId, commondefines.c_oAscForceSaveTypes.Timeout,
-                                                            undefined, undefined, undefined, queue, pubsub);
-            actions.push(action);
+            actions.push(utils.promiseRedis(redisClient, redisClient.del, redisKeyForceSaveTimerLock + docId));
+            actions.push(docsCoServer.startForceSavePromise(docId, commondefines.c_oAscForceSaveTypes.Timeout,
+                                                            undefined, undefined, undefined, queue, pubsub));
           }
         }
         yield Promise.all(actions);
@@ -184,7 +185,7 @@ let forceSaveTimeout = function() {
       } catch (e) {
         logger.error('checkDocumentExpire error:\r\n%s', e.stack);
       }
-      setTimeout(forceSaveTimeout, cfgForceSaveTimeoutQuantum);
+      setTimeout(forceSaveTimeout, cfgForceSaveCheckInterval);
     }
   });
 };
@@ -205,6 +206,6 @@ var fileExpireJob = function(opt_isStart) {
 };
 fileExpireJob(true);
 
-if(cfgForceSaveTimeoutQuantum > 0){
-  setTimeout(forceSaveTimeout, cfgForceSaveTimeoutQuantum);
+if(cfgForceSaveCheckInterval > 0){
+  setTimeout(forceSaveTimeout, cfgForceSaveCheckInterval);
 }

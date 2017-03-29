@@ -59,9 +59,8 @@
 			},
 			"autoAssembly": {
 				"enable": false,
-				"intervalWithoutChanges": "1m",
-				"checkInterval": "1m",
-				"minRetentionPeriod": "1m"
+				"interval": "5m",
+				"checkInterval": "1m"
 			},
 			"utils": {
 				"utils_common_fontdir": "null",
