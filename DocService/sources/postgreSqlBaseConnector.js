@@ -1,5 +1,5 @@
 /*
- * (c) Copyright Ascensio System SIA 2010-2016
+ * (c) Copyright Ascensio System SIA 2010-2017
  *
  * This program is a free software product. You can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public License (AGPL)
@@ -30,6 +30,8 @@
  *
  */
 
+'use strict';
+
 var pg = require('pg');
 var co = require('co');
 var pgEscape = require('pg-escape');
@@ -47,7 +49,6 @@ var pool = new pg.Pool({
   ssl: false,
   idleTimeoutMillis: 30000
 });
-var cfgTableCallbacks = configSql.get('tableCallbacks');
 //todo datetime timezone
 types.setTypeParser(1114, function(stringValue) {
   return new Date(stringValue + '+0000');
@@ -117,37 +118,18 @@ var isSupportOnConflict = false;
   }, true, true);
 })();
 
-exports.insertCallback = function(id, href, baseUrl, callbackFunction) {
-  var sqlCommand = "INSERT INTO " + cfgTableCallbacks + " VALUES (" + exports.sqlEscape(id) + "," +
-    exports.sqlEscape(href) + "," + exports.sqlEscape(baseUrl) + ")";
-  if (isSupportOnConflict) {
-    sqlCommand += ' ON CONFLICT DO NOTHING;';
-    exports.sqlQuery(sqlCommand, callbackFunction);
-  } else {
-    sqlCommand += ';';
-    exports.sqlQuery(sqlCommand, function(error, result) {
-      if (error && error.code == '23505') {
-        //UNIQUE VIOLATION
-        callbackFunction(null, result);
-      } else {
-        callbackFunction(error, result);
-      }
-    });
-  }
-};
-
 function getUpsertString(task) {
   task.completeDefaults();
   var dateNow = sqlBase.getDateTime(new Date());
-  var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.title, task.userIndex, task.changeId];
+  var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.userIndex, task.changeId, task.callback, task.baseurl];
   var commandArgEsc = commandArg.map(function(curVal) {
     return exports.sqlEscape(curVal)
   });
   if (isSupportOnConflict) {
     //http://stackoverflow.com/questions/34762732/how-to-find-out-if-an-upsert-was-an-update-with-postgresql-9-5-upsert
-    return "INSERT INTO task_result (id, status, status_info, last_open_date, title, user_index, change_id) SELECT " +
-      commandArgEsc.join(', ') +
-      " WHERE 'false' = set_config('myapp.isupdate', 'false', true) ON CONFLICT (id) DO UPDATE SET  last_open_date = " +
+    return "INSERT INTO task_result (id, status, status_info, last_open_date, user_index, change_id, callback," +
+      " baseurl) SELECT " + commandArgEsc.join(', ') + " WHERE 'false' = set_config('myapp.isupdate', 'false', true) " +
+      "ON CONFLICT (id) DO UPDATE SET  last_open_date = " +
       sqlBase.baseConnector.sqlEscape(dateNow) +
       ", user_index = task_result.user_index + 1 WHERE 'true' = set_config('myapp.isupdate', 'true', true) RETURNING" +
       " current_setting('myapp.isupdate') as isupdate, user_index as userindex;";

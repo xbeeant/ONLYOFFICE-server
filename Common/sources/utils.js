@@ -1,5 +1,5 @@
 /*
- * (c) Copyright Ascensio System SIA 2010-2016
+ * (c) Copyright Ascensio System SIA 2010-2017
  *
  * This program is a free software product. You can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public License (AGPL)
@@ -50,11 +50,13 @@ const dnscache = require('dnscache')({
 const jwt = require('jsonwebtoken');
 const NodeCache = require( "node-cache" );
 const ms = require('ms');
-var constants = require('./constants');
+const constants = require('./constants');
+const forwarded = require('forwarded');
 
 var configIpFilter = config.get('services.CoAuthoring.ipfilter');
 var cfgIpFilterRules = configIpFilter.get('rules');
 var cfgIpFilterErrorCode = configIpFilter.get('errorcode');
+const cfgIpFilterEseForRequest = configIpFilter.get('useforrequest');
 var cfgExpPemStdTtl = config.get('services.CoAuthoring.expire.pemStdTTL');
 var cfgExpPemCheckPeriod = config.get('services.CoAuthoring.expire.pemCheckPeriod');
 var cfgTokenOutboxHeader = config.get('services.CoAuthoring.token.outbox.header');
@@ -63,6 +65,8 @@ var cfgTokenOutboxAlgorithm = config.get('services.CoAuthoring.token.outbox.algo
 var cfgTokenOutboxExpires = config.get('services.CoAuthoring.token.outbox.expires');
 var cfgSignatureSecretInbox = config.get('services.CoAuthoring.secret.inbox');
 var cfgSignatureSecretOutbox = config.get('services.CoAuthoring.secret.outbox');
+var cfgVisibilityTimeout = config.get('queue.visibilityTimeout');
+var cfgQueueRetentionPeriod = config.get('queue.retentionPeriod');
 
 var ANDROID_SAFE_FILENAME = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ._-+,@£$€!½§~\'=()[]{}0123456789';
 
@@ -78,6 +82,8 @@ var g_oIpFilterRules = function() {
 }();
 var isEmptySecretTenants = isEmptyObject(cfgSignatureSecretInbox.tenants);
 const pemfileCache = new NodeCache({stdTTL: ms(cfgExpPemStdTtl) / 1000, checkperiod: ms(cfgExpPemCheckPeriod) / 1000, errorOnMissing: false, useClones: true});
+
+exports.CONVERTION_TIMEOUT = 1.5 * (cfgVisibilityTimeout + cfgQueueRetentionPeriod) * 1000;
 
 exports.addSeconds = function(date, sec) {
   date.setSeconds(date.getSeconds() + sec);
@@ -103,6 +109,7 @@ function fsStat(fsPath) {
     });
   });
 }
+exports.fsStat = fsStat;
 function fsReadDir(fsPath) {
   return new Promise(function(resolve, reject) {
     fs.readdir(fsPath, function(err, list) {
@@ -114,27 +121,40 @@ function fsReadDir(fsPath) {
     });
   });
 }
-function* walkDir(fsPath, results, optNoSubDir) {
-  var list = yield fsReadDir(fsPath);
-  for (var i = 0; i < list.length; ++i) {
-    var fileName = list[i];
-    var file = path.join(fsPath, fileName);
-    var stats = yield fsStat(file);
+function* walkDir(fsPath, results, optNoSubDir, optOnlyFolders) {
+  const list = yield fsReadDir(fsPath);
+  for (let i = 0; i < list.length; ++i) {
+    const file = path.join(fsPath, list[i]);
+    const stats = yield fsStat(file);
     if (stats.isDirectory()) {
       if (optNoSubDir) {
-        continue;
+        optOnlyFolders && results.push(file);
       } else {
-        yield* walkDir(file, results);
+        yield* walkDir(file, results, optNoSubDir, optOnlyFolders);
       }
     } else {
-      results.push(file);
+      !optOnlyFolders && results.push(file);
     }
   }
 }
+exports.listFolders = function(fsPath, optNoSubDir) {
+  return co(function* () {
+    let stats, list = [];
+    try {
+      stats = yield fsStat(fsPath);
+    } catch (e) {
+      //exception if fsPath not exist
+      stats = null;
+    }
+    if (stats && stats.isDirectory()) {
+        yield* walkDir(fsPath, list, optNoSubDir, true);
+    }
+    return list;
+  });
+};
 exports.listObjects = function(fsPath, optNoSubDir) {
   return co(function* () {
-    var list;
-    var stats;
+    let stats, list = [];
     try {
       stats = yield fsStat(fsPath);
     } catch (e) {
@@ -143,13 +163,10 @@ exports.listObjects = function(fsPath, optNoSubDir) {
     }
     if (stats) {
       if (stats.isDirectory()) {
-        list = [];
-        yield* walkDir(fsPath, list, optNoSubDir);
+        yield* walkDir(fsPath, list, optNoSubDir, false);
       } else {
-        list = [fsPath];
+        list.push(fsPath);
       }
-    } else {
-      list = [];
     }
     return list;
   });
@@ -162,17 +179,6 @@ exports.sleep = function(ms) {
 exports.readFile = function(file) {
   return new Promise(function(resolve, reject) {
     fs.readFile(file, function(err, data) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(data);
-      }
-    });
-  });
-};
-exports.fsStat = function(file) {
-  return new Promise(function(resolve, reject) {
-    fs.stat(file, function(err, data) {
       if (err) {
         reject(err);
       } else {
@@ -359,25 +365,45 @@ exports.mapAscServerErrorToOldError = function(error) {
   }
   return res;
 };
-exports.fillXmlResponse = function(res, uri, error) {
+function fillXmlResponse(val) {
   var xml = '<?xml version="1.0" encoding="utf-8"?><FileResult>';
-  if (constants.NO_ERROR != error) {
-    xml += '<Error>' + exports.encodeXml(exports.mapAscServerErrorToOldError(error).toString()) + '</Error>';
+  if (undefined != val.error) {
+    xml += '<Error>' + exports.encodeXml(val.error.toString()) + '</Error>';
   } else {
-    if (uri) {
-      xml += '<FileUrl>' + exports.encodeXml(uri) + '</FileUrl>';
+    if (val.fileUrl) {
+      xml += '<FileUrl>' + exports.encodeXml(val.fileUrl) + '</FileUrl>';
     } else {
       xml += '<FileUrl/>';
     }
-    xml += '<Percent>' + (uri ? '100' : '0') + '</Percent>';
-    xml += '<EndConvert>' + (uri ? 'True' : 'False') + '</EndConvert>';
+    xml += '<Percent>' + val.percent + '</Percent>';
+    xml += '<EndConvert>' + (val.endConvert ? 'True' : 'False') + '</EndConvert>';
   }
   xml += '</FileResult>';
-  var body = new Buffer(xml, 'utf-8');
-  res.setHeader('Content-Type', 'text/xml; charset=UTF-8');
+  return xml;
+}
+function fillResponse(req, res, uri, error) {
+  var data;
+  var contentType;
+  var output;
+  if (constants.NO_ERROR != error) {
+    output = {error: exports.mapAscServerErrorToOldError(error)};
+  } else {
+    output = {fileUrl: uri, percent: (uri ? 100 : 0), endConvert: !!uri};
+  }
+  var accept = req.get('Accept');
+  if (accept && -1 != accept.toLowerCase().indexOf('application/json')) {
+    data = JSON.stringify(output);
+    contentType = 'application/json';
+  } else {
+    data = fillXmlResponse(output);
+    contentType = 'text/xml';
+  }
+  var body = new Buffer(data, 'utf-8');
+  res.setHeader('Content-Type', contentType + '; charset=UTF-8');
   res.setHeader('Content-Length', body.length);
   res.send(body);
-};
+}
+exports.fillResponse = fillResponse;
 function promiseCreateWriteStream(strPath, optOptions) {
   return new Promise(function(resolve, reject) {
     var file = fs.createWriteStream(strPath, optOptions);
@@ -569,6 +595,20 @@ function checkIpFilter(ipString, opt_hostname) {
   return status;
 }
 exports.checkIpFilter = checkIpFilter;
+function checkClientIp(req, res, next) {
+	let status = 0;
+	if (cfgIpFilterEseForRequest) {
+		const addresses = forwarded(req);
+		const ipString = addresses[addresses.length - 1];
+		status = checkIpFilter(ipString);
+	}
+	if (status > 0) {
+		res.sendStatus(status);
+	} else {
+		next();
+	}
+}
+exports.checkClientIp = checkClientIp;
 function dnsLookup(hostname, options) {
   return new Promise(function(resolve, reject) {
     dnscache.lookup(hostname, options, function(err, addresses){
@@ -635,3 +675,4 @@ function fillJwtForRequest(opt_payload) {
   return jwt.sign(data, secret, options);
 }
 exports.fillJwtForRequest = fillJwtForRequest;
+exports.forwarded = forwarded;

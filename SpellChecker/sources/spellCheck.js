@@ -1,5 +1,5 @@
 ﻿/*
- * (c) Copyright Ascensio System SIA 2010-2016
+ * (c) Copyright Ascensio System SIA 2010-2017
  *
  * This program is a free software product. You can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public License (AGPL)
@@ -30,23 +30,25 @@
  *
  */
 
-var sockjs = require('sockjs'),
-	nodehun = require('nodehun'),
-    config = require('config').get('SpellChecker'),
-	logger = require('./../../Common/sources/logger'),
-	fs = require('fs'),
-	cfgSockjsUrl = require('config').get('services.CoAuthoring.server.sockjsUrl');
-var arrDictionaries = {};
+'use strict';
+
+const sockjs = require('sockjs');
+const nodehun = require('nodehun');
+const config = require('config').get('SpellChecker');
+const logger = require('./../../Common/sources/logger');
+const fs = require('fs');
+const cfgSockjsUrl = require('config').get('services.CoAuthoring.server.sockjsUrl');
+let arrDictionaries = {};
 
 (function() {
 	// Read dictionaries
-	var arrDictionariesConfig = config.get('dictionaries');
-	var oDictTmp = null, pathTmp = '', oDictName = null;
-	for (var indexDict = 0, lengthDict = arrDictionariesConfig.length; indexDict < lengthDict; ++indexDict) {
+	const arrDictionariesConfig = config.get('dictionaries');
+	let oDictTmp = null, pathTmp = '', oDictName = null;
+	for (let indexDict = 0, lengthDict = arrDictionariesConfig.length; indexDict < lengthDict; ++indexDict) {
 		oDictTmp = arrDictionariesConfig[indexDict];
 		oDictName = oDictTmp.name;
 		pathTmp = __dirname + '/../dictionaries/' + oDictName + '/' + oDictName + '.';
-		arrDictionaries[oDictTmp.id] = new nodehun(fs.readFileSync(pathTmp + 'aff'), fs.readFileSync(pathTmp + 'dic'));
+		arrDictionaries[oDictTmp.id] = new nodehun(pathTmp + 'aff', pathTmp + 'dic');
 	}
 })();
 
@@ -69,8 +71,8 @@ CheckDictionary(arrDictionaries[0x0409], 'color', 'calor');*/
  
 exports.install = function (server, callbackFunction) {
 	'use strict';
-	var sockjs_opts = {sockjs_url: cfgSockjsUrl},
-		sockjs_echo = sockjs.createServer(sockjs_opts);
+	const sockjs_opts = {sockjs_url: cfgSockjsUrl};
+	const sockjs_echo = sockjs.createServer(sockjs_opts);
 
 	sockjs_echo.on('connection', function (conn) {
 		if (null == conn) {
@@ -79,7 +81,7 @@ exports.install = function (server, callbackFunction) {
 		}
 		conn.on('data', function (message) {
 			try {
-				var data = JSON.parse(message);
+				let data = JSON.parse(message);
 				switch (data.type) {
 					case 'spellCheck':	spellCheck(conn, data);break;
 				}
@@ -100,7 +102,7 @@ exports.install = function (server, callbackFunction) {
 	}
 
 	function spellCheck(conn, data) {
-		var oSpellInfo;
+		let oSpellInfo;
 		function checkEnd() {
 			if (0 === oSpellInfo.usrWordsLength) {
 				sendData(conn, { type:"spellCheck", spellCheckData:JSON.stringify(data) });
@@ -109,9 +111,9 @@ exports.install = function (server, callbackFunction) {
 		function spellSuggest(index, word, lang) {
 			oSpellInfo.arrTimes[index] = new Date();
 			logger.info('start %s word = %s, lang = %s', data.type, word, lang);
-			var oDictionary = arrDictionaries[lang];
-			if (undefined === oDictionary) {
-				data.usrCorrect[index] = false;
+			const oDictionary = arrDictionaries[lang];
+			if (!oDictionary) {
+				data.usrCorrect[index] = true;
 				--data.usrWordsLength;
 				checkEnd();
 			} else if ("spell" === data.type) {
@@ -139,7 +141,7 @@ exports.install = function (server, callbackFunction) {
 		oSpellInfo = {usrWordsLength: data.usrWords.length, arrTimes: []};
 
 		//data.start = new Date();
-		for (var i = 0, length = data.usrWords.length; i < length; ++i) {
+		for (let i = 0, length = data.usrWords.length; i < length; ++i) {
 			spellSuggest(i, data.usrWords[i], data.usrLang[i]);
 		}
 	}
@@ -152,7 +154,7 @@ exports.install = function (server, callbackFunction) {
 	callbackFunction();
 };
 exports.spellSuggest = function (type, word, lang, callbackFunction) {
-	var oDictionary = arrDictionaries[lang];
+	const oDictionary = arrDictionaries[lang];
 	if (undefined === oDictionary) {
 		callbackFunction(false);
 	} else if ('spell' === type) {

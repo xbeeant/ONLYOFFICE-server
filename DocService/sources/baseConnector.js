@@ -1,5 +1,5 @@
 /*
- * (c) Copyright Ascensio System SIA 2010-2016
+ * (c) Copyright Ascensio System SIA 2010-2017
  *
  * This program is a free software product. You can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public License (AGPL)
@@ -30,6 +30,8 @@
  *
  */
 
+'use strict';
+
 var sqlDataBaseType = {
 	mySql		: 'mysql',
 	postgreSql	: 'postgres'
@@ -39,7 +41,6 @@ var config = require('config').get('services.CoAuthoring.sql');
 var baseConnector = (sqlDataBaseType.mySql === config.get('type')) ? require('./mySqlBaseConnector') : require('./postgreSqlBaseConnector');
 
 var tableChanges = config.get('tableChanges'),
-	tableCallbacks = config.get('tableCallbacks'),
 	tableResult = config.get('tableResult');
 
 var g_oCriticalSection = {};
@@ -64,9 +65,6 @@ var c_oTableId = {
 function getTableById (id) {
 	var res;
 	switch (id) {
-		case c_oTableId.callbacks:
-			res = tableCallbacks;
-			break;
 		case c_oTableId.changes:
 			res = tableChanges;
 			break;
@@ -80,20 +78,6 @@ exports.loadTable = function (tableId, callbackFunction) {
 	var table = getTableById(tableId);
 	var sqlCommand = "SELECT * FROM " + table + ";";
 	baseConnector.sqlQuery(sqlCommand, callbackFunction);
-};
-exports.insertCallback = function(id, href, baseUrl, callbackFunction) {
-  baseConnector.insertCallback(id, href, baseUrl, callbackFunction);
-};
-exports.insertCallbackPromise = function(id, href, baseUrl) {
-  return new Promise(function(resolve, reject) {
-    exports.insertCallback(id, href, baseUrl, function(error, result) {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(result);
-      }
-    });
-  });
 };
 exports.insertChanges = function (objChanges, docId, index, user) {
 	lockCriticalSection(docId, function () {_insertChanges(0, objChanges, docId, index, user);});
@@ -185,34 +169,6 @@ exports.deleteChanges = function (docId, deleteIndex) {
 function _deleteChanges (docId, deleteIndex) {
   exports.deleteChangesCallback(docId, deleteIndex, function () {unLockCriticalSection(docId);});
 }
-exports.getCallback = function(docId, callback) {
-  getDataFromTable(c_oTableId.callbacks, "*", "id='" + docId + "'", callback);
-};
-exports.getCallbackPromise = function(docId) {
-  return new Promise(function(resolve, reject) {
-    exports.getCallback(docId, function(error, result) {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(result);
-      }
-    });
-  });
-};
-exports.deleteCallback = function (docId, callback) {
-  deleteFromTable(c_oTableId.callbacks, "id='" + docId + "'", callback);
-};
-exports.deleteCallbackPromise = function (docId) {
-  return new Promise(function(resolve, reject) {
-    exports.deleteCallback(docId, function(error, result) {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(result);
-      }
-    });
-  });
-};
 exports.getChangesIndex = function(docId, callback) {
   var table = getTableById(c_oTableId.changes);
   var sqlCommand = 'SELECT MAX(change_id) as change_id FROM ' + table + ' WHERE id=' + baseConnector.sqlEscape(docId) + ';';
@@ -245,11 +201,17 @@ exports.getChangesPromise = function (docId, optStartIndex, optEndIndex) {
     });
   });
 };
-exports.getChanges = function (docId, callback) {
-	lockCriticalSection(docId, function () {_getChanges(docId, callback);});
+exports.getChanges = function (docId, opt_time, opt_index, callback) {
+	lockCriticalSection(docId, function () {_getChanges(docId, opt_time, opt_index, callback);});
 };
-function _getChanges (docId, callback) {
-	getDataFromTable(c_oTableId.changes, "*", "id='" + docId + "' ORDER BY change_id ASC",
+function _getChanges (docId, opt_time, opt_index, callback) {
+  var getCondition = "id='" + docId + "'";
+  if (null != opt_time && null != opt_index) {
+    getCondition += " AND change_date<=" + baseConnector.sqlEscape(_getDateTime(opt_time));
+    getCondition += " AND change_id<" + baseConnector.sqlEscape(opt_index);
+  }
+  getCondition += " ORDER BY change_id ASC";
+	getDataFromTable(c_oTableId.changes, "*", getCondition,
 		function (error, result) {unLockCriticalSection(docId); if (callback) callback(error, result);});
 }
 
@@ -298,3 +260,16 @@ function unLockCriticalSection (id) {
 	else
 		delete g_oCriticalSection[id];
 }
+exports.healthCheck = function () {
+  return new Promise(function(resolve, reject) {
+  	//SELECT 1; usefull for H2, MySQL, Microsoft SQL Server, PostgreSQL, SQLite
+  	//http://stackoverflow.com/questions/3668506/efficient-sql-test-query-or-validation-query-that-will-work-across-all-or-most
+    baseConnector.sqlQuery('SELECT 1;', function(error, result) {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(result);
+      }
+    });
+  });
+};

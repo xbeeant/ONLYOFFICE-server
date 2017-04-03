@@ -22,31 +22,6 @@ CREATE DATABASE IF NOT EXISTS onlyoffice DEFAULT CHARACTER SET utf8 DEFAULT COLL
 USE onlyoffice;
 
 --
--- Drop tables
---
-DROP TABLE IF EXISTS `doc_callbacks`;
-DROP TABLE IF EXISTS `doc_changes`;
-DROP TABLE IF EXISTS `task_result`;
-
---
--- Definition of table `doc_callbacks`
---
-
-CREATE TABLE IF NOT EXISTS `doc_callbacks` (
-  `id` varchar(255) NOT NULL,
-  `callback` text NOT NULL,
-  `baseurl` text NOT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
-
---
--- Dumping data for table `doc_callbacks`
---
-
-/*!40000 ALTER TABLE `doc_callbacks` DISABLE KEYS */;
-/*!40000 ALTER TABLE `doc_callbacks` ENABLE KEYS */;
-
---
 -- Definition of table `doc_changes`
 --
 
@@ -77,9 +52,10 @@ CREATE TABLE IF NOT EXISTS `task_result` (
   `status` tinyint(3) NOT NULL,
   `status_info` int(10) NOT NULL,
   `last_open_date` datetime NOT NULL,
-  `title` varchar(255) NOT NULL,
   `user_index` int(10) unsigned NOT NULL DEFAULT 1,
   `change_id` int(10) unsigned NOT NULL DEFAULT 0,
+  `callback` text NOT NULL,
+  `baseurl` text NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 

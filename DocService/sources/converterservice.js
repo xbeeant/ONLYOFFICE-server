@@ -1,5 +1,5 @@
 /*
- * (c) Copyright Ascensio System SIA 2010-2016
+ * (c) Copyright Ascensio System SIA 2010-2017
  *
  * This program is a free software product. You can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public License (AGPL)
@@ -30,9 +30,10 @@
  *
  */
 
+'use strict';
+
 var config = require('config');
 var co = require('co');
-const forwarded = require('forwarded');
 var taskResult = require('./taskresult');
 var logger = require('./../../Common/sources/logger');
 var utils = require('./../../Common/sources/utils');
@@ -45,23 +46,20 @@ var formatChecker = require('./../../Common/sources/formatchecker');
 var statsDClient = require('./../../Common/sources/statsdclient');
 
 var cfgHealthCheckFilePath = config.get('services.CoAuthoring.server.healthcheckfilepath');
-var cfgVisibilityTimeout = config.get('queue.visibilityTimeout');
-var cfgQueueRetentionPeriod = config.get('queue.retentionPeriod');
 var cfgTokenEnableRequestInbox = config.get('services.CoAuthoring.token.enable.request.inbox');
 
-var CONVERT_TIMEOUT = 1.5 * (cfgVisibilityTimeout + cfgQueueRetentionPeriod) * 1000;
 var CONVERT_ASYNC_DELAY = 1000;
 
 var clientStatsD = statsDClient.getClient();
 
-function* getConvertStatus(cmd, selectRes, baseUrl) {
+function* getConvertStatus(cmd, selectRes, baseUrl, fileTo) {
   var status = {url: undefined, err: constants.NO_ERROR};
   if (selectRes.length > 0) {
     var docId = cmd.getDocId();
     var row = selectRes[0];
     switch (row.status) {
       case taskResult.FileStatus.Ok:
-        status.url = yield storage.getSignedUrl(baseUrl, docId + '/' + cmd.getTitle());
+        status.url = yield storage.getSignedUrl(baseUrl, docId + '/' + fileTo);
         break;
       case taskResult.FileStatus.Err:
       case taskResult.FileStatus.ErrToReload:
@@ -80,14 +78,14 @@ function* getConvertStatus(cmd, selectRes, baseUrl) {
         break;
     }
     var lastOpenDate = row.last_open_date;
-    if (new Date().getTime() - lastOpenDate.getTime() > CONVERT_TIMEOUT) {
+    if (new Date().getTime() - lastOpenDate.getTime() > utils.CONVERTION_TIMEOUT) {
       status.err = constants.CONVERT_TIMEOUT;
     }
   }
   return status;
 }
 
-function* convertByCmd(cmd, async, baseUrl, opt_healthcheck) {
+function* convertByCmd(cmd, async, baseUrl, fileTo, opt_healthcheck, opt_priority, opt_expiration, opt_queue) {
   var docId = cmd.getDocId();
   var startDate = null;
   if (clientStatsD) {
@@ -99,7 +97,6 @@ function* convertByCmd(cmd, async, baseUrl, opt_healthcheck) {
   task.key = docId;
   task.status = taskResult.FileStatus.WaitQueue;
   task.statusInfo = constants.NO_ERROR;
-  task.title = cmd.getTitle();
 
   var upsertRes = yield taskResult.upsert(task);
   //if CLIENT_FOUND_ROWS don't specify 1 row is inserted , 2 row is updated, and 0 row is set to its current values
@@ -109,15 +106,16 @@ function* convertByCmd(cmd, async, baseUrl, opt_healthcheck) {
   var status;
   if (!bCreate && !opt_healthcheck) {
     selectRes = yield taskResult.select(docId);
-    status = yield* getConvertStatus(cmd, selectRes, baseUrl);
+    status = yield* getConvertStatus(cmd, selectRes, baseUrl, fileTo);
   } else {
     var queueData = new commonDefines.TaskQueueData();
     queueData.setCmd(cmd);
-    queueData.setToFile(cmd.getTitle());
+    queueData.setToFile(fileTo);
     if (opt_healthcheck) {
       queueData.setFromOrigin(true);
     }
-    yield* docsCoServer.addTask(queueData, constants.QUEUE_PRIORITY_LOW);
+    var priority = null != opt_priority ? opt_priority : constants.QUEUE_PRIORITY_LOW
+    yield* docsCoServer.addTask(queueData, priority, opt_queue, opt_expiration);
     status = {url: undefined, err: constants.NO_ERROR};
   }
   //wait
@@ -129,9 +127,9 @@ function* convertByCmd(cmd, async, baseUrl, opt_healthcheck) {
       }
       yield utils.sleep(CONVERT_ASYNC_DELAY);
       selectRes = yield taskResult.select(docId);
-      status = yield* getConvertStatus(cmd, selectRes, baseUrl);
+      status = yield* getConvertStatus(cmd, selectRes, baseUrl, fileTo);
       waitTime += CONVERT_ASYNC_DELAY;
-      if (waitTime > CONVERT_TIMEOUT) {
+      if (waitTime > utils.CONVERTION_TIMEOUT) {
         status.err = constants.CONVERT_TIMEOUT;
       }
     }
@@ -143,42 +141,8 @@ function* convertByCmd(cmd, async, baseUrl, opt_healthcheck) {
   return status;
 }
 
-function convertHealthCheck(req, res) {
-  return co(function* () {
-    var output = false;
-    try {
-      logger.debug('Start convertHealthCheck');
-      var task = yield* taskResult.addRandomKeyTask('healthcheck');
-      var docId = task.key;
-      //put test file to storage
-      var data = yield utils.readFile(cfgHealthCheckFilePath);
-      var format = 'docx';
-      yield storage.putObject(docId + '/origin.' + format, data, data.length);
-      //convert
-      var cmd = new commonDefines.InputCommand();
-      cmd.setCommand('conv');
-      cmd.setSaveKey(docId);
-      cmd.setFormat(format);
-      cmd.setDocId(docId);
-      cmd.setTitle('Editor.bin');
-      cmd.setOutputFormat(constants.AVS_OFFICESTUDIO_FILE_CANVAS);
-
-      var status = yield* convertByCmd(cmd, false, utils.getBaseUrlByRequest(req), true);
-      if (status && constants.NO_ERROR == status.err) {
-        output = true;
-      }
-      //clean up
-      yield canvasService.cleanupCache(docId);
-      logger.debug('End convertHealthCheck');
-    } catch (e) {
-      logger.error('Error convertHealthCheck\r\n%s', e.stack);
-    } finally {
-      res.send(output.toString());
-    }
-  });
-}
-
-function* convertFromChanges(docId, baseUrl, lastSave, userdata) {
+function* convertFromChanges(docId, baseUrl, forceSave, opt_userdata, opt_userConnectionId, opt_priority,
+                             opt_expiration, opt_queue) {
   var cmd = new commonDefines.InputCommand();
   cmd.setCommand('sfcm');
   cmd.setDocId(docId);
@@ -186,11 +150,19 @@ function* convertFromChanges(docId, baseUrl, lastSave, userdata) {
   cmd.setEmbeddedFonts(false);
   cmd.setCodepage(commonDefines.c_oAscCodePageUtf8);
   cmd.setDelimiter(commonDefines.c_oAscCsvDelimiter.Comma);
-  cmd.setLastSave(lastSave);
-  cmd.setUserData(userdata);
+  cmd.setForceSave(forceSave);
+  if (opt_userdata) {
+    cmd.setUserData(opt_userdata);
+  }
+  if (opt_userConnectionId) {
+    cmd.setUserConnectionId(opt_userConnectionId);
+  }
 
-  yield* canvasService.commandSfctByCmd(cmd);
-  return yield* convertByCmd(cmd, true, baseUrl);
+  yield* canvasService.commandSfctByCmd(cmd, opt_priority, opt_expiration, opt_queue);
+  return yield* convertByCmd(cmd, true, baseUrl, constants.OUTPUT_NAME, undefined, opt_priority, opt_expiration, opt_queue);
+}
+function parseIntParam(val){
+  return (typeof val === 'string') ? parseInt(val) : val;
 }
 
 function convertRequest(req, res) {
@@ -226,7 +198,7 @@ function convertRequest(req, res) {
           }
         }
         if (authError !== constants.NO_ERROR) {
-          utils.fillXmlResponse(res, undefined, authError);
+          utils.fillResponse(req, res, undefined, authError);
           return;
         }
       }
@@ -239,15 +211,15 @@ function convertRequest(req, res) {
       var outputtype = params.outputtype || '';
       docId = 'conv_' + params.key + '_' + outputtype;
       cmd.setDocId(docId);
-      cmd.setTitle(constants.OUTPUT_NAME + '.' + outputtype);
+      var fileTo = constants.OUTPUT_NAME + '.' + outputtype;
       cmd.setOutputFormat(formatChecker.getFormatFromString(outputtype));
       cmd.setCodepage(commonDefines.c_oAscEncodingsMap[params.codePage] || commonDefines.c_oAscCodePageUtf8);
-      cmd.setDelimiter(params.delimiter || commonDefines.c_oAscCsvDelimiter.Comma);
-      cmd.setDoctParams(params.doctparams);
+      cmd.setDelimiter(parseIntParam(params.delimiter) || commonDefines.c_oAscCsvDelimiter.Comma);
+      cmd.setDoctParams(parseIntParam(params.doctparams));
       cmd.setPassword(params.password);
       var thumbnail = params.thumbnail;
       if (thumbnail) {
-        if(typeof thumbnail === 'string'){
+        if (typeof thumbnail === 'string') {
           thumbnail = JSON.parse(thumbnail);
         }
         var thumbnailData = new commonDefines.CThumbnailData(thumbnail);
@@ -275,21 +247,20 @@ function convertRequest(req, res) {
       var async = (typeof params.async === 'string') ? 'true' == params.async : params.async;
 
       if (constants.AVS_OFFICESTUDIO_FILE_UNKNOWN !== cmd.getOutputFormat()) {
-        var status = yield* convertByCmd(cmd, async, utils.getBaseUrlByRequest(req));
-        utils.fillXmlResponse(res, status.url, status.err);
+        var status = yield* convertByCmd(cmd, async, utils.getBaseUrlByRequest(req), fileTo);
+        utils.fillResponse(req, res, status.url, status.err);
       } else {
-        var addresses = forwarded(req);
+        var addresses = utils.forwarded(req);
         logger.error('Error convert unknown outputtype: query = %j from = %s docId = %s', params, addresses, docId);
-        utils.fillXmlResponse(res, undefined, constants.UNKNOWN);
+        utils.fillResponse(req, res, undefined, constants.UNKNOWN);
       }
     }
     catch (e) {
       logger.error('Error convert: docId = %s\r\n%s', docId, e.stack);
-      utils.fillXmlResponse(res, undefined, constants.UNKNOWN);
+      utils.fillResponse(req, res, undefined, constants.UNKNOWN);
     }
   });
 }
 
-exports.convertHealthCheck = convertHealthCheck;
 exports.convertFromChanges = convertFromChanges;
 exports.convert = convertRequest;

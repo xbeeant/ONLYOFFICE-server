@@ -1,5 +1,5 @@
 /*
- * (c) Copyright Ascensio System SIA 2010-2016
+ * (c) Copyright Ascensio System SIA 2010-2017
  *
  * This program is a free software product. You can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public License (AGPL)
@@ -29,6 +29,8 @@
  * terms at http://creativecommons.org/licenses/by-sa/4.0/legalcode
  *
  */
+
+'use strict';
 
 var pathModule = require('path');
 var urlModule = require('url');
@@ -150,7 +152,7 @@ function* getOutputData(cmd, outputData, key, status, statusInfo, optConn, optAd
         outputData.setStatus('updateversion');
       }
       var command = cmd.getCommand();
-      if ('open' != command && 'reopen' != command) {
+      if ('open' != command && 'reopen' != command && !cmd.getOutputUrls()) {
         var strPath = key + '/' + cmd.getOutputPath();
         if (optConn) {
           var contentDisposition = cmd.getInline() ? constants.CONTENT_DISPOSITION_INLINE : constants.CONTENT_DISPOSITION_ATTACHMENT;
@@ -249,9 +251,6 @@ function getUpdateResponse(cmd) {
     updateTask.status = taskResult.FileStatus.Err;
   }
   updateTask.statusInfo = statusInfo;
-  if (cmd.getTitle()) {
-    updateTask.title = cmd.getTitle();
-  }
   return updateTask;
 }
 var cleanupCache = co.wrap(function* (docId) {
@@ -265,14 +264,16 @@ var cleanupCache = co.wrap(function* (docId) {
   return res;
 });
 
-function commandOpenStartPromise(docId, cmd, opt_updateUserIndex) {
+function commandOpenStartPromise(docId, cmd, opt_updateUserIndex, opt_documentCallbackUrl, opt_baseUrl) {
   var task = new taskResult.TaskResultData();
   task.key = docId;
   task.status = taskResult.FileStatus.WaitQueue;
   task.statusInfo = constants.NO_ERROR;
-  if (cmd) {
-    task.title = cmd.getTitle();
-  } else {
+  if (opt_documentCallbackUrl && opt_baseUrl) {
+    task.callback = opt_documentCallbackUrl;
+    task.baseurl = opt_baseUrl;
+  }
+  if (!cmd) {
     logger.warn("commandOpenStartPromise empty cmd: docId = %s", docId);
   }
 
@@ -367,11 +368,12 @@ function* commandSendMailMerge(cmd, outputData) {
     outputData.setData(cmd.getSaveKey());
   }
 }
-function* commandSfctByCmd(cmd) {
+function* commandSfctByCmd(cmd, opt_priority, opt_expiration, opt_queue) {
   yield* addRandomKeyTaskCmd(cmd);
   var queueData = getSaveTask(cmd);
   queueData.setFromChanges(true);
-  yield* docsCoServer.addTask(queueData, constants.QUEUE_PRIORITY_LOW);
+  let priority = null != opt_priority ? opt_priority : constants.QUEUE_PRIORITY_LOW;
+  yield* docsCoServer.addTask(queueData, priority, opt_queue, opt_expiration);
 }
 function* commandSfct(cmd, outputData) {
   yield* commandSfctByCmd(cmd);
@@ -424,9 +426,16 @@ function* commandImgurls(conn, cmd, outputData) {
           data = new Buffer(urlSource.substring(delimiterIndex + 1), 'base64');
         }
       } else if (urlSource) {
-        //todo stream
-        data = yield utils.downloadUrlPromise(urlSource, cfgImageDownloadTimeout * 1000, cfgImageSize);
-        urlParsed = urlModule.parse(urlSource);
+        try {
+          //todo stream
+          data = yield utils.downloadUrlPromise(urlSource, cfgImageDownloadTimeout * 1000, cfgImageSize);
+          urlParsed = urlModule.parse(urlSource);
+        } catch (e) {
+          data = undefined;
+          logger.error('error commandImgurls download: url = %s; docId = %s\r\n%s', urlSource, docId, e.stack);
+          errorCode = constants.UPLOAD_URL;
+          break;
+        }
       }
       var outputUrl = {url: 'error', path: 'error'};
       if (data) {
@@ -513,11 +522,24 @@ function* commandSfcCallback(cmd, isSfcm) {
   logger.debug('Start commandSfcCallback: docId = %s', docId);
   var saveKey = cmd.getSaveKey();
   var statusInfo = cmd.getStatusInfo();
-  var isError = constants.NO_ERROR != statusInfo && constants.CONVERT_CORRUPTED != statusInfo;
+  var isError = constants.NO_ERROR != statusInfo;
+  var isErrorCorrupted = constants.CONVERT_CORRUPTED == statusInfo;
   var savePathDoc = saveKey + '/' + cmd.getOutputPath();
   var savePathChanges = saveKey + '/changes.zip';
   var savePathHistory = saveKey + '/changesHistory.json';
   var getRes = yield* docsCoServer.getCallback(docId);
+  var forceSave = cmd.getForceSave();
+  var forceSaveType = forceSave ? forceSave.getType() : commonDefines.c_oAscForceSaveTypes.Command;
+  var isSfcmSuccess = false;
+  var statusOk;
+  var statusErr;
+  if (isSfcm) {
+    statusOk = docsCoServer.c_oAscServerStatus.MustSaveForce;
+    statusErr = docsCoServer.c_oAscServerStatus.CorruptedForce;
+  } else {
+    statusOk = docsCoServer.c_oAscServerStatus.MustSave;
+    statusErr = docsCoServer.c_oAscServerStatus.Corrupted;
+  }
   if (getRes) {
     logger.debug('Callback commandSfcCallback: docId = %s callback = %s', docId, getRes.server.href);
     var outputSfc = new commonDefines.OutputSfcData();
@@ -537,7 +559,7 @@ function* commandSfcCallback(cmd, isSfcm) {
       outputSfc.setActions(actions);
     }
     outputSfc.setUserData(cmd.getUserData());
-    if (!isError) {
+    if (!isError || isErrorCorrupted) {
       try {
         var data = yield storage.getObject(savePathHistory);
         outputSfc.setChangeHistory(JSON.parse(data.toString('utf-8')));
@@ -547,38 +569,41 @@ function* commandSfcCallback(cmd, isSfcm) {
         logger.error('Error commandSfcCallback: docId = %s\r\n%s', docId, e.stack);
       }
       if (outputSfc.getUrl() && outputSfc.getUsers().length > 0) {
-        if (isSfcm) {
-          outputSfc.setStatus(docsCoServer.c_oAscServerStatus.MustSaveForce);
-        } else {
-          outputSfc.setStatus(docsCoServer.c_oAscServerStatus.MustSave);
-        }
+        outputSfc.setStatus(statusOk);
       } else {
         isError = true;
       }
     }
     if (isError) {
-      if (isSfcm) {
-        outputSfc.setStatus(docsCoServer.c_oAscServerStatus.CorruptedForce);
-      } else {
-        outputSfc.setStatus(docsCoServer.c_oAscServerStatus.Corrupted);
-      }
+      outputSfc.setStatus(statusErr);
     }
     var uri = getRes.server.href;
     if (isSfcm) {
-      var lastSave = cmd.getLastSave();
-      if (lastSave && !isError) {
-        yield* docsCoServer.setForceSave(docId, lastSave, savePathDoc);
-      }
-      try {
-        yield* docsCoServer.sendServerRequest(docId, uri, outputSfc);
-      } catch (err) {
-        logger.error('sendServerRequest error: docId = %s;url = %s;data = %j\r\n%s', docId, uri, outputSfc, err.stack);
+      var selectRes = yield taskResult.select(docId);
+      var row = selectRes.length > 0 ? selectRes[0] : null;
+      //send only if FileStatus.Ok to prevent forcesave after final save
+      if (row && row.status == taskResult.FileStatus.Ok) {
+        if (forceSave) {
+          outputSfc.setForceSaveType(forceSaveType);
+          outputSfc.setLastSave(new Date(forceSave.getTime()).toISOString());
+        }
+        try {
+          yield* docsCoServer.sendServerRequest(docId, uri, outputSfc);
+          isSfcmSuccess = true;
+        } catch (err) {
+          logger.error('sendServerRequest error: docId = %s;url = %s;data = %j\r\n%s', docId, uri, outputSfc, err.stack);
+        }
       }
     } else {
       //if anybody in document stop save
       var hasEditors = yield* docsCoServer.hasEditors(docId);
       logger.debug('hasEditors commandSfcCallback: docId = %s hasEditors = %d', docId, hasEditors);
       if (!hasEditors) {
+        let lastSave = yield* docsCoServer.getLastSave(docId);
+        let notModified = yield* docsCoServer.getLastForceSave(docId, lastSave);
+        var lastSaveDate = lastSave ? new Date(lastSave.time) : new Date();
+        outputSfc.setLastSave(lastSaveDate.toISOString());
+        outputSfc.setNotModified(notModified);
         var updateMask = new taskResult.TaskResultData();
         updateMask.key = docId;
         updateMask.status = taskResult.FileStatus.SaveVersion;
@@ -621,6 +646,9 @@ function* commandSfcCallback(cmd, isSfcm) {
     }
   } else {
     logger.error('Empty Callback commandSfcCallback: docId = %s', docId);
+  }
+  if (forceSave) {
+    yield* docsCoServer.setForceSave(docId, forceSave, cmd, isSfcmSuccess && !isError);
   }
   if (docsCoServer.getIsShutdown() && !isSfcm) {
     yield utils.promiseRedis(redisClient, redisClient.srem, redisKeyShutdown, docId);
@@ -697,7 +725,6 @@ exports.openDocument = function(conn, cmd, opt_upsertRes) {
       outputData = new OutputData(cmd.getCommand());
       switch (cmd.getCommand()) {
         case 'open':
-          //yield utils.sleep(5000);
           yield* commandOpen(conn, cmd, outputData, opt_upsertRes);
           break;
         case 'reopen':

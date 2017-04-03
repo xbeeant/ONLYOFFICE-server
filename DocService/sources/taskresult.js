@@ -1,5 +1,5 @@
 /*
- * (c) Copyright Ascensio System SIA 2010-2016
+ * (c) Copyright Ascensio System SIA 2010-2017
  *
  * This program is a free software product. You can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public License (AGPL)
@@ -30,6 +30,8 @@
  *
  */
 
+'use strict';
+
 var sqlBase = require('./baseConnector');
 var logger = require('./../../Common/sources/logger');
 var utils = require('./../../Common/sources/utils');
@@ -55,9 +57,10 @@ function TaskResultData() {
   this.status = null;
   this.statusInfo = null;
   this.lastOpenDate = null;
-  this.title = null;
   this.userIndex = null;
   this.changeId = null;
+  this.callback = null;
+  this.baseurl = null;
 }
 TaskResultData.prototype.completeDefaults = function() {
   if (!this.key) {
@@ -72,14 +75,17 @@ TaskResultData.prototype.completeDefaults = function() {
   if (!this.lastOpenDate) {
     this.lastOpenDate = new Date();
   }
-  if (!this.title) {
-    this.title = '';
-  }
   if (!this.userIndex) {
     this.userIndex = 1;
   }
   if (!this.changeId) {
     this.changeId = 0;
+  }
+  if (!this.callback) {
+    this.callback = '';
+  }
+  if (!this.baseurl) {
+    this.baseurl = '';
   }
 };
 
@@ -114,14 +120,17 @@ function toUpdateArray(task, updateTime) {
   if (updateTime) {
     res.push('last_open_date=' + sqlBase.baseConnector.sqlEscape(sqlBase.getDateTime(new Date())));
   }
-  if (null != task.title) {
-    res.push('title=' + sqlBase.baseConnector.sqlEscape(task.title));
-  }
   if (null != task.indexUser) {
     res.push('user_index=' + sqlBase.baseConnector.sqlEscape(task.indexUser));
   }
   if (null != task.changeId) {
     res.push('change_id=' + sqlBase.baseConnector.sqlEscape(task.changeId));
+  }
+  if (null != task.callback) {
+    res.push('callback=' + sqlBase.baseConnector.sqlEscape(task.callback));
+  }
+  if (null != task.baseurl) {
+    res.push('baseurl=' + sqlBase.baseConnector.sqlEscape(task.baseurl));
   }
   return res;
 }
@@ -167,12 +176,12 @@ function updateIf(task, mask) {
 function getInsertString(task) {
   var dateNow = sqlBase.getDateTime(new Date());
   task.completeDefaults();
-  var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.title, task.userIndex, task.changeId];
+  var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.userIndex, task.changeId, task.callback, task.baseurl];
   var commandArgEsc = commandArg.map(function(curVal) {
     return sqlBase.baseConnector.sqlEscape(curVal)
   });
-  return 'INSERT INTO task_result ( id, status, status_info, last_open_date, title, user_index, change_id) VALUES (' +
-    commandArgEsc.join(', ') + ');';
+  return 'INSERT INTO task_result ( id, status, status_info, last_open_date, user_index, change_id, callback,' +
+    ' baseurl) VALUES (' + commandArgEsc.join(', ') + ');';
 }
 function addRandomKey(task) {
   return new Promise(function(resolve, reject) {

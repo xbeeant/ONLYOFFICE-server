@@ -106,7 +106,9 @@
             try {
                 var xhrObj = _createXMLHTTPObject();
                 if (xhrObj) {
-                    xhrObj.open('GET', '/healthcheck');
+                    var index_html = window["location"]["href"];
+                    var healthcheck_url = index_html.substring(0, index_html.lastIndexOf("/") + 1) + '../healthcheck';
+                    xhrObj.open('GET', healthcheck_url);
                     xhrObj.onreadystatechange = function() {
                         if (xhrObj.readyState == 4) {
                             var serverstatus = document.getElementById('doc-server-status');

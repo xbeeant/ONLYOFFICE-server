@@ -1,5 +1,5 @@
 /*
- * (c) Copyright Ascensio System SIA 2010-2016
+ * (c) Copyright Ascensio System SIA 2010-2017
  *
  * This program is a free software product. You can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public License (AGPL)
@@ -30,9 +30,12 @@
  *
  */
 
+'use strict';
+
 var config = require('config').get('services.CoAuthoring');
 var co = require('co');
 var cron = require('cron');
+var ms = require('ms');
 var taskResult = require('./taskresult');
 var docsCoServer = require('./DocsCoServer');
 var canvasService = require('./canvasservice');
@@ -40,16 +43,21 @@ var storage = require('./../../Common/sources/storage-base');
 var utils = require('./../../Common/sources/utils');
 var logger = require('./../../Common/sources/logger');
 var constants = require('./../../Common/sources/constants');
+var commondefines = require('./../../Common/sources/commondefines');
 var pubsubRedis = require('./pubsubRedis.js');
 var queueService = require('./../../Common/sources/taskqueueRabbitMQ');
+var pubsubService = require('./' + config.get('pubsub.name'));
 
 var cfgRedisPrefix = config.get('redis.prefix');
 var cfgExpFilesCron = config.get('expire.filesCron');
 var cfgExpDocumentsCron = config.get('expire.documentsCron');
 var cfgExpFiles = config.get('expire.files');
 var cfgExpFilesRemovedAtOnce = config.get('expire.filesremovedatonce');
+var cfgForceSaveStep = ms(config.get('autoAssembly.step'));
 
 var redisKeyDocuments = cfgRedisPrefix + constants.REDIS_KEY_DOCUMENTS;
+var redisKeyForceSaveTimer = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_TIMER;
+var redisKeyForceSaveTimerLock = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_TIMER_LOCK;
 
 var checkFileExpire = function() {
   return co(function* () {
@@ -129,6 +137,59 @@ var checkDocumentExpire = function() {
     }
   });
 };
+let forceSaveTimeout = function() {
+  return co(function* () {
+    let queue = null;
+    let pubsub = null;
+    try {
+      logger.debug('forceSaveTimeout start');
+      let redisClient = pubsubRedis.getClientRedis();
+
+      let now = (new Date()).getTime();
+      let multi = redisClient.multi([
+        ['zrangebyscore', redisKeyForceSaveTimer, 0, now],
+        ['zremrangebyscore', redisKeyForceSaveTimer, 0, now]
+      ]);
+      let execRes = yield utils.promiseRedis(multi, multi.exec);
+      let expiredKeys = execRes[0];
+      if (expiredKeys.length > 0) {
+        queue = new queueService();
+        yield queue.initPromise(true, false, false, false);
+
+        pubsub = new pubsubService();
+        yield pubsub.initPromise();
+
+        let actions = [];
+        for (let i = 0; i < expiredKeys.length; ++i) {
+          let docId = expiredKeys[i];
+          if (docId) {
+            actions.push(utils.promiseRedis(redisClient, redisClient.del, redisKeyForceSaveTimerLock + docId));
+            actions.push(docsCoServer.startForceSavePromise(docId, commondefines.c_oAscForceSaveTypes.Timeout,
+                                                            undefined, undefined, undefined, queue, pubsub));
+          }
+        }
+        yield Promise.all(actions);
+        logger.debug('forceSaveTimeout actions.length %d', actions.length);
+      }
+      logger.debug('forceSaveTimeout end');
+    } catch (e) {
+      logger.error('forceSaveTimeout error:\r\n%s', e.stack);
+    } finally {
+      try {
+        if (queue) {
+          yield queue.close();
+        }
+        if (pubsub) {
+          yield pubsub.close();
+        }
+      } catch (e) {
+        logger.error('checkDocumentExpire error:\r\n%s', e.stack);
+      }
+      setTimeout(forceSaveTimeout, cfgForceSaveStep);
+    }
+  });
+};
+
 var documentExpireJob = function(opt_isStart) {
   if (!opt_isStart) {
     logger.warn('checkDocumentExpire restart');
@@ -144,3 +205,7 @@ var fileExpireJob = function(opt_isStart) {
   new cron.CronJob(cfgExpFilesCron, checkFileExpire, fileExpireJob, true);
 };
 fileExpireJob(true);
+
+if(cfgForceSaveStep > 0){
+  setTimeout(forceSaveTimeout, cfgForceSaveStep);
+}

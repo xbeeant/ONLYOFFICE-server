@@ -5,17 +5,6 @@
 -- CREATE DATABASE onlyoffice ENCODING = 'UTF8' CONNECTION LIMIT = -1;
 
 -- ----------------------------
--- Table structure for doc_callbacks
--- ----------------------------
-CREATE TABLE IF NOT EXISTS "public"."doc_callbacks" (
-"id" varchar(255) COLLATE "default" NOT NULL,
-"callback" text COLLATE "default" NOT NULL,
-"baseurl" text COLLATE "default" NOT NULL,
-PRIMARY KEY ("id")
-)
-WITH (OIDS=FALSE);
-
--- ----------------------------
 -- Table structure for doc_changes
 -- ----------------------------
 CREATE TABLE IF NOT EXISTS "public"."doc_changes" (
@@ -38,14 +27,15 @@ CREATE TABLE IF NOT EXISTS "public"."task_result" (
 "status" int2 NOT NULL,
 "status_info" int4 NOT NULL,
 "last_open_date" timestamp without time zone NOT NULL,
-"title" varchar(255) COLLATE "default" NOT NULL,
 "user_index" int4 NOT NULL DEFAULT 1,
 "change_id" int4 NOT NULL DEFAULT 0,
+"callback" text COLLATE "default" NOT NULL,
+"baseurl" text COLLATE "default" NOT NULL,
 PRIMARY KEY ("id")
 )
 WITH (OIDS=FALSE);
 
-CREATE OR REPLACE FUNCTION merge_db(_id varchar(255), _status int2, _status_info int4, _last_open_date timestamp without time zone, _title varchar(255), _user_index int4, _change_id int4, OUT isupdate char(5), OUT userindex int4) AS
+CREATE OR REPLACE FUNCTION merge_db(_id varchar(255), _status int2, _status_info int4, _last_open_date timestamp without time zone, _user_index int4, _change_id int4, _callback text, _baseurl text, OUT isupdate char(5), OUT userindex int4) AS
 $$
 DECLARE
 	t_var "public"."task_result"."user_index"%TYPE;
@@ -62,7 +52,7 @@ BEGIN
 		-- if someone else inserts the same key concurrently,
 		-- we could get a unique-key failure
 		BEGIN
-			INSERT INTO "public"."task_result"(id, status, status_info, last_open_date, title, user_index, change_id) VALUES(_id, _status, _status_info, _last_open_date, _title, _user_index, _change_id) RETURNING user_index into userindex;
+			INSERT INTO "public"."task_result"(id, status, status_info, last_open_date, user_index, change_id, callback, baseurl) VALUES(_id, _status, _status_info, _last_open_date, _user_index, _change_id, _callback, _baseurl) RETURNING user_index into userindex;
 			isupdate := 'false';
 			RETURN;
 		EXCEPTION WHEN unique_violation THEN

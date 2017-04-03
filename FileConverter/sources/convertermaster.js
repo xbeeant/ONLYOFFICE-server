@@ -1,5 +1,5 @@
 /*
- * (c) Copyright Ascensio System SIA 2010-2016
+ * (c) Copyright Ascensio System SIA 2010-2017
  *
  * This program is a free software product. You can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public License (AGPL)
@@ -29,6 +29,8 @@
  * terms at http://creativecommons.org/licenses/by-sa/4.0/legalcode
  *
  */
+
+'use strict';
 
 const cluster = require('cluster');
 const logger = require('./../../Common/sources/logger');
@@ -76,8 +78,8 @@ if (cluster.isMaster) {
     });
   };
 
-  cluster.on('exit', (worker) => {
-    logger.warn('worker %s died.', worker.process.pid);
+  cluster.on('exit', (worker, code, signal) => {
+    logger.warn('worker %s died (code = %s; signal = %s).', worker.process.pid, code, signal);
     updateWorkers();
   });
 

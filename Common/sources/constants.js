@@ -1,5 +1,5 @@
 /*
- * (c) Copyright Ascensio System SIA 2010-2016
+ * (c) Copyright Ascensio System SIA 2010-2017
  *
  * This program is a free software product. You can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public License (AGPL)
@@ -29,6 +29,8 @@
  * terms at http://creativecommons.org/licenses/by-sa/4.0/legalcode
  *
  */
+
+'use strict';
 
 exports.DOC_ID_PATTERN = '0-9-.a-zA-Z_=';
 exports.CHAR_DELIMITER = String.fromCharCode(5);
@@ -147,6 +149,7 @@ exports.UPLOAD = -100;
 exports.UPLOAD_CONTENT_LENGTH = -101;
 exports.UPLOAD_EXTENSION = -102;
 exports.UPLOAD_COUNT_FILES = -103;
+exports.UPLOAD_URL = -104;
 exports.VKEY = -120;
 exports.VKEY_ENCRYPT = -121;
 exports.VKEY_KEY_EXPIRE = -122;
@@ -155,10 +158,11 @@ exports.VKEY_TIME_EXPIRE = -124;
 exports.VKEY_TIME_INCORRECT = -125;
 exports.EDITOR_CHANGES = -160;
 
-exports.QUEUE_PRIORITY_LOW = 0;
-exports.QUEUE_PRIORITY_NORMAL = 1;
-exports.QUEUE_PRIORITY_HIGH = 2;
-exports.QUEUE_PRIORITY_RESPONSE = 3;
+exports.QUEUE_PRIORITY_VERY_LOW = 0;
+exports.QUEUE_PRIORITY_LOW = 1;
+exports.QUEUE_PRIORITY_NORMAL = 2;
+exports.QUEUE_PRIORITY_HIGH = 3;
+exports.QUEUE_PRIORITY_VERY_HIGH = 4;
 
 exports.EDITOR_TYPE_WORD = 0;
 exports.EDITOR_TYPE_SPREADSHEET = 1;
@@ -179,6 +183,8 @@ exports.REDIS_KEY_MESSAGE = 'message:';
 exports.REDIS_KEY_DOCUMENTS = 'documents';
 exports.REDIS_KEY_LAST_SAVE = 'lastsave:';
 exports.REDIS_KEY_FORCE_SAVE = 'forcesave:';
+exports.REDIS_KEY_FORCE_SAVE_TIMER = 'forcesavetimer';
+exports.REDIS_KEY_FORCE_SAVE_TIMER_LOCK = 'forcesavetimerlock:';
 exports.REDIS_KEY_SAVED = 'saved:';
 exports.REDIS_KEY_SHUTDOWN = 'shutdown';
 exports.REDIS_KEY_LICENSE = 'license';

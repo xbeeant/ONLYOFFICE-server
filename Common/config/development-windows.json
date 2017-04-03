@@ -6,6 +6,7 @@
     "name": "storage-fs",
     "fs": {
       "folderPath": "../../App_Data",
+      "urlExpires": 2592000,
       "secretString": "onlyoffice"
     }
   },
@@ -14,21 +15,18 @@
       "server": {
         "port": 8001,
         "sockjsUrl": "/web-apps/vendor/sockjs/sockjs.min.js",
-        "editor_settings_spellchecker_url": "",
-        "static_content": [
-          {
-            "name": "/sdkjs",
+        "editor_settings_spellchecker_url": "http://127.0.0.1:8080",
+        "static_content": {
+          "/sdkjs": {
             "path": "../../../sdkjs"
           },
-          {
-            "name": "/web-apps",
+          "/web-apps": {
             "path": "../../../web-apps"
           },
-          {
-            "name": "/sdkjs-plugins",
+          "/sdkjs-plugins": {
             "path": "../../../sdkjs-plugins"
           }
-        ]
+        }
       },
       "utils": {
         "utils_common_fontdir": "C:\\Windows\\Fonts"

@@ -1,5 +1,5 @@
 /*
- * (c) Copyright Ascensio System SIA 2010-2016
+ * (c) Copyright Ascensio System SIA 2010-2017
  *
  * This program is a free software product. You can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public License (AGPL)
@@ -30,7 +30,9 @@
  *
  */
 
-var constants = require('./constants');
+'use strict';
+
+const constants = require('./constants');
 
 function InputCommand(data) {
   if (data) {
@@ -67,10 +69,16 @@ function InputCommand(data) {
     this['docconnectionid'] = data['docconnectionid'];
     this['doctparams'] = data['doctparams'];
     this['useractionid'] = data['useractionid'];
-    this['lastsave'] = data['lastsave'];
+    if (data['forcesave']) {
+      this['forcesave'] = new CForceSaveData(data['forcesave']);
+    } else {
+      this['forcesave'] = undefined;
+    }
     this['userdata'] = data['userdata'];
     this['inline'] = data['inline'];
     this['password'] = data['password'];
+    this['outputurls'] = data['outputurls'];
+    this['closeonerror'] = data['closeonerror'];
   } else {
     this['c'] = undefined;//string command
     this['id'] = undefined;//string document id
@@ -101,10 +109,12 @@ function InputCommand(data) {
     this['docconnectionid'] = undefined;//string internal
     this['doctparams'] = undefined;//int doctRenderer
     this['useractionid'] = undefined;
-    this['lastsave'] = undefined;//string key
+    this['forcesave'] = undefined;
     this['userdata'] = undefined;
     this['inline'] = undefined;//content disposition
     this['password'] = undefined;
+    this['outputurls'] = undefined;
+    this['closeonerror'] = undefined;
   }
 }
 InputCommand.prototype = {
@@ -249,11 +259,11 @@ InputCommand.prototype = {
   setUserActionId: function(data) {
     this['useractionid'] = data;
   },
-  getLastSave: function() {
-    return this['lastsave'];
+  getForceSave: function() {
+    return this['forcesave'];
   },
-  setLastSave: function(data) {
-    this['lastsave'] = data;
+  setForceSave: function(data) {
+    this['forcesave'] = data;
   },
   getUserData: function() {
     return this['userdata'];
@@ -272,8 +282,51 @@ InputCommand.prototype = {
   },
   setPassword: function(data) {
     this['password'] = data;
+  },
+  setOutputUrls: function(data) {
+    this['outputurls'] = data;
+  },
+  getOutputUrls: function() {
+    return this['outputurls'];
+  },
+  getCloseOnError: function() {
+    return this['closeonerror'];
+  },
+  setCloseOnError: function(data) {
+    this['closeonerror'] = data;
   }
 };
+
+function CForceSaveData(obj) {
+  if (obj) {
+    this['type'] = obj['type'];
+    this['time'] = obj['time'];
+    this['index'] = obj['index'];
+  } else {
+    this['type'] = null;
+    this['time'] = null;
+    this['index'] = null;
+  }
+}
+CForceSaveData.prototype.getType = function() {
+  return this['type']
+};
+CForceSaveData.prototype.setType = function(v) {
+  this['type'] = v;
+};
+CForceSaveData.prototype.getTime = function() {
+  return this['time']
+};
+CForceSaveData.prototype.setTime = function(v) {
+  this['time'] = v;
+};
+CForceSaveData.prototype.getIndex = function() {
+  return this['index']
+};
+CForceSaveData.prototype.setIndex = function(v) {
+  this['index'] = v;
+};
+
 function CThumbnailData(obj) {
   if (obj) {
     this['format'] = obj['format'];
@@ -521,6 +574,9 @@ function OutputSfcData() {
   this['actions'] = undefined;
   this['mailMerge'] = undefined;
   this['userdata'] = undefined;
+  this['lastsave'] = undefined;
+  this['notmodified'] = undefined;
+  this['forcesavetype'] = undefined;
 }
 OutputSfcData.prototype.getKey = function() {
   return this['key'];
@@ -576,13 +632,32 @@ OutputSfcData.prototype.getUserData= function() {
 OutputSfcData.prototype.setUserData = function(data) {
   return this['userdata'] = data;
 };
+OutputSfcData.prototype.getLastSave = function() {
+  return this['lastsave']
+};
+OutputSfcData.prototype.setLastSave = function(v) {
+  this['lastsave'] = v;
+};
+OutputSfcData.prototype.getNotModified = function() {
+  return this['notmodified']
+};
+OutputSfcData.prototype.setNotModified = function(v) {
+  this['notmodified'] = v;
+};
+OutputSfcData.prototype.getForceSaveType = function() {
+  return this['forcesavetype']
+};
+OutputSfcData.prototype.setForceSaveType = function(v) {
+  this['forcesavetype'] = v;
+};
+
 function OutputMailMerge(mailMergeSendData) {
   if (mailMergeSendData) {
     this['from'] = mailMergeSendData.getFrom();
     this['message'] = mailMergeSendData.getMessage();
     this['subject'] = mailMergeSendData.getSubject();
     this['title'] = mailMergeSendData.getFileName();
-    var mailFormat = mailMergeSendData.getMailFormat();
+    const mailFormat = mailMergeSendData.getMailFormat();
     switch (mailFormat) {
       case constants.AVS_OFFICESTUDIO_FILE_OTHER_HTMLZIP :
         this['type'] = 0;
@@ -635,7 +710,7 @@ function OutputAction(type, userid) {
   this['type'] = type;
   this['userid'] = userid;
 }
-var c_oPublishType = {
+const c_oPublishType = {
   drop : 0,
   releaseLock : 1,
   participantsState : 2,
@@ -647,9 +722,10 @@ var c_oPublishType = {
   warning: 8,
   cursor: 9,
   shutdown: 10,
-  meta: 11
+  meta: 11,
+  forceSave: 12
 };
-var c_oAscCsvDelimiter = {
+const c_oAscCsvDelimiter = {
   None: 0,
   Tab: 1,
   Semicolon: 2,
@@ -657,7 +733,7 @@ var c_oAscCsvDelimiter = {
   Comma: 4,
   Space: 5
 };
-var c_oAscEncodings = [
+const c_oAscEncodings = [
   [ 0,    28596, "ISO-8859-6",       "Arabic (ISO 8859-6)" ],
   [ 1,    720,   "DOS-720",          "Arabic (OEM 720)" ],
   [ 2,    1256,  "windows-1256",     "Arabic (Windows)" ],
@@ -729,21 +805,26 @@ var c_oAscEncodings = [
   [ 50,   12000, "UTF-32",           "Unicode (UTF-32)" ],
   [ 51,   12001, "UTF-32BE",         "Unicode (UTF-32 Big Endian)" ]
 ];
-var c_oAscEncodingsMap = {"437": 43, "720": 1, "737": 21, "775": 5, "850": 39, "852": 15, "855": 12, "857": 35, "858": 40, "860": 41, "861": 30, "862": 25, "863": 42, "865": 31, "866": 13, "869": 22, "874": 32, "932": 27, "936": 18, "949": 28, "950": 17, "1200": 48, "1201": 49, "1250": 16, "1251": 14, "1252": 44, "1253": 23, "1254": 36, "1255": 26, "1256": 2, "1257": 6, "1258": 45, "10007": 11, "12000": 50, "12001": 51, "20866": 9, "21866": 10, "28591": 37, "28592": 19, "28593": 33, "28594": 3, "28595": 8, "28596": 0, "28597": 20, "28598": 24, "28599": 34, "28603": 4, "28604": 7, "28605": 38, "51949": 29, "65000": 47, "65001": 46}
-var c_oAscCodePageUtf8 = 46;//65001
-var c_oAscUserAction = {
+const c_oAscEncodingsMap = {"437": 43, "720": 1, "737": 21, "775": 5, "850": 39, "852": 15, "855": 12, "857": 35, "858": 40, "860": 41, "861": 30, "862": 25, "863": 42, "865": 31, "866": 13, "869": 22, "874": 32, "932": 27, "936": 18, "949": 28, "950": 17, "1200": 48, "1201": 49, "1250": 16, "1251": 14, "1252": 44, "1253": 23, "1254": 36, "1255": 26, "1256": 2, "1257": 6, "1258": 45, "10007": 11, "12000": 50, "12001": 51, "20866": 9, "21866": 10, "28591": 37, "28592": 19, "28593": 33, "28594": 3, "28595": 8, "28596": 0, "28597": 20, "28598": 24, "28599": 34, "28603": 4, "28604": 7, "28605": 38, "51949": 29, "65000": 47, "65001": 46}
+const c_oAscCodePageUtf8 = 46;//65001
+const c_oAscUserAction = {
   Out: 0,
   In: 1
 };
-var c_oAscServerCommandErrors = {
+const c_oAscServerCommandErrors = {
   NoError: 0,
   DocumentIdError: 1,
   ParseError: 2,
   UnknownError: 3,
-  NotModify: 4,
+  NotModified: 4,
   UnknownCommand: 5,
   Token: 6,
   TokenExpire: 7
+};
+const c_oAscForceSaveTypes = {
+  Command: 0,
+  Button: 1,
+  Timeout: 2
 };
 
 const buildVersion = '4.1.2';
@@ -752,6 +833,7 @@ const buildNumber = 37;
 exports.TaskQueueData = TaskQueueData;
 exports.CMailMergeSendData = CMailMergeSendData;
 exports.CThumbnailData = CThumbnailData;
+exports.CForceSaveData = CForceSaveData;
 exports.InputCommand = InputCommand;
 exports.OutputSfcData = OutputSfcData;
 exports.OutputMailMerge = OutputMailMerge;
@@ -763,5 +845,6 @@ exports.c_oAscEncodingsMap = c_oAscEncodingsMap;
 exports.c_oAscCodePageUtf8 = c_oAscCodePageUtf8;
 exports.c_oAscUserAction = c_oAscUserAction;
 exports.c_oAscServerCommandErrors = c_oAscServerCommandErrors;
+exports.c_oAscForceSaveTypes = c_oAscForceSaveTypes;
 exports.buildVersion = buildVersion;
 exports.buildNumber = buildNumber;
