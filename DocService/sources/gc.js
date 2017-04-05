@@ -53,6 +53,7 @@ var cfgExpFilesCron = config.get('expire.filesCron');
 var cfgExpDocumentsCron = config.get('expire.documentsCron');
 var cfgExpFiles = config.get('expire.files');
 var cfgExpFilesRemovedAtOnce = config.get('expire.filesremovedatonce');
+var cfgForceSaveEnable = config.get('autoAssembly.enable');
 var cfgForceSaveStep = ms(config.get('autoAssembly.step'));
 
 var redisKeyDocuments = cfgRedisPrefix + constants.REDIS_KEY_DOCUMENTS;
@@ -206,6 +207,6 @@ var fileExpireJob = function(opt_isStart) {
 };
 fileExpireJob(true);
 
-if(cfgForceSaveStep > 0){
+if (cfgForceSaveEnable) {
   setTimeout(forceSaveTimeout, cfgForceSaveStep);
 }
