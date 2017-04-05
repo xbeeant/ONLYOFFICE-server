@@ -404,8 +404,8 @@ function* commandImgurls(conn, cmd, outputData) {
   var docId = cmd.getDocId();
   var errorCode = constants.NO_ERROR;
   var outputUrls = [];
+  var isImgUrl = 'imgurl' == cmd.getCommand();
   if (!conn.user.view && !conn.isCloseCoAuthoring) {
-    var isImgUrl = 'imgurl' == cmd.getCommand();
     if (isImgUrl) {
       urls = [cmd.getData()];
       supportedFormats = cfgTypesUpload || 'jpg';
@@ -496,7 +496,11 @@ function* commandImgurls(conn, cmd, outputData) {
     outputData.setData(errorCode);
   } else {
     outputData.setStatus('ok');
-    outputData.setData({error: errorCode, urls: outputUrls});
+    if (isImgUrl) {
+       outputData.setData(outputUrls);
+    } else {
+      outputData.setData({error: errorCode, urls: outputUrls});
+    }
   }
 }
 function* commandPathUrl(conn, cmd, outputData) {
