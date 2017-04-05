@@ -13,29 +13,38 @@ This instruction describes document service deployment for Windows based platfor
 
 For the document service to work correctly it is necessary to install the following components for your Windows system (if not specified additionally, the latest version for 32 or 64 bit Windows can be installed with default settings):
 
-a) Node.js 4.0.x 32 bit version (https://nodejs.org/dist/v4.0.0/node-v4.0.0-x86.msi) 
+a) Node.js version 6.9.1 or later (https://nodejs.org/en/download/)
 
-To find out which Node.js version is used on your system currently run the `node -v` command
+b) Java (https://java.com/en/download/). Necessary for the sdk build.
 
-The 32 bit version is necessary for the spellchecking module only. In case you do not plan to use this module, you can install 64 bit Node.js version.
+c) MySql Server version 5.5 or later (http://dev.mysql.com/downloads/windows/installer/). When installing use the `onlyoffice` password for the `root` user.
+с) or PostgreSQL Server version 9.1 or later (https://www.postgresql.org/download/).
 
-b) MySql Server version 5.5 or later (http://dev.mysql.com/downloads/windows/installer/). When installing use the `onlyoffice` password for the `root` user
+d) Erlang (http://www.erlang.org/download.html)
 
-c) Erlang (http://www.erlang.org/download.html)
+e) RabbitMQ (https://www.rabbitmq.com/releases/rabbitmq-server/v3.5.4/rabbitmq-server-3.5.4.exe)
 
-d) RabbitMQ (https://www.rabbitmq.com/releases/rabbitmq-server/v3.5.4/rabbitmq-server-3.5.4.exe)
+f) Redis (https://github.com/MSOpenTech/redis/releases/download/win-2.8.2102/Redis-x64-2.8.2102.msi)
 
-e) Redis (https://github.com/MSOpenTech/redis/releases/download/win-2.8.2102/Redis-x64-2.8.2102.msi)
+g) Python 2.7.x (http://www.python.org/download/releases/2.7.3/#download)
 
-f) Python 2.7.x (http://www.python.org/download/releases/2.7.3/#download)
-
-g) Microsoft Visual C++ Express 2010 (necessary for the spellchecker modules build)
+h) Microsoft Visual C++ Express 2010 (necessary for the spellchecker modules build)
 
 ### Setting up the system
 
-a) Database setup
+a) Database setup MySQL
 
 Run the schema/mysql/createdb.sql script for MySQL
+
+a) or Database setup PostgreSQL
+Enter in `psql` (PostgreSQL interactive terminal) with login and password introduced during installation, then enter commands:
+`CREATE DATABASE onlyoffice;`
+`CREATE USER onlyoffice WITH PASSWORD 'onlyoffice';`
+`\c onlyoffice`
+`\i 'schema/postgresql/createdb.sql';`
+`GRANT ALL PRIVILEGES ON DATABASE onlyoffice to onlyoffice;`
+`GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO onlyoffice;`
+Delete from `server\Common\config\development-windows.json` option `sql`.
 
 b) Install the Web Monitor for RabbitMQ (see the details for the installation here - https://www.rabbitmq.com/management.html)
 
