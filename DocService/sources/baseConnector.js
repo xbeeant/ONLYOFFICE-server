@@ -273,3 +273,16 @@ exports.healthCheck = function () {
     });
   });
 };
+
+exports.getEmptyCallbacks = function() {
+  return new Promise(function(resolve, reject) {
+    const sqlCommand = "SELECT DISTINCT t1.id FROM doc_changes t1 LEFT JOIN task_result t2 ON t2.id = t1.id WHERE t2.callback = '';";
+    baseConnector.sqlQuery(sqlCommand, function(error, result) {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(result);
+      }
+    });
+  });
+};
