@@ -121,6 +121,17 @@ function consumePromise(channel, queue, messageCallback, options) {
     });
   });
 }
+function closePromise(conn) {
+  return new Promise(function(resolve, reject) {
+    conn.close(function(err) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
 
 module.exports.connetPromise = connetPromise;
 module.exports.createChannelPromise = createChannelPromise;
@@ -128,3 +139,4 @@ module.exports.createConfirmChannelPromise = createConfirmChannelPromise;
 module.exports.assertExchangePromise = assertExchangePromise;
 module.exports.assertQueuePromise = assertQueuePromise;
 module.exports.consumePromise = consumePromise;
+module.exports.closePromise = closePromise;
