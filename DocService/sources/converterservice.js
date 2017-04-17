@@ -142,7 +142,7 @@ function* convertByCmd(cmd, async, baseUrl, fileTo, opt_healthcheck, opt_priorit
 }
 
 function* convertFromChanges(docId, baseUrl, forceSave, opt_userdata, opt_userConnectionId, opt_priority,
-                             opt_expiration, opt_queue) {
+                             opt_expiration, opt_queue, opt_redisKey) {
   var cmd = new commonDefines.InputCommand();
   cmd.setCommand('sfcm');
   cmd.setDocId(docId);
@@ -156,6 +156,9 @@ function* convertFromChanges(docId, baseUrl, forceSave, opt_userdata, opt_userCo
   }
   if (opt_userConnectionId) {
     cmd.setUserConnectionId(opt_userConnectionId);
+  }
+  if (opt_redisKey) {
+    cmd.setRedisKey(opt_redisKey);
   }
 
   yield* canvasService.commandSfctByCmd(cmd, opt_priority, opt_expiration, opt_queue);

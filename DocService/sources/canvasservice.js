@@ -650,8 +650,9 @@ function* commandSfcCallback(cmd, isSfcm) {
   if (forceSave) {
     yield* docsCoServer.setForceSave(docId, forceSave, cmd, isSfcmSuccess && !isError);
   }
-  if (docsCoServer.getIsShutdown() && !isSfcm) {
-    yield utils.promiseRedis(redisClient, redisClient.srem, redisKeyShutdown, docId);
+  if ((docsCoServer.getIsShutdown() && !isSfcm) || cmd.getRedisKey()) {
+    let keyRedis = cmd.getRedisKey() ? cmd.getRedisKey() : redisKeyShutdown;
+    yield utils.promiseRedis(redisClient, redisClient.srem, keyRedis, docId);
   }
   logger.debug('End commandSfcCallback: docId = %s', docId);
 }
