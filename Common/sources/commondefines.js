@@ -79,6 +79,7 @@ function InputCommand(data) {
     this['password'] = data['password'];
     this['outputurls'] = data['outputurls'];
     this['closeonerror'] = data['closeonerror'];
+    this['rediskey'] = data['rediskey'];
   } else {
     this['c'] = undefined;//string command
     this['id'] = undefined;//string document id
@@ -115,6 +116,7 @@ function InputCommand(data) {
     this['password'] = undefined;
     this['outputurls'] = undefined;
     this['closeonerror'] = undefined;
+    this['rediskey'] = undefined;
   }
 }
 InputCommand.prototype = {
@@ -294,6 +296,12 @@ InputCommand.prototype = {
   },
   setCloseOnError: function(data) {
     this['closeonerror'] = data;
+  },
+  getRedisKey: function() {
+    return this['rediskey'];
+  },
+  setRedisKey: function(data) {
+    this['rediskey'] = data;
   }
 };
 

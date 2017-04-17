@@ -187,6 +187,7 @@ exports.REDIS_KEY_FORCE_SAVE_TIMER = 'forcesavetimer';
 exports.REDIS_KEY_FORCE_SAVE_TIMER_LOCK = 'forcesavetimerlock:';
 exports.REDIS_KEY_SAVED = 'saved:';
 exports.REDIS_KEY_SHUTDOWN = 'shutdown';
+exports.REDIS_KEY_COLLECT_LOST = 'collectlost';
 exports.REDIS_KEY_LICENSE = 'license';
 exports.REDIS_KEY_LICENSE_T = 'licenseT';
 
