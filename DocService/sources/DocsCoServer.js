@@ -1047,7 +1047,7 @@ exports.install = function(server, callbackFunction) {
     urlParse = new RegExp("^/doc/([" + constants.DOC_ID_PATTERN + "]*)/c.+", 'i');
 
   sockjs_echo.on('connection', function(conn) {
-    if (null == conn) {
+    if (!conn) {
       logger.error("null == conn");
       return;
     }
