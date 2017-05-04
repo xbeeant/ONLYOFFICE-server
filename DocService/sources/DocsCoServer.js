@@ -816,16 +816,12 @@ function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl, 
 
   if (c_oAscChangeBase.No !== bChangeBase) {
     if (c_oAscServerStatus.Editing === status && c_oAscChangeBase.All === bChangeBase) {
-      // Добавить в базу
-      var updateMask = new taskResult.TaskResultData();
-      updateMask.key = docId;
-      updateMask.callback = '';
-      updateMask.baseurl = '';
+      //always override callback to avoid expired callbacks
       var updateTask = new taskResult.TaskResultData();
       updateTask.key = docId;
       updateTask.callback = callback.href;
       updateTask.baseurl = baseUrl;
-      var updateIfRes = yield taskResult.updateIf(updateTask, updateMask);
+      var updateIfRes = yield taskResult.update(updateTask);
       if (updateIfRes.affectedRows > 0) {
         logger.debug('sendStatusDocument updateIf: docId = %s', docId);
       } else {
@@ -903,8 +899,8 @@ function* bindEvents(docId, callback, baseUrl, opt_userAction, opt_userData) {
   // - если есть пользователи, то просто добавляем в базу
   var bChangeBase;
   var oCallbackUrl;
-  var getRes = yield* getCallback(docId);
-  if (getRes) {
+  if (!callback) {
+    var getRes = yield* getCallback(docId);
     oCallbackUrl = getRes.server;
     bChangeBase = c_oAscChangeBase.Delete;
   } else {

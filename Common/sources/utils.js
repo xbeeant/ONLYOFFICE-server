@@ -323,7 +323,6 @@ exports.mapAscServerErrorToOldError = function(error) {
     case constants.CONVERT_PARAMS :
     case constants.CONVERT_LIBREOFFICE :
     case constants.CONVERT_CORRUPTED :
-    case constants.CONVERT_MS_OFFCRYPTO :
     case constants.CONVERT_UNKNOWN_FORMAT :
     case constants.CONVERT_READ_FILE :
     case constants.CONVERT :
