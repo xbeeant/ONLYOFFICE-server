@@ -817,7 +817,9 @@ function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl, 
   }
 
   if (c_oAscChangeBase.No !== bChangeBase) {
-    if (c_oAscServerStatus.Editing === status && c_oAscChangeBase.All === bChangeBase) {
+    //update callback even if the connection is closed to avoid script:
+    //open->make changes->disconnect->subscription from community->reconnect
+    if (c_oAscChangeBase.All === bChangeBase) {
       //always override callback to avoid expired callbacks
       var updateTask = new taskResult.TaskResultData();
       updateTask.key = docId;
