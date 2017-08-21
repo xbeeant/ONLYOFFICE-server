@@ -121,7 +121,7 @@ function InputCommand(data) {
     this['outputurls'] = undefined;
     this['closeonerror'] = undefined;
     this['rediskey'] = undefined;
-    this['nobase64'] = undefined;
+    this['nobase64'] = true;
     this['savexfile'] = undefined;
   }
 }
