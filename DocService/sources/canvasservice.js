@@ -322,12 +322,16 @@ function* commandOpen(conn, cmd, outputData, opt_upsertRes) {
   }
 }
 function* commandReopen(cmd) {
+  let updateMask = new taskResult.TaskResultData();
+  updateMask.key = cmd.getDocId();
+  updateMask.status = undefined !== cmd.getPassword() ? taskResult.FileStatus.NeedPassword : taskResult.FileStatus.NeedParams;
+
   var task = new taskResult.TaskResultData();
   task.key = cmd.getDocId();
   task.status = taskResult.FileStatus.WaitQueue;
   task.statusInfo = constants.NO_ERROR;
 
-  var upsertRes = yield taskResult.update(task);
+  var upsertRes = yield taskResult.updateIf(task, updateMask);
   if (upsertRes.affectedRows > 0) {
     //add task
     cmd.setUrl(null);//url may expire
