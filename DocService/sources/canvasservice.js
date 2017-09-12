@@ -575,8 +575,11 @@ function* commandSfcCallback(cmd, isSfcm) {
     var outputSfc = new commonDefines.OutputSfcData();
     outputSfc.setKey(docId);
     var users = [];
-    if (cmd.getUserId()) {
-      users.push(cmd.getUserId());
+    //setUserId - set from changes in convert
+    //setUserActionId - used in case of save without changes(forgotten files)
+    let userLastChangeId = cmd.getUserId() || cmd.getUserActionId();
+    if (userLastChangeId) {
+      users.push(userLastChangeId);
     }
     outputSfc.setUsers(users);
     if (!isSfcm) {
