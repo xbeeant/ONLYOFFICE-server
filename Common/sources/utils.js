@@ -426,6 +426,21 @@ function promiseCreateWriteStream(strPath, optOptions) {
   });
 };
 exports.promiseCreateWriteStream = promiseCreateWriteStream;
+
+function promiseWaitDrain(stream) {
+  return new Promise(function(resolve, reject) {
+    stream.once('drain', resolve);
+  });
+}
+exports.promiseWaitDrain = promiseWaitDrain;
+
+function promiseWaitClose(stream) {
+  return new Promise(function(resolve, reject) {
+    stream.once('close', resolve);
+  });
+}
+exports.promiseWaitClose = promiseWaitClose;
+
 function promiseCreateReadStream(strPath) {
   return new Promise(function(resolve, reject) {
     var file = fs.createReadStream(strPath);
