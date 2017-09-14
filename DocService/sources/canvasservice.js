@@ -302,6 +302,7 @@ function* commandOpen(conn, cmd, outputData, opt_upsertRes) {
     let forgotten = yield storage.listObjects(forgottenId);
     //replace url with forgotten file because it absorbed all lost changes
     if (forgotten.length > 0) {
+      logger.debug("commandOpen from forgotten: docId = %s", cmd.getDocId());
       cmd.setUrl(undefined);
       cmd.setForgotten(forgottenId);
     }
@@ -602,6 +603,7 @@ function* commandSfcCallback(cmd, isSfcm) {
           var forgottenMarkPath = docId + '/' + cfgForgottenFilesName + '.txt';
           var forgottenMark = yield storage.listObjects(forgottenMarkPath);
           isSendHistory = 0 === forgottenMark.length;
+          logger.debug('commandSfcCallback forgotten no empty: docId = %s isSendHistory = %s', docId, isSendHistory);
         }
         if (isSendHistory) {
           //don't send history info because changes isn't from file in storage
@@ -696,12 +698,13 @@ function* commandSfcCallback(cmd, isSfcm) {
   }
   if (storeForgotten && (!isError || isErrorCorrupted)) {
     try {
+      logger.debug("storeForgotten: docId = %s", docId);
       //todo implement storage.copy
       let data = yield storage.getObject(savePathDoc);
       let forgottenName = cfgForgottenFilesName + pathModule.extname(cmd.getOutputPath());
       yield storage.putObject(cfgForgottenFiles + '/' + docId + '/' + forgottenName, data, data.length);
     } catch (err) {
-      logger.error('Empty storeForgotten: docId = %s\r\n%s', docId, err.stack);
+      logger.error('Error storeForgotten: docId = %s\r\n%s', docId, err.stack);
     }
   }
   if (forceSave) {
