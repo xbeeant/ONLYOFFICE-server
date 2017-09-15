@@ -610,6 +610,9 @@ function* commandSfcCallback(cmd, isSfcm) {
           var data = yield storage.getObject(savePathHistory);
           outputSfc.setChangeHistory(JSON.parse(data.toString('utf-8')));
           outputSfc.setChangeUrl(yield storage.getSignedUrl(getRes.baseUrl, savePathChanges));
+        } else {
+          //for backward compatibility. remove this when Community is ready
+          outputSfc.setChangeHistory({});
         }
         outputSfc.setUrl(yield storage.getSignedUrl(getRes.baseUrl, savePathDoc));
       } catch (e) {
