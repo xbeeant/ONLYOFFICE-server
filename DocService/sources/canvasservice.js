@@ -249,6 +249,8 @@ function getUpdateResponse(cmd) {
     updateTask.status = taskResult.FileStatus.NeedParams;
   } else if (constants.CONVERT_DRM == statusInfo || constants.CONVERT_PASSWORD == statusInfo) {
     updateTask.status = taskResult.FileStatus.NeedPassword;
+  } else if (constants.CONVERT_DEAD_LETTER == statusInfo) {
+    updateTask.status = taskResult.FileStatus.ErrToReload;
   } else {
     updateTask.status = taskResult.FileStatus.Err;
   }
@@ -933,7 +935,7 @@ exports.saveFromChanges = function(docId, statusInfo, optFormat, opt_userId, opt
     }
   });
 };
-exports.receiveTask = function(data, dataRaw) {
+exports.receiveTask = function(data, opt_dataRaw) {
   return co(function* () {
     var docId = 'null';
     try {
@@ -973,7 +975,9 @@ exports.receiveTask = function(data, dataRaw) {
             });
           }
         }
-        yield* docsCoServer.removeResponse(dataRaw);
+        if (opt_dataRaw) {
+          yield* docsCoServer.removeResponse(opt_dataRaw);
+        }
         logger.debug('End receiveTask: docId = %s', docId);
       }
     } catch (err) {

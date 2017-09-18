@@ -763,14 +763,13 @@ function handleDeadLetter(data) {
   return co(function*() {
     let docId = 'null';
     try {
-      logger.debug('handleDeadLetter start: docId = %s %s', docId, data);
       var isRequeued = false;
       let task = new commonDefines.TaskQueueData(JSON.parse(data));
       if (task) {
         let cmd = task.getCmd();
         docId = cmd.getDocId();
+        logger.warn('handleDeadLetter start: docId = %s %s', docId, data);
         let forceSave = cmd.getForceSave();
-        //todo requeue other tasks
         if (forceSave && commonDefines.c_oAscForceSaveTypes.Timeout == forceSave.getType()) {
           let lastSave = yield* getLastSave(docId);
           //check that there are no new changes
@@ -779,11 +778,15 @@ function handleDeadLetter(data) {
             yield* addTask(task, constants.QUEUE_PRIORITY_VERY_LOW, undefined, FORCE_SAVE_EXPIRATION);
             isRequeued = true;
           }
+        } else {
+          //simulate error response
+          cmd.setStatusInfo(constants.CONVERT_DEAD_LETTER);
+          canvasService.receiveTask(JSON.stringify(task))
         }
       }
-      logger.debug('handleDeadLetter end: docId = %s; requeue = %s', docId, isRequeued);
+      logger.warn('handleDeadLetter end: docId = %s; requeue = %s', docId, isRequeued);
     } catch (err) {
-      logger.debug('handleDeadLetter error: docId = %s\r\n%s', docId, err.stack);
+      logger.error('handleDeadLetter error: docId = %s\r\n%s', docId, err.stack);
     }
   });
 }
