@@ -173,7 +173,8 @@
 			"args": "",
 			"errorfiles": "",
 			"streamWriterBufferSize": 8388608,
-			"maxRequestChanges": 50000
+			"maxRequestChanges": 50000,
+			"maxRedeliveredCount": 2
 		}
 	},
 	"FileStorage": {

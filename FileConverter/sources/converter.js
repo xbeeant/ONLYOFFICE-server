@@ -61,6 +61,7 @@ var cfgErrorFiles = configConverter.get('errorfiles');
 const cfgStreamWriterBufferSize = configConverter.get('streamWriterBufferSize');
 //cfgMaxRequestChanges was obtained as a result of the test: 84408 changes - 5,16 MB
 const cfgMaxRequestChanges = configConverter.get('maxRequestChanges');
+const cfgMaxRedeliveredCount = configConverter.get('maxRedeliveredCount')
 var cfgTokenEnableRequestOutbox = config.get('services.CoAuthoring.token.enable.request.outbox');
 const cfgForgottenFilesName = config.get('services.CoAuthoring.server.forgottenfilesname');
 
@@ -596,26 +597,49 @@ function receiveTask(data, dataRaw) {
   return co(function* () {
     var res = null;
     var task = null;
-    try {
-      task = new commonDefines.TaskQueueData(JSON.parse(data));
-      if (task) {
-        res = yield* ExecuteTask(task);
-      }
-    } catch (err) {
-      logger.error(err);
-    } finally {
+    if (!dataRaw.fields.redelivered) {
       try {
-        if (!res && task) {
-          //если все упало так что даже нет res, все равно пытаемся отдать ошибку.
-          var cmd = task.getCmd();
+        task = new commonDefines.TaskQueueData(JSON.parse(data));
+        if (task) {
+          res = yield* ExecuteTask(task);
+        }
+      } catch (err) {
+        logger.error(err);
+      } finally {
+        try {
+          if (!res && task) {
+            //если все упало так что даже нет res, все равно пытаемся отдать ошибку.
+            var cmd = task.getCmd();
+            cmd.setStatusInfo(constants.CONVERT);
+            res = new commonDefines.TaskQueueData();
+            res.setCmd(cmd);
+          }
+          if(res) {
+            yield queue.addResponse(res);
+          }
+          yield queue.removeTask(dataRaw);
+        } catch (err) {
+          logger.error(err);
+        }
+      }
+    } else {
+      try {
+        logger.warn('receiveTask redelivered data=%j', dataRaw);
+        //remove current task and add new into tail of queue to remove redelivered flag
+        yield queue.removeTask(dataRaw);
+        task = new commonDefines.TaskQueueData(JSON.parse(data));
+        let redeliveredCount = dataRaw.properties.headers['x-redelivered-count'];
+        if (!redeliveredCount || redeliveredCount < cfgMaxRedeliveredCount) {
+          dataRaw.properties.headers['x-redelivered-count'] = redeliveredCount ? redeliveredCount + 1 : 1;
+          yield queue.addTask(task, dataRaw.properties.priority, undefined, dataRaw.properties.headers);
+        } else {
+          //simulate error response
+          let cmd = task.getCmd();
           cmd.setStatusInfo(constants.CONVERT);
           res = new commonDefines.TaskQueueData();
           res.setCmd(cmd);
-        }
-        if(res) {
           yield queue.addResponse(res);
         }
-        yield queue.removeTask(dataRaw);
       } catch (err) {
         logger.error(err);
       }
@@ -625,7 +649,7 @@ function receiveTask(data, dataRaw) {
 function run() {
   queue = new queueService();
   queue.on('task', receiveTask);
-  queue.init(false, true, true, false, function(err) {
+  queue.init(true, true, true, false, function(err) {
     if (null != err) {
       logger.error('createTaskQueue error :\r\n%s', err.stack);
     }
