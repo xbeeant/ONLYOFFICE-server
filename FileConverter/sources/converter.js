@@ -59,6 +59,7 @@ var cfgFilePath = configConverter.get('filePath');
 var cfgArgs = configConverter.get('args');
 var cfgErrorFiles = configConverter.get('errorfiles');
 var cfgTokenEnableRequestOutbox = config.get('services.CoAuthoring.token.enable.request.outbox');
+const cfgForgottenFilesName = config.get('services.CoAuthoring.server.forgottenfilesname');
 
 //windows limit 512(2048) https://msdn.microsoft.com/en-us/library/6e3b887c.aspx
 //Ubuntu 14.04 limit 4096 http://underyx.me/2015/05/18/raising-the-maximum-number-of-file-descriptors.html
@@ -96,6 +97,7 @@ function TaskQueueDataConvert(task) {
   this.thumbnail = cmd.thumbnail;
   this.doctParams = cmd.getDoctParams();
   this.password = cmd.getPassword();
+  this.noBase64 = cmd.getNoBase64();
   this.timestamp = new Date();
 }
 TaskQueueDataConvert.prototype = {
@@ -124,6 +126,7 @@ TaskQueueDataConvert.prototype = {
     xml += this.serializeXmlProp('m_nDoctParams', this.doctParams);
     xml += this.serializeXmlProp('m_sPassword', this.password);
     xml += this.serializeXmlProp('m_oTimestamp', this.timestamp.toISOString());
+    xml += this.serializeXmlProp('m_bIsNoBase64', this.noBase64);
     xml += '</TaskQueueDataConvert>';
     fs.writeFileSync(fsPath, xml, {encoding: 'utf8'});
   },
@@ -513,6 +516,18 @@ function* ExecuteTask(task) {
       curDate = new Date();
     }
     yield* processDownloadFromStorage(dataConvert, cmd, task, tempDirs);
+  } else if (cmd.getForgotten()) {
+    yield* downloadFileFromStorage(cmd.getDocId(), cmd.getForgotten(), tempDirs.source);
+    logger.debug('downloadFileFromStorage complete(id=%s)', dataConvert.key);
+    let list = yield utils.listObjects(tempDirs.source, false);
+    if (list.length > 0) {
+      dataConvert.fileFrom = list[0];
+      //store indicator file to determine if opening was from the forgotten file
+      var forgottenMarkPath = tempDirs.result + '/' + cfgForgottenFilesName + '.txt';
+      fs.writeFileSync(forgottenMarkPath, cfgForgottenFilesName, {encoding: 'utf8'});
+    } else {
+      error = constants.UNKNOWN;
+    }
   } else {
     error = constants.UNKNOWN;
   }

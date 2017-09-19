@@ -136,6 +136,7 @@ const cfgForceSaveEnable = config.get('autoAssembly.enable');
 const cfgForceSaveInterval = ms(config.get('autoAssembly.interval'));
 const cfgForceSaveStep = ms(config.get('autoAssembly.step'));
 const cfgQueueRetentionPeriod = configCommon.get('queue.retentionPeriod');
+const cfgForgottenFiles = config.get('server.forgottenfiles');
 
 const redisKeySaveLock = cfgRedisPrefix + constants.REDIS_KEY_SAVE_LOCK;
 const redisKeyPresenceHash = cfgRedisPrefix + constants.REDIS_KEY_PRESENCE_HASH;
@@ -855,6 +856,7 @@ function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl, 
     logger.error('postData error: docId = %s;url = %s;data = %j\r\n%s', docId, uri, sendData, err.stack);
   }
   yield* onReplySendStatusDocument(docId, replyData);
+  return callback;
 }
 function parseReplyData(docId, replyData) {
   var res = null;
@@ -935,6 +937,8 @@ function* cleanDocumentOnExit(docId, deleteChanges) {
   //remove changes
   if (deleteChanges) {
     sqlBase.deleteChanges(docId, null);
+    //delete forgotten after successful send on callbackUrl
+    yield storage.deletePath(cfgForgottenFiles + '/' + docId);
   }
 }
 function* cleanDocumentOnExitNoChanges(docId, opt_userId) {
@@ -1259,8 +1263,16 @@ exports.install = function(server, callbackFunction) {
           // На всякий случай снимаем lock
           yield utils.promiseRedis(redisClient, redisClient.del, redisKeySaveLock + docId);
 
-          // Send changes to save server
-          if (bHasChanges) {
+          let needSaveChanges = bHasChanges;
+          if (!needSaveChanges) {
+            //start save changes if forgotten file exists.
+            //more effective to send file without sfc, but this method is simpler by code
+            let forgotten = yield storage.listObjects(cfgForgottenFiles + '/' + docId);
+            needSaveChanges = forgotten.length > 0;
+            logger.debug('closeDocument hasForgotten %s: docId = %s', needSaveChanges, docId);
+          }
+          if (needSaveChanges) {
+            // Send changes to save server
             yield* _createSaveTimer(docId, tmpUser.idOriginal);
           } else {
             yield* cleanDocumentOnExitNoChanges(docId, tmpUser.idOriginal);
@@ -1884,6 +1896,7 @@ exports.install = function(server, callbackFunction) {
     var res = true;
     var docId = conn.docId;
     var tmpUser = conn.user;
+    let hasForgotten;
     if (constants.CONN_CLOSED === conn.readyState) {
       //closing could happen during async action
       return false;
@@ -1909,7 +1922,13 @@ exports.install = function(server, callbackFunction) {
       if (documentCallbackUrl) {
         bindEventsRes = yield* bindEvents(docId, documentCallbackUrl, conn.baseUrl, userAction);
       } else {
-        yield* sendStatusDocument(docId, c_oAscChangeBase.No, userAction);
+        let callback = yield* sendStatusDocument(docId, c_oAscChangeBase.No, userAction);
+        if (!callback && !bIsRestore) {
+          //check forgotten file
+          let forgotten = yield storage.listObjects(cfgForgottenFiles + '/' + docId);
+          hasForgotten = forgotten.length > 0;
+          logger.debug('endAuth hasForgotten %s: docId = %s', hasForgotten, docId);
+        }
       }
     }
 
@@ -1944,10 +1963,10 @@ exports.install = function(server, callbackFunction) {
         sendData(conn, sendObject);//Or 0 if fails
       } else {
         if (bIsRestore) {
-          yield* sendAuthInfo(undefined, undefined, conn, participantsMap);
+          yield* sendAuthInfo(undefined, undefined, conn, participantsMap, hasForgotten);
         } else {
           var objChangesDocument = yield* getDocumentChanges(docId);
-          yield* sendAuthInfo(objChangesDocument.arrChanges, objChangesDocument.getLength(), conn, participantsMap);
+          yield* sendAuthInfo(objChangesDocument.arrChanges, objChangesDocument.getLength(), conn, participantsMap, hasForgotten);
         }
       }
       yield* publish({type: commonDefines.c_oPublishType.participantsState, docId: docId, user: tmpUser, state: true}, docId, tmpUser.id);
@@ -1958,7 +1977,7 @@ exports.install = function(server, callbackFunction) {
     return res;
   }
 
-  function* sendAuthInfo(objChangesDocument, changesIndex, conn, participantsMap) {
+  function* sendAuthInfo(objChangesDocument, changesIndex, conn, participantsMap, opt_hasForgotten) {
     const docId = conn.docId;
     let docLock;
     if(EditorTypes.document == conn.editorType){
@@ -1990,6 +2009,7 @@ exports.install = function(server, callbackFunction) {
       changes: objChangesDocument,
       changesIndex: changesIndex,
       indexUser: conn.user.indexUser,
+      hasForgotten: opt_hasForgotten,
       jwt: cfgTokenEnableBrowser ? {token: fillJwtByConnection(conn), expires: cfgTokenSessionExpires} : undefined,
       g_cAscSpellCheckUrl: cfgSpellcheckerUrl,
       buildVersion: commonDefines.buildVersion,
