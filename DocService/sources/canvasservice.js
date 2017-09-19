@@ -57,6 +57,8 @@ var cfgImageSize = config_server.get('limits_image_size');
 var cfgImageDownloadTimeout = config_server.get('limits_image_download_timeout');
 var cfgRedisPrefix = config.get('services.CoAuthoring.redis.prefix');
 var cfgTokenEnableBrowser = config.get('services.CoAuthoring.token.enable.browser');
+const cfgForgottenFiles = config_server.get('forgottenfiles');
+const cfgForgottenFilesName = config_server.get('forgottenfilesname');
 
 var SAVE_TYPE_PART_START = 0;
 var SAVE_TYPE_PART = 1;
@@ -296,6 +298,14 @@ function* commandOpen(conn, cmd, outputData, opt_upsertRes) {
       yield* getOutputData(cmd, outputData, cmd.getDocId(), row.status, row.status_info, conn);
     }
   } else {
+    let forgottenId = cfgForgottenFiles + '/' + cmd.getDocId();
+    let forgotten = yield storage.listObjects(forgottenId);
+    //replace url with forgotten file because it absorbed all lost changes
+    if (forgotten.length > 0) {
+      logger.debug("commandOpen from forgotten: docId = %s", cmd.getDocId());
+      cmd.setUrl(undefined);
+      cmd.setForgotten(forgottenId);
+    }
     //add task
     cmd.setOutputFormat(constants.AVS_OFFICESTUDIO_FILE_CANVAS);
     cmd.setEmbeddedFonts(false);
@@ -313,12 +323,16 @@ function* commandOpen(conn, cmd, outputData, opt_upsertRes) {
   }
 }
 function* commandReopen(cmd) {
+  let updateMask = new taskResult.TaskResultData();
+  updateMask.key = cmd.getDocId();
+  updateMask.status = undefined !== cmd.getPassword() ? taskResult.FileStatus.NeedPassword : taskResult.FileStatus.NeedParams;
+
   var task = new taskResult.TaskResultData();
   task.key = cmd.getDocId();
   task.status = taskResult.FileStatus.WaitQueue;
   task.statusInfo = constants.NO_ERROR;
 
-  var upsertRes = yield taskResult.update(task);
+  var upsertRes = yield taskResult.updateIf(task, updateMask);
   if (upsertRes.affectedRows > 0) {
     //add task
     cmd.setUrl(null);//url may expire
@@ -547,6 +561,7 @@ function* commandSfcCallback(cmd, isSfcm) {
   var forceSave = cmd.getForceSave();
   var forceSaveType = forceSave ? forceSave.getType() : commonDefines.c_oAscForceSaveTypes.Command;
   var isSfcmSuccess = false;
+  let storeForgotten = false;
   var statusOk;
   var statusErr;
   if (isSfcm) {
@@ -561,8 +576,11 @@ function* commandSfcCallback(cmd, isSfcm) {
     var outputSfc = new commonDefines.OutputSfcData();
     outputSfc.setKey(docId);
     var users = [];
-    if (cmd.getUserId()) {
-      users.push(cmd.getUserId());
+    //setUserId - set from changes in convert
+    //setUserActionId - used in case of save without changes(forgotten files)
+    let userLastChangeId = cmd.getUserId() || cmd.getUserActionId();
+    if (userLastChangeId) {
+      users.push(userLastChangeId);
     }
     outputSfc.setUsers(users);
     if (!isSfcm) {
@@ -577,10 +595,26 @@ function* commandSfcCallback(cmd, isSfcm) {
     outputSfc.setUserData(cmd.getUserData());
     if (!isError || isErrorCorrupted) {
       try {
-        var data = yield storage.getObject(savePathHistory);
-        outputSfc.setChangeHistory(JSON.parse(data.toString('utf-8')));
+        let forgottenId = cfgForgottenFiles + '/' + docId;
+        let forgotten = yield storage.listObjects(forgottenId);
+        let isSendHistory = 0 === forgotten.length;
+        if (!isSendHistory) {
+          //check indicator file to determine if opening was from the forgotten file
+          var forgottenMarkPath = docId + '/' + cfgForgottenFilesName + '.txt';
+          var forgottenMark = yield storage.listObjects(forgottenMarkPath);
+          isSendHistory = 0 === forgottenMark.length;
+          logger.debug('commandSfcCallback forgotten no empty: docId = %s isSendHistory = %s', docId, isSendHistory);
+        }
+        if (isSendHistory) {
+          //don't send history info because changes isn't from file in storage
+          var data = yield storage.getObject(savePathHistory);
+          outputSfc.setChangeHistory(JSON.parse(data.toString('utf-8')));
+          outputSfc.setChangeUrl(yield storage.getSignedUrl(getRes.baseUrl, savePathChanges));
+        } else {
+          //for backward compatibility. remove this when Community is ready
+          outputSfc.setChangeHistory({});
+        }
         outputSfc.setUrl(yield storage.getSignedUrl(getRes.baseUrl, savePathDoc));
-        outputSfc.setChangeUrl(yield storage.getSignedUrl(getRes.baseUrl, savePathChanges));
       } catch (e) {
         logger.error('Error commandSfcCallback: docId = %s\r\n%s', docId, e.stack);
       }
@@ -656,12 +690,25 @@ function* commandSfcCallback(cmd, isSfcm) {
             updateTask.status = taskResult.FileStatus.Ok;
             updateTask.statusInfo = constants.NO_ERROR;
             yield taskResult.update(updateTask);
+            storeForgotten = true;
           }
         }
       }
     }
   } else {
     logger.error('Empty Callback commandSfcCallback: docId = %s', docId);
+    storeForgotten = true;
+  }
+  if (storeForgotten && (!isError || isErrorCorrupted)) {
+    try {
+      logger.debug("storeForgotten: docId = %s", docId);
+      //todo implement storage.copy
+      let data = yield storage.getObject(savePathDoc);
+      let forgottenName = cfgForgottenFilesName + pathModule.extname(cmd.getOutputPath());
+      yield storage.putObject(cfgForgottenFiles + '/' + docId + '/' + forgottenName, data, data.length);
+    } catch (err) {
+      logger.error('Error storeForgotten: docId = %s\r\n%s', docId, err.stack);
+    }
   }
   if (forceSave) {
     yield* docsCoServer.setForceSave(docId, forceSave, cmd, isSfcmSuccess && !isError);
