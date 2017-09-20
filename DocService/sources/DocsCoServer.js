@@ -1459,6 +1459,19 @@ exports.install = function(server, callbackFunction) {
     sendData(conn, {type: 'error', description: errorId});
   }
 
+  function* sendFileErrorAuth(conn, sessionId, errorId) {
+    conn.sessionId = sessionId;//restore old
+    //Kill previous connections
+    connections = _.reject(connections, function(el) {
+      return el.sessionId === sessionId;//Delete this connection
+    });
+    // Кладем в массив, т.к. нам нужно отправлять данные для открытия/сохранения документа
+    connections.push(conn);
+    yield* updatePresence(conn.docId, conn.user.id, getConnectionInfo(conn));
+
+    sendFileError(conn, errorId);
+  }
+
   // Пересчет только для чужих Lock при сохранении на клиенте, который добавлял/удалял строки или столбцы
   function _recalcLockArray(userId, _locks, oRecalcIndexColumns, oRecalcIndexRows) {
     if (null == _locks) {
@@ -1802,6 +1815,7 @@ exports.install = function(server, callbackFunction) {
 
       // Ситуация, когда пользователь уже отключен от совместного редактирования
       if (bIsRestore && data.isCloseCoAuthoring) {
+        conn.sessionId = data.sessionId;//restore old
         // Удаляем предыдущие соединения
         connections = _.reject(connections, function(el) {
           return el.sessionId === data.sessionId;//Delete this connection
@@ -1842,16 +1856,16 @@ exports.install = function(server, callbackFunction) {
               var updateIfRes = yield taskResult.updateIf(updateTask, updateMask);
               if (!(updateIfRes.affectedRows > 0)) {
                 // error version
-                sendFileError(conn, 'Update Version error');
+                yield* sendFileErrorAuth(conn, data.sessionId, 'Update Version error');
                 return;
               }
             } else if (taskResult.FileStatus.UpdateVersion === status) {
               // error version
-              sendFileError(conn, 'Update Version error');
+              yield* sendFileErrorAuth(conn, data.sessionId, 'Update Version error');
               return;
             } else {
               // Other error
-              sendFileError(conn, 'Other error');
+              yield* sendFileErrorAuth(conn, data.sessionId, 'Other error');
               return;
             }
 
@@ -1873,14 +1887,14 @@ exports.install = function(server, callbackFunction) {
               if (arrayBlocks && (0 === arrayBlocks.length || getLockRes)) {
                 yield* authRestore(conn, data.sessionId);
               } else {
-                sendFileError(conn, 'Restore error. Locks not checked.');
+                yield* sendFileErrorAuth(conn, data.sessionId, 'Restore error. Locks not checked.');
               }
             } else {
-              sendFileError(conn, 'Restore error. Document modified.');
+              yield* sendFileErrorAuth(conn, data.sessionId, 'Restore error. Document modified.');
             }
           } catch (err) {
             logger.error("DataBase error: docId = %s %s", docId, err.stack);
-            sendFileError(conn, 'DataBase error');
+            yield* sendFileErrorAuth(conn, data.sessionId, 'DataBase error');
           }
         } else {
           yield* authRestore(conn, data.sessionId);
