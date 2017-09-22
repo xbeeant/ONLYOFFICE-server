@@ -1204,6 +1204,7 @@ exports.install = function(server, callbackFunction) {
       return;
     }
     var hvals;
+    let participantsTimestamp;
     var tmpUser = conn.user;
     var isView = tmpUser.view;
     logger.info("Connection closed or timed out: userId = %s isCloseConnection = %s docId = %s", tmpUser.id, isCloseConnection, docId);
@@ -1222,6 +1223,7 @@ exports.install = function(server, callbackFunction) {
                                         ['zrem', redisKeyPresenceSet + docId, tmpUser.id]]);
         yield utils.promiseRedis(multi, multi.exec);
         hvals = yield* getAllPresence(docId);
+        participantsTimestamp = Date.now();
         if (hvals.length <= 0) {
           yield utils.promiseRedis(redisClient, redisClient.zrem, redisKeyDocuments, docId);
         }
@@ -1246,7 +1248,11 @@ exports.install = function(server, callbackFunction) {
       //revert old view to send event
       var tmpView = tmpUser.view;
       tmpUser.view = isView;
-      yield* publish({type: commonDefines.c_oPublishType.participantsState, docId: docId, user: tmpUser, state: false}, docId, tmpUser.id);
+      let participants = yield* getParticipantMap(docId, undefined, undefined, hvals);
+      if (!participantsTimestamp) {
+        participantsTimestamp = Date.now();
+      }
+      yield* publish({type: commonDefines.c_oPublishType.participantsState, docId: docId, userId: tmpUser.id, participantsTimestamp: participantsTimestamp, participants: participants}, docId, tmpUser.id);
       tmpUser.view = tmpView;
 
       // Для данного пользователя снимаем лок с сохранения
@@ -1395,9 +1401,14 @@ exports.install = function(server, callbackFunction) {
     return userLocks;
   }
 
-  function* getParticipantMap(docId, opt_userId, opt_connInfo) {
+  function* getParticipantMap(docId, opt_userId, opt_connInfo, opt_hvals) {
     var participantsMap = [];
-    var hvals = yield* getAllPresence(docId, opt_userId, opt_connInfo);
+    let hvals;
+    if (opt_hvals) {
+      hvals = opt_hvals;
+    } else {
+      hvals = yield* getAllPresence(docId, opt_userId, opt_connInfo);
+    }
     for (var i = 0; i < hvals.length; ++i) {
       var elem = JSON.parse(hvals[i]);
       if (!elem.isCloseCoAuthoring) {
@@ -1447,8 +1458,9 @@ exports.install = function(server, callbackFunction) {
     _.each(participants, function(participant) {
       sendData(participant, {
         type: "connectState",
-        state: data.state,
-        user: data.user
+        participantsTimestamp: data.participantsTimestamp,
+        participants: data.participants,
+        waitAuth: !!data.waitAuthUserId
       });
     });
   }
@@ -1921,6 +1933,7 @@ exports.install = function(server, callbackFunction) {
     connections.push(conn);
     var firstParticipantNoView, countNoView = 0;
     var participantsMap = yield* getParticipantMap(docId, tmpUser.id, getConnectionInfo(conn));
+    let participantsTimestamp = Date.now();
     for (var i = 0; i < participantsMap.length; ++i) {
       var elem = participantsMap[i];
       if (!elem.view) {
@@ -1970,8 +1983,9 @@ exports.install = function(server, callbackFunction) {
           }
         }
       }
-
+      let waitAuthUserId;
       if (lockDocument && !tmpUser.view) {
+        waitAuthUserId = lockDocument.id;
         // Для view не ждем снятия lock-а
         var sendObject = {
           type: "waitAuth",
@@ -1986,7 +2000,7 @@ exports.install = function(server, callbackFunction) {
           yield* sendAuthInfo(objChangesDocument.arrChanges, objChangesDocument.getLength(), conn, participantsMap, hasForgotten);
         }
       }
-      yield* publish({type: commonDefines.c_oPublishType.participantsState, docId: docId, user: tmpUser, state: true}, docId, tmpUser.id);
+      yield* publish({type: commonDefines.c_oPublishType.participantsState, docId: docId, userId: tmpUser.id, participantsTimestamp: participantsTimestamp, participants: participantsMap, waitAuthUserId: waitAuthUserId}, docId, tmpUser.id);
     } else {
       sendFileError(conn, 'ip filter');
       res = false;
@@ -2536,8 +2550,13 @@ exports.install = function(server, callbackFunction) {
             });
             break;
           case commonDefines.c_oPublishType.participantsState:
-            participants = getParticipants(data.docId, true, data.user.id);
+            participants = getParticipants(data.docId, true, data.userId);
             sendParticipantsState(participants, data);
+            //release lock if participants is empty
+            if (0 == participants.length && data.waitAuthUserId) {
+              logger.warn('pubsub participantsState participants is empty docId = %s', data.docId);
+              yield* checkEndAuthLock(true, false, data.docId, data.waitAuthUserId);
+            }
             break;
           case commonDefines.c_oPublishType.message:
             participants = getParticipants(data.docId, true, data.userId);
