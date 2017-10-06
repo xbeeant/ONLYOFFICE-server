@@ -54,6 +54,7 @@ endif
 FILE_CONVERTER_FILES += ../core/build/bin/$(TARGET)/x2t$(EXEC_EXT)
 
 DOC_BUILDER_FILES += ../core/build/bin/$(TARGET)/docbuilder$(EXEC_EXT)
+DOC_BUILDER_FILES += ../core/Common/empty
 
 HTML_FILE_INTERNAL := $(FILE_CONVERTER)/HtmlFileInternal
 HTML_FILE_INTERNAL_FILES += ../core/build/lib/$(TARGET)/HtmlFileInternal$(EXEC_EXT)
