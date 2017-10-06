@@ -2464,7 +2464,7 @@ exports.install = function(server, callbackFunction) {
           connectionsCount = licenseInfo.connections;
         }
         if (connectionsCount) {
-			licenseType = (connectionsCount >= connections.length) ? c_LR.Success : c_LR.Connections;
+			licenseType = (connectionsCount > connections.length) ? c_LR.Success : c_LR.Connections;
 		}
         /*if (constants.PACKAGE_TYPE_OS === licenseInfo.packageType && c_LR.Error === licenseType) {
           licenseType = c_LR.SuccessLimit;
