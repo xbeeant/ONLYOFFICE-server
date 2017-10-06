@@ -578,7 +578,7 @@ function* commandSfcCallback(cmd, isSfcm) {
     var outputSfc = new commonDefines.OutputSfcData();
     outputSfc.setKey(docId);
     var users = [];
-    let isOpenFromFortotten = false;
+    let isOpenFromForgotten = false;
     //setUserId - set from changes in convert
     //setUserActionId - used in case of save without changes(forgotten files)
     let userLastChangeId = cmd.getUserId() || cmd.getUserActionId();
@@ -605,8 +605,8 @@ function* commandSfcCallback(cmd, isSfcm) {
           //check indicator file to determine if opening was from the forgotten file
           var forgottenMarkPath = docId + '/' + cfgForgottenFilesName + '.txt';
           var forgottenMark = yield storage.listObjects(forgottenMarkPath);
-          isOpenFromFortotten = 0 !== forgottenMark.length;
-          isSendHistory = !isOpenFromFortotten;
+          isOpenFromForgotten = 0 !== forgottenMark.length;
+          isSendHistory = !isOpenFromForgotten;
           logger.debug('commandSfcCallback forgotten no empty: docId = %s isSendHistory = %s', docId, isSendHistory);
         }
         if (isSendHistory) {
@@ -688,7 +688,7 @@ function* commandSfcCallback(cmd, isSfcm) {
           }
           if (requestRes) {
             yield docsCoServer.cleanDocumentOnExitPromise(docId, true);
-            if (isOpenFromFortotten) {
+            if (isOpenFromForgotten) {
               //remove forgotten file in cache
               yield cleanupCache(docId);
             }
