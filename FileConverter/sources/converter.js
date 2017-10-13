@@ -137,7 +137,7 @@ TaskQueueDataConvert.prototype = {
     fs.writeFileSync(fsPath, xml, {encoding: 'utf8'});
     let hiddenXml;
     if (undefined !== this.password) {
-      hiddenXml += '<TaskQueueDataConvert>';
+      hiddenXml = '<TaskQueueDataConvert>';
       hiddenXml += this.serializeXmlProp('m_sPassword', this.password);
       hiddenXml += '</TaskQueueDataConvert>';
     }
