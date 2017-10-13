@@ -61,7 +61,7 @@ function* getConvertStatus(cmd, selectRes, baseUrl, opt_fileTo) {
       case taskResult.FileStatus.Ok:
         status.end = true;
         if (opt_fileTo) {
-          status.url = yield storage.getSignedUrl(baseUrl, docId + '/' + opt_fileTo);
+          status.url = yield storage.getSignedUrl(baseUrl, docId + '/' + opt_fileTo, commonDefines.c_oAscUrlTypes.Temporary);
         }
         break;
       case taskResult.FileStatus.Err:
