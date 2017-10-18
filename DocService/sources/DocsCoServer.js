@@ -1655,7 +1655,8 @@ exports.install = function(server, callbackFunction) {
   function isEditMode(permissions, mode, def) {
     if (permissions && mode) {
       //as in web-apps/apps/documenteditor/main/app/controller/Main.js
-      return (permissions.edit !== false || permissions.review === true) && mode !== 'view';
+      return ((permissions.edit !== false || permissions.review === true) && mode !== 'view') ||
+        permissions.comment === true;
     } else {
       return def;
     }
