@@ -537,8 +537,8 @@ function* commandPathUrl(conn, cmd, outputData) {
   var contentDisposition = cmd.getInline() ? constants.CONTENT_DISPOSITION_INLINE :
     constants.CONTENT_DISPOSITION_ATTACHMENT;
   var strPath = cmd.getDocId() + '/' + cmd.getData();
-  var url = yield storage.getSignedUrl(conn.baseUrl, strPath, null, cmd.getTitle(), contentDisposition,
-                                       commonDefines.c_oAscUrlTypes.Temporary);
+  var url = yield storage.getSignedUrl(conn.baseUrl, strPath, commonDefines.c_oAscUrlTypes.Temporary, cmd.getTitle(),
+                                       contentDisposition);
   var errorCode = constants.NO_ERROR;
   if (constants.NO_ERROR !== errorCode) {
     outputData.setStatus('err');
