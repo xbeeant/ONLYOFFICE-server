@@ -70,7 +70,8 @@ exports.readLicense = function*() {
 			const isTrial = res.trial = (true === oLicense['trial'] || 'true' === oLicense['trial']); // Someone who likes to put json string instead of bool
 			const checkDate = (isTrial && constants.PACKAGE_TYPE_OS === oPackageType) ? new Date() : oBuildDate;
 			if (endDate >= checkDate && 2 <= oLicense['version']) {
-				res.count = Math.min(Math.max(res.count, oLicense['process'] >> 0), resMax.count);
+				res.connections = Math.max(res.count, oLicense['process'] >> 0) * 100;
+				res.count = resMax.count;
 				res.type = c_LR.Success;
 			} else {
 				res.type = isTrial ? c_LR.ExpiredTrial : c_LR.Expired;
@@ -79,7 +80,7 @@ exports.readLicense = function*() {
 			res.light = (true === oLicense['light'] || 'true' === oLicense['light']); // Someone who likes to put json string instead of bool
 			res.branding = (true === oLicense['branding'] || 'true' === oLicense['branding']); // Someone who likes to put json string instead of bool
 			if (oLicense.hasOwnProperty('connections')) {
-				res.connections = oLicense['connections'];
+				res.connections = oLicense['connections'] >> 0;
 			}
 		} else {
 			throw 'verify';
@@ -98,8 +99,8 @@ exports.readLicense = function*() {
 			} else {
 				res.type = (yield* _getFileState()) ? c_LR.Success : c_LR.ExpiredTrial;
 				if (res.type === c_LR.Success) {
-					res.trial = true;
-					res.count = 2;
+					res.trial = (constants.PACKAGE_TYPE_D === oPackageType);
+					res.count = resMax.count;
 					return res;
 				}
 			}
