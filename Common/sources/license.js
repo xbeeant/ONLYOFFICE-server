@@ -99,8 +99,8 @@ exports.readLicense = function*() {
 			} else {
 				res.type = (yield* _getFileState()) ? c_LR.Success : c_LR.ExpiredTrial;
 				if (res.type === c_LR.Success) {
-					res.trial = true;
-					res.count = 2;
+					res.trial = (constants.PACKAGE_TYPE_D === oPackageType);
+					res.count = resMax.count;
 					return res;
 				}
 			}
