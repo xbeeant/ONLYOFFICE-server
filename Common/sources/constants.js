@@ -178,6 +178,7 @@ exports.EDITOR_TYPE_CONVERTATION = 3;
 
 exports.PACKAGE_TYPE_OS = 0;
 exports.PACKAGE_TYPE_I = 1;
+exports.PACKAGE_TYPE_D = 2;
 
 exports.REDIS_KEY_PUBSUB = 'pubsub';
 exports.REDIS_KEY_SAVE_LOCK = 'savelock:';
