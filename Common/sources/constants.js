@@ -46,6 +46,12 @@ exports.RIGHTS = {
   View    : 4
 };
 
+exports.LICENSE_MODE = {
+  None: 0,
+  Trial: 1,
+  Developer: 2
+};
+
 exports.LICENSE_RESULT = {
   Error       : 1,
   Expired     : 2,
