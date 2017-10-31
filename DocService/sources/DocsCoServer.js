@@ -85,6 +85,7 @@ const co = require('co');
 const jwt = require('jsonwebtoken');
 const jwa = require('jwa');
 const ms = require('ms');
+const deepEqual  = require('deep-equal');
 const storage = require('./../../Common/sources/storage-base');
 const logger = require('./../../Common/sources/logger');
 const constants = require('./../../Common/sources/constants');
@@ -1654,12 +1655,14 @@ exports.install = function(server, callbackFunction) {
   function isEditMode(permissions, mode, def) {
     if (permissions && mode) {
       //as in web-apps/apps/documenteditor/main/app/controller/Main.js
-      return (permissions.edit !== false || permissions.review === true) && mode !== 'view';
+      return ((permissions.edit !== false || permissions.review === true) && mode !== 'view') ||
+        permissions.comment === true;
     } else {
       return def;
     }
   }
   function fillDataFromJwt(decoded, data) {
+    let res = true;
     var openCmd = data.openCmd;
     if (decoded.document) {
       var doc = decoded.document;
@@ -1670,6 +1673,7 @@ exports.install = function(server, callbackFunction) {
         }
       }
       if(doc.permissions) {
+        res = deepEqual(data.permissions, doc.permissions, {strict: true});
         if(!data.permissions){
           data.permissions = {};
         }
@@ -1729,6 +1733,7 @@ exports.install = function(server, callbackFunction) {
     if (decoded.iss) {
       data.iss = decoded.iss;
     }
+    return res;
   }
   function fillVersionHistoryFromJwt(decoded, cmd) {
     if (decoded.changesUrl && decoded.previous && (cmd.getServerVersion() === commonDefines.buildVersion)) {
@@ -1779,7 +1784,11 @@ exports.install = function(server, callbackFunction) {
         const isSession = !!data.jwtSession;
         const checkJwtRes = checkJwt(docId, data.jwtSession || data.jwtOpen, isSession);
         if (checkJwtRes.decoded) {
-          fillDataFromJwt(checkJwtRes.decoded, data);
+          if (!fillDataFromJwt(checkJwtRes.decoded, data)) {
+            logger.warn("fillDataFromJwt return false: docId = %s", docId);
+            conn.close(constants.ACCESS_DENIED_CODE, constants.ACCESS_DENIED_REASON);
+            return;
+          }
         } else {
           conn.close(checkJwtRes.code, checkJwtRes.description);
           return;
@@ -2519,7 +2528,7 @@ exports.install = function(server, callbackFunction) {
           license: {
             type: licenseType,
             light: licenseInfo.light,
-            trial: constants.PACKAGE_TYPE_OS === licenseInfo.packageType ? false : licenseInfo.trial,
+            mode: licenseInfo.mode,
             rights: rights,
             buildVersion: commonDefines.buildVersion,
             buildNumber: commonDefines.buildNumber,
