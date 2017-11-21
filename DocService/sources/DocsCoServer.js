@@ -1890,9 +1890,11 @@ exports.install = function(server, callbackFunction) {
         conn.sessionTimeLastAction = new Date().getTime() - data.sessionTimeIdle;
       }
 
+      const c_LR = constants.LICENSE_RESULT;
+      conn.licenseType = c_LR.Success;
       if (!conn.user.view) {
-        let res = yield* _checkLicenseAuth(conn.user.idOriginal);
-        if (c_LR.Success !== res && c_LR.SuccessLimit !== res) {
+        let licenceType = conn.licenseType = yield* _checkLicenseAuth(conn.user.idOriginal);
+        if (c_LR.Success !== licenceType && c_LR.SuccessLimit !== licenceType) {
           conn.user.view = true;
         } else {
           yield* updateEditUsers(conn.user.idOriginal);
@@ -2118,7 +2120,8 @@ exports.install = function(server, callbackFunction) {
       jwt: cfgTokenEnableBrowser ? {token: fillJwtByConnection(conn), expires: cfgTokenSessionExpires} : undefined,
       g_cAscSpellCheckUrl: cfgSpellcheckerUrl,
       buildVersion: commonDefines.buildVersion,
-      buildNumber: commonDefines.buildNumber
+      buildNumber: commonDefines.buildNumber,
+      licenseType: conn.licenseType
     };
     sendData(conn, sendObject);//Or 0 if fails
   }
