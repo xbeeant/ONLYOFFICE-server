@@ -5,7 +5,7 @@ ECHO ----------------------------------------
 ECHO copy file to converter
 ECHO ----------------------------------------
 
-if not exist "%~dp0\FileConverter\bin\core.zip" call update-core.bat
+call update-core.bat
 
 mkdir "%~dp0\App_Data"
 
