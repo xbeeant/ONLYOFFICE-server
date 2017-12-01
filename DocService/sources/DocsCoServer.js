@@ -602,10 +602,12 @@ function* getOriginalParticipantsId(docId) {
   return result;
 }
 
-function* sendServerRequest(docId, uri, dataObject) {
+function* sendServerRequest(docId, uri, dataObject, opt_authorization) {
   logger.debug('postData request: docId = %s;url = %s;data = %j', docId, uri, dataObject);
   var authorization;
-  if (cfgTokenEnableRequestOutbox) {
+  if (opt_authorization) {
+    authorization = opt_authorization;
+  } else if (cfgTokenEnableRequestOutbox) {
     authorization = utils.fillJwtForRequest(dataObject);
   }
   var res = yield utils.postRequestPromise(uri, JSON.stringify(dataObject), cfgCallbackRequestTimeout * 1000, authorization);
