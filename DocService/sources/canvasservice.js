@@ -59,6 +59,7 @@ var cfgRedisPrefix = config.get('services.CoAuthoring.redis.prefix');
 var cfgTokenEnableBrowser = config.get('services.CoAuthoring.token.enable.browser');
 const cfgForgottenFiles = config_server.get('forgottenfiles');
 const cfgForgottenFilesName = config_server.get('forgottenfilesname');
+const cfgTokenEnableRequestOutbox = config.get('services.CoAuthoring.token.enable.request.outbox');
 
 var SAVE_TYPE_PART_START = 0;
 var SAVE_TYPE_PART = 1;
@@ -718,7 +719,20 @@ function* commandSfcCallback(cmd, isSfcm) {
         if (updateIfRes.affectedRows > 0) {
           var replyStr = null;
           try {
-            replyStr = yield* docsCoServer.sendServerRequest(docId, uri, outputSfc);
+            //todo stub (remove in future versions)
+            var authorization;
+            if (cfgTokenEnableRequestOutbox) {
+              authorization = utils.fillJwtForRequest(outputSfc);
+              if (authorization.length > 7168) {//8kb(https://stackoverflow.com/questions/686217/maximum-on-http-header-values) - 1kb(for other header)
+                logger.warn('authorization too long: docId = %s; length=%d', docId, authorization.length);
+                outputSfc.setChangeUrl(undefined);
+                //for backward compatibility. remove this when Community is ready
+                outputSfc.setChangeHistory({});
+                authorization = utils.fillJwtForRequest(outputSfc);
+                logger.warn('authorization reduced to: docId = %s; length=%d', docId, authorization.length);
+              }
+            }
+            replyStr = yield* docsCoServer.sendServerRequest(docId, uri, outputSfc, authorization);
           } catch (err) {
             replyStr = null;
             logger.error('sendServerRequest error: docId = %s;url = %s;data = %j\r\n%s', docId, uri, outputSfc, err.stack);
