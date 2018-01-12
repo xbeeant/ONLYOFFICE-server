@@ -68,11 +68,11 @@ var cfgSignatureSecretInbox = config.get('services.CoAuthoring.secret.inbox');
 var cfgSignatureSecretOutbox = config.get('services.CoAuthoring.secret.outbox');
 var cfgVisibilityTimeout = config.get('queue.visibilityTimeout');
 var cfgQueueRetentionPeriod = config.get('queue.retentionPeriod');
-var cfgUserAgent = config.get('services.CoAuthoring.server.userAgent');
+var cfgRequestDefaults = config.get('services.CoAuthoring.requestDefaults');
 
 var ANDROID_SAFE_FILENAME = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ._-+,@£$€!½§~\'=()[]{}0123456789';
 
-var baseRequest = request.defaults({headers: {'User-Agent': cfgUserAgent}});
+var baseRequest = request.defaults(cfgRequestDefaults);
 
 var g_oIpFilterRules = function() {
   var res = [];
@@ -259,9 +259,6 @@ function downloadUrlPromise(uri, optTimeout, optLimit, opt_Authorization) {
       options.headers = {};
       options.headers[cfgTokenOutboxHeader] = cfgTokenOutboxPrefix + opt_Authorization;
     }
-    //TODO: Check how to correct handle a ssl link
-    urlParsed.rejectUnauthorized = false;
-    options.rejectUnauthorized = false;
 
     baseRequest.get(options, function (err, response, body) {
       if (err) {
@@ -293,10 +290,6 @@ function postRequestPromise(uri, postData, optTimeout, opt_Authorization) {
       headers[cfgTokenOutboxHeader] = cfgTokenOutboxPrefix + opt_Authorization;
     }
     var options = {uri: urlParsed, body: postData, encoding: 'utf8', headers: headers, timeout: optTimeout};
-
-    //TODO: Check how to correct handle a ssl link
-    urlParsed.rejectUnauthorized = false;
-    options.rejectUnauthorized = false;
 
     baseRequest.post(options, function(err, response, body) {
       if (err) {
