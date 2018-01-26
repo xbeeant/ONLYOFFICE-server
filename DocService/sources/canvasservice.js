@@ -699,8 +699,9 @@ function* commandSfcCallback(cmd, isSfcm) {
           outputSfc.setLastSave(new Date(forceSave.getTime()).toISOString());
         }
         try {
-          yield* docsCoServer.sendServerRequest(docId, uri, outputSfc);
-          isSfcmSuccess = true;
+          let replyStr = yield* docsCoServer.sendServerRequest(docId, uri, outputSfc);
+          let replyData = docsCoServer.parseReplyData(docId, replyStr);
+          isSfcmSuccess = replyData && commonDefines.c_oAscServerCommandErrors.NoError == replyData.error;
         } catch (err) {
           logger.error('sendServerRequest error: docId = %s;url = %s;data = %j\r\n%s', docId, uri, outputSfc, err.stack);
         }
