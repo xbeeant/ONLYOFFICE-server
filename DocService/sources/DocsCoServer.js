@@ -698,10 +698,12 @@ function* setForceSave(docId, forceSave, cmd, success) {
     yield utils.promiseRedis(redisClient, redisClient.hdel, redisKeyForceSave + docId, forceSaveIndex);
   }
   let forceSaveType = forceSave.getType();
-  yield* publish({
-                   type: commonDefines.c_oPublishType.forceSave, docId: docId,
-                   data: {type: forceSaveType, time: forceSave.getTime(), success: success}
-                 }, cmd.getUserConnectionId());
+  if (commonDefines.c_oAscForceSaveTypes.Command !== forceSaveType) {
+    yield* publish({
+                     type: commonDefines.c_oPublishType.forceSave, docId: docId,
+                     data: {type: forceSaveType, time: forceSave.getTime(), success: success}
+                   }, cmd.getUserConnectionId());
+  }
 }
 function* getLastForceSave(docId, lastSave) {
   let res = false;
@@ -741,7 +743,7 @@ function* startForceSave(docId, type, opt_userdata, opt_userConnectionId, opt_ba
     let forceSave = new commonDefines.CForceSaveData(lastSave);
     forceSave.setType(type);
 
-    if (commonDefines.c_oAscForceSaveTypes.Button !== type) {
+    if (commonDefines.c_oAscForceSaveTypes.Timeout === type) {
       yield* publish({
                        type: commonDefines.c_oPublishType.forceSave, docId: docId,
                        data: {type: type, time: forceSave.getTime(), start: true}
