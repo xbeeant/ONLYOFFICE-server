@@ -146,7 +146,7 @@
 					}
 				},
 				"browser": {
-					"secretFromInbox": false
+					"secretFromInbox": true
 				},
 				"inbox": {
 					"header": "Authorization",
