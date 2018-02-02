@@ -51,39 +51,21 @@ var configUtils = config.get('services.CoAuthoring.utils');
 var cfgImageSize = configServer.get('limits_image_size');
 var cfgTypesUpload = configUtils.get('limits_image_types_upload');
 var cfgTokenEnableBrowser = config.get('services.CoAuthoring.token.enable.browser');
-var cfgTokenEnableRequestInbox = config.get('services.CoAuthoring.token.enable.request.inbox');
 
 exports.uploadTempFile = function(req, res) {
   return co(function* () {
-    var docId = 'null';
+    var docId = 'uploadTempFile';
     try {
-      docId = req.query.key;
-      logger.debug('Start uploadTempFile: docId = %s', docId);
-      if (cfgTokenEnableRequestInbox) {
-        var authError = constants.VKEY;
-        var checkJwtRes = docsCoServer.checkJwtHeader(docId, req);
-        if (checkJwtRes) {
-          if (checkJwtRes.decoded) {
-            authError = constants.NO_ERROR;
-            if (checkJwtRes.decoded.query && checkJwtRes.decoded.query.key) {
-              docId = checkJwtRes.decoded.query.key;
-            }
-            if (checkJwtRes.decoded.payloadhash &&
-              !docsCoServer.checkJwtPayloadHash(docId, checkJwtRes.decoded.payloadhash, req.body, checkJwtRes.token)) {
-              authError = constants.VKEY;
-            }
-          } else {
-            if (constants.JWT_EXPIRED_CODE == checkJwtRes.code) {
-              authError = constants.VKEY_KEY_EXPIRE;
-            }
-          }
-        }
-        if (authError !== constants.NO_ERROR) {
-          utils.fillResponse(req, res, undefined, authError);
-          return;
-        }
+      let params;
+      let authRes = docsCoServer.getRequestParams(docId, req, true);
+      if(authRes.code === constants.NO_ERROR){
+        params = authRes.params;
+      } else {
+        utils.fillResponse(req, res, undefined, authRes.code);
+        return;
       }
-
+      docId = params.key;
+      logger.debug('Start uploadTempFile: docId = %s', docId);
       if (docId && req.body && Buffer.isBuffer(req.body)) {
         var task = yield* taskResult.addRandomKeyTask(docId);
         var strPath = task.key + '/' + docId + '.tmp';

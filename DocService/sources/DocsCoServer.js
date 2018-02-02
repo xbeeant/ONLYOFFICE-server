@@ -130,6 +130,7 @@ const cfgTokenSessionAlgorithm = config.get('token.session.algorithm');
 const cfgTokenSessionExpires = ms(config.get('token.session.expires'));
 const cfgTokenInboxHeader = config.get('token.inbox.header');
 const cfgTokenInboxPrefix = config.get('token.inbox.prefix');
+const cfgTokenInboxInBody = config.get('token.inbox.inBody');
 const cfgTokenOutboxInBody = config.get('token.outbox.inBody');
 const cfgTokenBrowserSecretFromInbox = config.get('token.browser.secretFromInbox');
 const cfgSecretBrowser = config.get('secret.browser');
@@ -1078,6 +1079,48 @@ function checkJwtPayloadHash(docId, hash, body, token) {
   }
   return res;
 }
+function getRequestParams(docId, req, opt_isNotInBody, opt_tokenAssign) {
+  let res = {code: constants.NO_ERROR, params: undefined};
+  if (req.body && Buffer.isBuffer(req.body) && !opt_isNotInBody) {
+    res.params = JSON.parse(req.body.toString('utf8'));
+  } else {
+    res.params = req.query;
+  }
+  if (cfgTokenEnableRequestInbox) {
+    res.code = constants.VKEY;
+    let checkJwtRes;
+    if (cfgTokenInboxInBody && !opt_isNotInBody) {
+      checkJwtRes = checkJwt(docId, res.params.token, commonDefines.c_oAscSecretType.Inbox);
+    } else {
+      //for compatibility
+      checkJwtRes = checkJwtHeader(docId, req);
+    }
+    if (checkJwtRes) {
+      if (checkJwtRes.decoded) {
+        res.code = constants.NO_ERROR;
+        if (cfgTokenInboxInBody && !opt_tokenAssign) {
+          res.params = checkJwtRes.decoded.payload || {};
+        } else {
+          //for compatibility
+          if (!utils.isEmptyObject(checkJwtRes.decoded.payload)) {
+            Object.assign(res.params, checkJwtRes.decoded.payload);
+          } else if (checkJwtRes.decoded.payloadhash) {
+            if (!checkJwtPayloadHash(docId, checkJwtRes.decoded.payloadhash, req.body, checkJwtRes.token)) {
+              res.code = constants.VKEY;
+            }
+          } else if (!utils.isEmptyObject(checkJwtRes.decoded.query)) {
+            Object.assign(res.params, checkJwtRes.decoded.query);
+          }
+        }
+      } else {
+        if (constants.JWT_EXPIRED_CODE == checkJwtRes.code) {
+          res.code = constants.VKEY_KEY_EXPIRE;
+        }
+      }
+    }
+  }
+  return res;
+}
 
 exports.c_oAscServerStatus = c_oAscServerStatus;
 exports.sendData = sendData;
@@ -1100,6 +1143,7 @@ exports.getLastSave = getLastSave;
 exports.getLastForceSave = getLastForceSave;
 exports.startForceSavePromise = co.wrap(startForceSave);
 exports.checkJwt = checkJwt;
+exports.getRequestParams = getRequestParams;
 exports.checkJwtHeader = checkJwtHeader;
 exports.checkJwtPayloadHash = checkJwtPayloadHash;
 exports.install = function(server, callbackFunction) {
@@ -2980,34 +3024,12 @@ exports.commandFromServer = function (req, res) {
     let docId = 'commandFromServer';
     let version = undefined;
     try {
-      let params;
-      if (req.body && Buffer.isBuffer(req.body)) {
-        params = JSON.parse(req.body.toString('utf8'));
-      } else {
-        params = req.query;
-      }
-      if (cfgTokenEnableRequestInbox) {
+      let authRes = getRequestParams(docId, req);
+      let params = authRes.params;
+      if(authRes.code === constants.VKEY_KEY_EXPIRE){
+        result = commonDefines.c_oAscServerCommandErrors.TokenExpire;
+      } else if(authRes.code !== constants.NO_ERROR){
         result = commonDefines.c_oAscServerCommandErrors.Token;
-        const checkJwtRes = checkJwtHeader(docId, req);
-        if (checkJwtRes) {
-          if (checkJwtRes.decoded) {
-            if (!utils.isEmptyObject(checkJwtRes.decoded.payload)) {
-              Object.assign(params, checkJwtRes.decoded.payload);
-              result = commonDefines.c_oAscServerCommandErrors.NoError;
-            } else if (checkJwtRes.decoded.payloadhash) {
-              if (checkJwtPayloadHash(docId, checkJwtRes.decoded.payloadhash, req.body, checkJwtRes.token)) {
-                result = commonDefines.c_oAscServerCommandErrors.NoError;
-              }
-            } else if (!utils.isEmptyObject(checkJwtRes.decoded.query)) {
-              Object.assign(params, checkJwtRes.decoded.query);
-              result = commonDefines.c_oAscServerCommandErrors.NoError;
-            }
-          } else {
-            if (constants.JWT_EXPIRED_CODE == checkJwtRes.code) {
-              result = commonDefines.c_oAscServerCommandErrors.TokenExpire;
-            }
-          }
-        }
       }
       // Ключ id-документа
       docId = params.key;

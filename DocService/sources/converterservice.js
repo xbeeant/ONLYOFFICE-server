@@ -46,8 +46,6 @@ var formatChecker = require('./../../Common/sources/formatchecker');
 var statsDClient = require('./../../Common/sources/statsdclient');
 var storageBase = require('./../../Common/sources/storage-base');
 
-var cfgTokenEnableRequestInbox = config.get('services.CoAuthoring.token.enable.request.inbox');
-
 var CONVERT_ASYNC_DELAY = 1000;
 
 var clientStatsD = statsDClient.getClient();
@@ -180,38 +178,13 @@ function convertRequest(req, res) {
   return co(function* () {
     var docId = 'convertRequest';
     try {
-      var params;
-      if (req.body && Buffer.isBuffer(req.body)) {
-        params = JSON.parse(req.body.toString('utf8'));
+      let params;
+      let authRes = docsCoServer.getRequestParams(docId, req);
+      if(authRes.code === constants.NO_ERROR){
+        params = authRes.params;
       } else {
-        params = req.query;
-      }
-      if (cfgTokenEnableRequestInbox) {
-        var authError = constants.VKEY;
-        var checkJwtRes = docsCoServer.checkJwtHeader(docId, req);
-        if (checkJwtRes) {
-          if (checkJwtRes.decoded) {
-            if (!utils.isEmptyObject(checkJwtRes.decoded.payload)) {
-              Object.assign(params, checkJwtRes.decoded.payload);
-              authError = constants.NO_ERROR;
-            } else if (checkJwtRes.decoded.payloadhash) {
-              if (docsCoServer.checkJwtPayloadHash(docId, checkJwtRes.decoded.payloadhash, req.body, checkJwtRes.token)) {
-                authError = constants.NO_ERROR;
-              }
-            } else if (!utils.isEmptyObject(checkJwtRes.decoded.query)) {
-              Object.assign(params, checkJwtRes.decoded.query);
-              authError = constants.NO_ERROR;
-            }
-          } else {
-            if (constants.JWT_EXPIRED_CODE == checkJwtRes.code) {
-              authError = constants.VKEY_KEY_EXPIRE;
-            }
-          }
-        }
-        if (authError !== constants.NO_ERROR) {
-          utils.fillResponse(req, res, undefined, authError);
-          return;
-        }
+        utils.fillResponse(req, res, undefined, authRes.code);
+        return;
       }
 
       var cmd = new commonDefines.InputCommand();
@@ -279,30 +252,18 @@ function builderRequest(req, res) {
   return co(function* () {
     let docId = 'builderRequest';
     try {
-      let params = req.query;
+      let authRes;
+      if (!utils.isEmptyObject(req.query)) {
+        //todo this is a stub for compatibility. remove in future version
+        authRes = docsCoServer.getRequestParams(docId, req, true, true);
+      } else {
+        authRes = docsCoServer.getRequestParams(docId, req);
+      }
+
+      let params = authRes.params;
+      let error = authRes.code;
       let urls;
       let end = false;
-      let error = constants.NO_ERROR;
-      if (cfgTokenEnableRequestInbox) {
-        error = constants.VKEY;
-        let checkJwtRes = docsCoServer.checkJwtHeader(docId, req);
-        if (checkJwtRes) {
-          if (checkJwtRes.decoded) {
-            error = constants.NO_ERROR;
-            if (!utils.isEmptyObject(checkJwtRes.decoded.query)) {
-              Object.assign(params, checkJwtRes.decoded.query);
-            }
-            if (checkJwtRes.decoded.payloadhash &&
-              !docsCoServer.checkJwtPayloadHash(docId, checkJwtRes.decoded.payloadhash, req.body, checkJwtRes.token)) {
-              error = constants.VKEY;
-            }
-          } else {
-            if (constants.JWT_EXPIRED_CODE === checkJwtRes.code) {
-              error = constants.VKEY_KEY_EXPIRE;
-            }
-          }
-        }
-      }
       if (error === constants.NO_ERROR &&
         (params.key || params.url || (req.body && Buffer.isBuffer(req.body) && req.body.length > 0))) {
         docId = params.key;
