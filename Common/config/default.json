@@ -132,6 +132,7 @@
 				"errorcode": 401
 			},
 			"secret": {
+				"browser": {"string": "secret", "file": "", "tenants": {}},
 				"inbox": {"string": "secret", "file": "", "tenants": {}},
 				"outbox": {"string": "secret", "file": ""},
 				"session": {"string": "secret", "file": ""}
@@ -144,15 +145,20 @@
 						"outbox": false
 					}
 				},
+				"browser": {
+					"secretFromInbox": true
+				},
 				"inbox": {
 					"header": "Authorization",
-					"prefix": "Bearer "
+					"prefix": "Bearer ",
+					"inBody": false
 				},
 				"outbox": {
 					"header": "Authorization",
 					"prefix": "Bearer ",
 					"algorithm": "HS256",
-					"expires": "5m"
+					"expires": "5m",
+					"inBody": false
 				},
 				"session": {
 					"algorithm": "HS256",

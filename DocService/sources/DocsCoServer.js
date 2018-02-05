@@ -130,6 +130,11 @@ const cfgTokenSessionAlgorithm = config.get('token.session.algorithm');
 const cfgTokenSessionExpires = ms(config.get('token.session.expires'));
 const cfgTokenInboxHeader = config.get('token.inbox.header');
 const cfgTokenInboxPrefix = config.get('token.inbox.prefix');
+const cfgTokenInboxInBody = config.get('token.inbox.inBody');
+const cfgTokenOutboxInBody = config.get('token.outbox.inBody');
+const cfgTokenBrowserSecretFromInbox = config.get('token.browser.secretFromInbox');
+const cfgSecretBrowser = config.get('secret.browser');
+const cfgSecretInbox = config.get('secret.inbox');
 const cfgSecretSession = config.get('secret.session');
 const cfgForceSaveEnable = config.get('autoAssembly.enable');
 const cfgForceSaveInterval = ms(config.get('autoAssembly.interval'));
@@ -602,15 +607,21 @@ function* getOriginalParticipantsId(docId) {
   return result;
 }
 
-function* sendServerRequest(docId, uri, dataObject, opt_authorization) {
+function* sendServerRequest(docId, uri, dataObject, opt_checkAuthorization) {
   logger.debug('postData request: docId = %s;url = %s;data = %j', docId, uri, dataObject);
-  var authorization;
-  if (opt_authorization) {
-    authorization = opt_authorization;
-  } else if (cfgTokenEnableRequestOutbox) {
-    authorization = utils.fillJwtForRequest(dataObject);
+  let auth;
+  if (cfgTokenEnableRequestOutbox) {
+    auth = utils.fillJwtForRequest(dataObject);
+    if (opt_checkAuthorization && !opt_checkAuthorization(auth, dataObject)) {
+      auth = utils.fillJwtForRequest(dataObject);
+      logger.warn('authorization reduced to: docId = %s; length=%d', docId, auth.length);
+    }
+    if (cfgTokenOutboxInBody) {
+      dataObject = {token: auth};
+      auth = undefined;
+    }
   }
-  var res = yield utils.postRequestPromise(uri, JSON.stringify(dataObject), cfgCallbackRequestTimeout * 1000, authorization);
+  let res = yield utils.postRequestPromise(uri, JSON.stringify(dataObject), cfgCallbackRequestTimeout * 1000, auth);
   logger.debug('postData response: docId = %s;data = %s', docId, res);
   return res;
 }
@@ -1017,13 +1028,19 @@ function* _createSaveTimer(docId, opt_userId, opt_queue, opt_noDelay) {
   }
 }
 
-function checkJwt(docId, token, isSession) {
+function checkJwt(docId, token, type) {
   var res = {decoded: null, description: null, code: null, token: token};
   var secret;
-  if (isSession) {
-    secret = utils.getSecretByElem(cfgSecretSession);
-  } else {
-    secret = utils.getSecret(docId, null, token);
+  switch (type) {
+    case commonDefines.c_oAscSecretType.Browser:
+      secret = utils.getSecret(docId, cfgTokenBrowserSecretFromInbox ? cfgSecretInbox : cfgSecretBrowser, null, token);
+      break;
+    case commonDefines.c_oAscSecretType.Inbox:
+      secret = utils.getSecret(docId, cfgSecretInbox, null, token);
+      break;
+    case commonDefines.c_oAscSecretType.Session:
+      secret = utils.getSecretByElem(cfgSecretSession);
+      break;
   }
   if (undefined == secret) {
     logger.error('empty secret: docId = %s token = %s', docId, token);
@@ -1047,7 +1064,7 @@ function checkJwtHeader(docId, req) {
   var authorization = req.get(cfgTokenInboxHeader);
   if (authorization && authorization.startsWith(cfgTokenInboxPrefix)) {
     var token = authorization.substring(cfgTokenInboxPrefix.length);
-    return checkJwt(docId, token, false);
+    return checkJwt(docId, token, commonDefines.c_oAscSecretType.Inbox);
   }
   return null;
 }
@@ -1056,9 +1073,51 @@ function checkJwtPayloadHash(docId, hash, body, token) {
   if (body && Buffer.isBuffer(body)) {
     var decoded = jwt.decode(token, {complete: true});
     var hmac = jwa(decoded.header.alg);
-    var secret = utils.getSecret(docId, null, token);
+    var secret = utils.getSecret(docId, cfgSecretInbox, null, token);
     var signature = hmac.sign(body, secret);
     res = (hash === signature);
+  }
+  return res;
+}
+function getRequestParams(docId, req, opt_isNotInBody, opt_tokenAssign) {
+  let res = {code: constants.NO_ERROR, params: undefined};
+  if (req.body && Buffer.isBuffer(req.body) && !opt_isNotInBody) {
+    res.params = JSON.parse(req.body.toString('utf8'));
+  } else {
+    res.params = req.query;
+  }
+  if (cfgTokenEnableRequestInbox) {
+    res.code = constants.VKEY;
+    let checkJwtRes;
+    if (cfgTokenInboxInBody && !opt_isNotInBody) {
+      checkJwtRes = checkJwt(docId, res.params.token, commonDefines.c_oAscSecretType.Inbox);
+    } else {
+      //for compatibility
+      checkJwtRes = checkJwtHeader(docId, req);
+    }
+    if (checkJwtRes) {
+      if (checkJwtRes.decoded) {
+        res.code = constants.NO_ERROR;
+        if (cfgTokenInboxInBody && !opt_tokenAssign) {
+          res.params = checkJwtRes.decoded.payload || {};
+        } else {
+          //for compatibility
+          if (!utils.isEmptyObject(checkJwtRes.decoded.payload)) {
+            Object.assign(res.params, checkJwtRes.decoded.payload);
+          } else if (checkJwtRes.decoded.payloadhash) {
+            if (!checkJwtPayloadHash(docId, checkJwtRes.decoded.payloadhash, req.body, checkJwtRes.token)) {
+              res.code = constants.VKEY;
+            }
+          } else if (!utils.isEmptyObject(checkJwtRes.decoded.query)) {
+            Object.assign(res.params, checkJwtRes.decoded.query);
+          }
+        }
+      } else {
+        if (constants.JWT_EXPIRED_CODE == checkJwtRes.code) {
+          res.code = constants.VKEY_KEY_EXPIRE;
+        }
+      }
+    }
   }
   return res;
 }
@@ -1084,6 +1143,7 @@ exports.getLastSave = getLastSave;
 exports.getLastForceSave = getLastForceSave;
 exports.startForceSavePromise = co.wrap(startForceSave);
 exports.checkJwt = checkJwt;
+exports.getRequestParams = getRequestParams;
 exports.checkJwtHeader = checkJwtHeader;
 exports.checkJwtPayloadHash = checkJwtPayloadHash;
 exports.install = function(server, callbackFunction) {
@@ -1178,8 +1238,9 @@ exports.install = function(server, callbackFunction) {
             conn.sessionTimeLastAction = new Date().getTime() - data.idletime;
             break;
           case 'refreshToken' :
-            var isSession = !!data.jwtSession;
-            var checkJwtRes = checkJwt(docId, data.jwtSession || data.jwtOpen, isSession);
+            let secretType = !!data.jwtSession ? commonDefines.c_oAscSecretType.Session :
+              commonDefines.c_oAscSecretType.Browser;
+            var checkJwtRes = checkJwt(docId, data.jwtSession || data.jwtOpen, secretType);
             if (checkJwtRes.decoded) {
               if (checkJwtRes.decoded.document.key == conn.docId) {
                 sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgTokenSessionExpires});
@@ -1348,7 +1409,7 @@ exports.install = function(server, callbackFunction) {
     var docIdNew = cmd.getDocId();
     //check jwt
     if (cfgTokenEnableBrowser) {
-      var checkJwtRes = checkJwt(docIdNew, cmd.getJwt(), false);
+      var checkJwtRes = checkJwt(docIdNew, cmd.getJwt(), commonDefines.c_oAscSecretType.Browser);
       if (checkJwtRes.decoded) {
         fillVersionHistoryFromJwt(checkJwtRes.decoded, cmd);
         docIdNew = cmd.getDocId();
@@ -1841,8 +1902,9 @@ exports.install = function(server, callbackFunction) {
       let docId = data.docid;
       //check jwt
       if (cfgTokenEnableBrowser) {
-        const isSession = !!data.jwtSession;
-        const checkJwtRes = checkJwt(docId, data.jwtSession || data.jwtOpen, isSession);
+        let secretType = !!data.jwtSession ? commonDefines.c_oAscSecretType.Session :
+          commonDefines.c_oAscSecretType.Browser;
+        const checkJwtRes = checkJwt(docId, data.jwtSession || data.jwtOpen, secretType);
         if (checkJwtRes.decoded) {
           if (!fillDataFromJwt(checkJwtRes.decoded, data)) {
             logger.warn("fillDataFromJwt return false: docId = %s", docId);
@@ -2962,34 +3024,12 @@ exports.commandFromServer = function (req, res) {
     let docId = 'commandFromServer';
     let version = undefined;
     try {
-      let params;
-      if (req.body && Buffer.isBuffer(req.body)) {
-        params = JSON.parse(req.body.toString('utf8'));
-      } else {
-        params = req.query;
-      }
-      if (cfgTokenEnableRequestInbox) {
+      let authRes = getRequestParams(docId, req);
+      let params = authRes.params;
+      if(authRes.code === constants.VKEY_KEY_EXPIRE){
+        result = commonDefines.c_oAscServerCommandErrors.TokenExpire;
+      } else if(authRes.code !== constants.NO_ERROR){
         result = commonDefines.c_oAscServerCommandErrors.Token;
-        const checkJwtRes = checkJwtHeader(docId, req);
-        if (checkJwtRes) {
-          if (checkJwtRes.decoded) {
-            if (!utils.isEmptyObject(checkJwtRes.decoded.payload)) {
-              Object.assign(params, checkJwtRes.decoded.payload);
-              result = commonDefines.c_oAscServerCommandErrors.NoError;
-            } else if (checkJwtRes.decoded.payloadhash) {
-              if (checkJwtPayloadHash(docId, checkJwtRes.decoded.payloadhash, req.body, checkJwtRes.token)) {
-                result = commonDefines.c_oAscServerCommandErrors.NoError;
-              }
-            } else if (!utils.isEmptyObject(checkJwtRes.decoded.query)) {
-              Object.assign(params, checkJwtRes.decoded.query);
-              result = commonDefines.c_oAscServerCommandErrors.NoError;
-            }
-          } else {
-            if (constants.JWT_EXPIRED_CODE == checkJwtRes.code) {
-              result = commonDefines.c_oAscServerCommandErrors.TokenExpire;
-            }
-          }
-        }
       }
       // Ключ id-документа
       docId = params.key;
