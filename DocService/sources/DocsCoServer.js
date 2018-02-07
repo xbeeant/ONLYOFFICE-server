@@ -1558,7 +1558,7 @@ exports.install = function(server, callbackFunction) {
     let timerId = setTimeout(function() {
       return co(function*() {
         try {
-          logger.debug("lockDocumentsTimerId timeout: docId = %s", docId);
+          logger.warn("lockDocumentsTimerId timeout: docId = %s", docId);
           delete lockDocumentsTimerId[docId];
           //todo remove checkEndAuthLock(only needed for lost connections in redis)
           yield* checkEndAuthLock(true, false, docId, userId);
