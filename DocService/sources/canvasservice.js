@@ -186,7 +186,7 @@ function* getOutputData(cmd, outputData, key, status, statusInfo, optConn, optAd
       break;
     case taskResult.FileStatus.NeedParams:
       outputData.setStatus('needparams');
-      var settingsPath = key + '/' + 'settings.json';
+      var settingsPath = key + '/' + 'origin.' + cmd.getFormat();
       if (optConn) {
         let url = yield storage.getSignedUrl(optConn.baseUrl, settingsPath, commonDefines.c_oAscUrlTypes.Temporary);
         outputData.setData(url);
