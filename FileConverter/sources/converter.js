@@ -606,7 +606,8 @@ function* ExecuteTask(task) {
         }, waitMS);
         childRes = yield spawnAsyncPromise;
       } catch (err) {
-        logger.error('error spawnAsync(id=%s)\r\n%s', cmd.getDocId(), err.stack);
+        let fLog = null === err.status ? logger.error : logger.debug;
+        fLog.call(logger, 'error spawnAsync(id=%s)\r\n%s', cmd.getDocId(), err.stack);
         childRes = err;
       }
       if (undefined !== timeoutId) {
