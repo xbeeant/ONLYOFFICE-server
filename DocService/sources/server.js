@@ -125,7 +125,6 @@ if (cluster.isMaster) {
 	const docsCoServer = require('./DocsCoServer');
 	const canvasService = require('./canvasservice');
 	const converterService = require('./converterservice');
-	const fontService = require('./fontservice');
 	const fileUploaderService = require('./fileuploaderservice');
 	const constants = require('./../../Common/sources/constants');
 	const utils = require('./../../Common/sources/utils');
@@ -191,13 +190,6 @@ if (cluster.isMaster) {
 		app.get('/coauthoring/CommandService.ashx', utils.checkClientIp, rawFileParser, docsCoServer.commandFromServer);
 		app.post('/coauthoring/CommandService.ashx', utils.checkClientIp, rawFileParser,
 			docsCoServer.commandFromServer);
-
-		if (config.has('server.fonts_route')) {
-			const fontsRoute = config.get('server.fonts_route');
-			app.get('/' + fontsRoute + 'native/:fontname', fontService.getFont);
-			app.get('/' + fontsRoute + 'js/:fontname', fontService.getFont);
-			app.get('/' + fontsRoute + 'odttf/:fontname', fontService.getFont);
-		}
 
 		app.get('/ConvertService.ashx', utils.checkClientIp, rawFileParser, converterService.convertXml);
 		app.post('/ConvertService.ashx', utils.checkClientIp, rawFileParser, converterService.convertXml);
