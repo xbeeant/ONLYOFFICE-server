@@ -192,13 +192,6 @@ if (cluster.isMaster) {
 		app.post('/coauthoring/CommandService.ashx', utils.checkClientIp, rawFileParser,
 			docsCoServer.commandFromServer);
 
-		if (config.has('server.fonts_route')) {
-			const fontsRoute = config.get('server.fonts_route');
-			app.get('/' + fontsRoute + 'native/:fontname', fontService.getFont);
-			app.get('/' + fontsRoute + 'js/:fontname', fontService.getFont);
-			app.get('/' + fontsRoute + 'odttf/:fontname', fontService.getFont);
-		}
-
 		app.get('/ConvertService.ashx', utils.checkClientIp, rawFileParser, converterService.convertXml);
 		app.post('/ConvertService.ashx', utils.checkClientIp, rawFileParser, converterService.convertXml);
 		app.post('/converter', utils.checkClientIp, rawFileParser, converterService.convertJson);
