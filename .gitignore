@@ -3,6 +3,7 @@ Common/config/local.json
 license.lic
 App_Data/
 */node_modules
+FileConverter/bin/AllFonts.js
 FileConverter/bin/*.dll
 FileConverter/bin/*.dylib
 FileConverter/bin/*.exe
