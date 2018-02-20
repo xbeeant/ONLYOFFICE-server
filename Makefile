@@ -81,7 +81,7 @@ WELCOME_FILES = $(WELCOME_DIR)/**
 WELCOME = $(OUTPUT)/$(WELCOME_DIR)/
 
 CORE_FONTS_DIR = core-fonts
-CORE_FONTS_FILES = $(CORE_FONTS_DIR)/**
+CORE_FONTS_FILES = ../$(CORE_FONTS_DIR)/**
 CORE_FONTS = $(OUTPUT)/$(CORE_FONTS_DIR)/
 
 .PHONY: all clean install uninstall build-date htmlfileinternal docbuilder
