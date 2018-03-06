@@ -139,7 +139,7 @@ $(CORE_FONTS):
 		cp -r -t $(CORE_FONTS) $(CORE_FONTS_FILES)
 		
 clean:
-	rm -rf $(OUTPUT) $(GRUNT_FILES) $(CORE_FONTS)
+	rm -rf $(CORE_FONTS) $(OUTPUT) $(GRUNT_FILES) 
 
 install:
 	sudo adduser --quiet --home /var/www/onlyoffice --system --group onlyoffice
