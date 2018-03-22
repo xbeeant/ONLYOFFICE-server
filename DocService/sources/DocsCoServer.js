@@ -1238,20 +1238,6 @@ exports.install = function(server, callbackFunction) {
             conn.sessionIsSendWarning = false;
             conn.sessionTimeLastAction = new Date().getTime() - data.idletime;
             break;
-          case 'refreshToken' :
-            let secretType = !!data.jwtSession ? commonDefines.c_oAscSecretType.Session :
-              commonDefines.c_oAscSecretType.Browser;
-            var checkJwtRes = checkJwt(docId, data.jwtSession || data.jwtOpen, secretType);
-            if (checkJwtRes.decoded) {
-              if (checkJwtRes.decoded.document.key == conn.docId) {
-                sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgTokenSessionExpires});
-              } else {
-                conn.close(constants.ACCESS_DENIED_CODE, constants.ACCESS_DENIED_REASON);
-              }
-            } else {
-              conn.close(checkJwtRes.code, checkJwtRes.description);
-            }
-            break;
           case 'forceSaveStart' :
             var forceSaveRes;
             if (conn.user) {
@@ -1334,7 +1320,7 @@ exports.install = function(server, callbackFunction) {
         conn.isCloseCoAuthoring = true;
         yield* updatePresence(docId, tmpUser.id, getConnectionInfo(conn));
         if (cfgTokenEnableBrowser) {
-          sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgTokenSessionExpires});
+          sendDataRefreshToken(conn, fillJwtByConnection(conn));
         }
       }
     }
@@ -1440,7 +1426,7 @@ exports.install = function(server, callbackFunction) {
       conn.docId = docIdNew;
       yield* updatePresence(docIdNew, tmpUser.id, getConnectionInfo(conn));
       if (cfgTokenEnableBrowser) {
-        sendDataRefreshToken(conn, {token: fillJwtByConnection(conn), expires: cfgTokenSessionExpires});
+        sendDataRefreshToken(conn, fillJwtByConnection(conn));
       }
     }
     //open
@@ -2003,7 +1989,7 @@ exports.install = function(server, callbackFunction) {
           connections.push(conn);
           yield* updatePresence(docId, conn.user.id, getConnectionInfo(conn));
           // Посылаем формальную авторизацию, чтобы подтвердить соединение
-          yield* sendAuthInfo(conn, undefined);
+          yield* sendAuthInfo(conn, bIsRestore, undefined);
           if (cmd) {
             yield canvasService.openDocument(conn, cmd, upsertRes);
           }
@@ -2173,7 +2159,7 @@ exports.install = function(server, callbackFunction) {
         if (!bIsRestore) {
           yield* sendAuthChanges(conn.docId, [conn]);
         }
-        yield* sendAuthInfo(conn, participantsMap, hasForgotten);
+        yield* sendAuthInfo(conn, bIsRestore, participantsMap, hasForgotten);
       }
       yield* publish({type: commonDefines.c_oPublishType.participantsState, docId: docId, userId: tmpUser.id, participantsTimestamp: participantsTimestamp, participants: participantsMap, waitAuthUserId: waitAuthUserId}, docId, tmpUser.id);
     } else {
@@ -2199,7 +2185,7 @@ exports.install = function(server, callbackFunction) {
       index += cfgMaxRequestChanges;
     } while (changes && cfgMaxRequestChanges === changes.length);
   }
-  function* sendAuthInfo(conn, participantsMap, opt_hasForgotten) {
+  function* sendAuthInfo(conn, bIsRestore, participantsMap, opt_hasForgotten) {
     const docId = conn.docId;
     let docLock;
     if(EditorTypes.document == conn.editorType){
@@ -2230,7 +2216,7 @@ exports.install = function(server, callbackFunction) {
       locks: docLock,
       indexUser: conn.user.indexUser,
       hasForgotten: opt_hasForgotten,
-      jwt: cfgTokenEnableBrowser ? {token: fillJwtByConnection(conn), expires: cfgTokenSessionExpires} : undefined,
+      jwt: (!bIsRestore && cfgTokenEnableBrowser) ? fillJwtByConnection(conn) : undefined,
       g_cAscSpellCheckUrl: cfgSpellcheckerUrl,
       buildVersion: commonDefines.buildVersion,
       buildNumber: commonDefines.buildNumber,
@@ -2841,7 +2827,7 @@ exports.install = function(server, callbackFunction) {
               yield* sendAuthChanges(data.docId, participants);
               for (i = 0; i < participants.length; ++i) {
                 participant = participants[i];
-                yield* sendAuthInfo(participant, data.participantsMap);
+                yield* sendAuthInfo(participant, false, data.participantsMap);
               }
             }
             break;

@@ -162,7 +162,7 @@
 				},
 				"session": {
 					"algorithm": "HS256",
-					"expires": "10m"
+					"expires": "30d"
 				}
 			},
 			"plugins": {
