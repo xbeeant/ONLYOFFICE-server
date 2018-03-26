@@ -2699,6 +2699,7 @@ exports.install = function(server, callbackFunction) {
 			let connectionsCount = 0;
 			if (constants.PACKAGE_TYPE_OS === licenseInfo.packageType && c_LR.Error === licenseType) {
 				connectionsCount = constants.LICENSE_CONNECTIONS;
+				licenseType = c_LR.SuccessLimit;
 			} else if (c_LR.Success === licenseType) {
 				connectionsCount = licenseInfo.connections;
 			}
@@ -2706,7 +2707,7 @@ exports.install = function(server, callbackFunction) {
 				const editConnectionsCount = (_.filter(connections, function (el) {
 					return true !== el.isCloseCoAuthoring && el.user.view !== true;
 				})).length;
-				licenseType = (connectionsCount > editConnectionsCount) ? c_LR.Success : c_LR.Connections;
+				licenseType = (connectionsCount > editConnectionsCount) ? licenseType : c_LR.Connections;
 			}
 			/*if (constants.PACKAGE_TYPE_OS === licenseInfo.packageType && c_LR.Error === licenseType) {
 			licenseType = c_LR.SuccessLimit;
