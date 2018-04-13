@@ -16,8 +16,8 @@ powershell -executionpolicy remotesigned -file update-core.ps1 "http://repo-doc-
 
 cd /D "%~dp0\FileConverter\bin" || goto ERROR
 copy "core\Common\3dParty\v8\win_%OS%\release\icudt.dll" "."
-copy "core\Common\3dParty\icu\win_%OS%\build\icudt55.dll" "."
-copy "core\Common\3dParty\icu\win_%OS%\build\icuuc55.dll" "."
+copy "core\Common\3dParty\icu\win_%OS%\build\icudt*.dll" "."
+copy "core\Common\3dParty\icu\win_%OS%\build\icuuc*.dll" "."
 copy "core\build\lib\win_%OS%\doctrenderer.dll" "."
 copy "core\build\lib\win_%OS%\HtmlRenderer.dll" "."
 copy "core\build\lib\win_%OS%\DjVuFile.dll" "."
