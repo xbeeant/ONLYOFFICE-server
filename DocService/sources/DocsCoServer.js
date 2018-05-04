@@ -1353,6 +1353,16 @@ exports.install = function(server, callbackFunction) {
         var puckerIndex = yield* getChangesIndex(docId);
         bHasChanges = puckerIndex > 0;
 
+        let needSendStatus = true;
+        if (conn.crypted) {
+          let selectRes = yield taskResult.select(docId);
+          if (selectRes.length > 0) {
+            var row = selectRes[0];
+            if (taskResult.FileStatus.UpdateVersion === row.status) {
+              needSendStatus = false;
+            }
+          }
+        }
         // Если у нас нет пользователей, то удаляем все сообщения
         if (!bHasEditors) {
           // На всякий случай снимаем lock
@@ -1366,13 +1376,15 @@ exports.install = function(server, callbackFunction) {
             needSaveChanges = forgotten.length > 0;
             logger.debug('closeDocument hasForgotten %s: docId = %s', needSaveChanges, docId);
           }
-          if (needSaveChanges) {
+          if (needSaveChanges && needSendStatus) {
             // Send changes to save server
             yield* _createSaveTimer(docId, tmpUser.idOriginal);
-          } else {
+          } else if (needSendStatus) {
             yield* cleanDocumentOnExitNoChanges(docId, tmpUser.idOriginal);
+          } else {
+            yield* cleanDocumentOnExit(docId);
           }
-        } else {
+        } else if (needSendStatus) {
           yield* sendStatusDocument(docId, c_oAscChangeBase.No, new commonDefines.OutputAction(commonDefines.c_oAscUserAction.Out, tmpUser.idOriginal));
         }
 
@@ -1859,6 +1871,7 @@ exports.install = function(server, callbackFunction) {
         }
       }
     }
+    data.crypted = decoded.crypted;
     //issuer for secret
     if (decoded.iss) {
       data.iss = decoded.iss;
@@ -1899,6 +1912,7 @@ exports.install = function(server, callbackFunction) {
     //no standart
     edit.ds_view = conn.user.view;
     edit.ds_isCloseCoAuthoring = conn.isCloseCoAuthoring;
+    edit.crypted = conn.crypted;
 
     var options = {algorithm: cfgTokenSessionAlgorithm, expiresIn: cfgTokenSessionExpires / 1000};
     var secret = utils.getSecretByElem(cfgSecretSession);
@@ -1964,6 +1978,7 @@ exports.install = function(server, callbackFunction) {
       if (data.sessionTimeIdle >= 0) {
         conn.sessionTimeLastAction = new Date().getTime() - data.sessionTimeIdle;
       }
+      conn.crypted = data.crypted;
 
       const c_LR = constants.LICENSE_RESULT;
       conn.licenseType = c_LR.Success;
