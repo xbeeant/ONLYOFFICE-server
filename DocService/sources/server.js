@@ -218,6 +218,7 @@ if (cluster.isMaster) {
 		app.post('/upload/:docid/:userid/:index', rawFileParser, fileUploaderService.uploadImageFile);
 
 		app.post('/downloadas/:docid', rawFileParser, canvasService.downloadAs);
+		app.post('/savefile/:docid', rawFileParser, canvasService.saveFile);
 		app.get('/healthcheck', utils.checkClientIp, docsCoServer.healthCheck);
 
 		app.get('/baseurl', (req, res) => {

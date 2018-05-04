@@ -628,7 +628,7 @@ function checkAuthorizationLength(authorization, data){
   }
   return res;
 }
-function* commandSfcCallback(cmd, isSfcm) {
+function* commandSfcCallback(cmd, isSfcm, isCrypted) {
   var docId = cmd.getDocId();
   logger.debug('Start commandSfcCallback: docId = %s', docId);
   var saveKey = cmd.getSaveKey();
@@ -654,8 +654,12 @@ function* commandSfcCallback(cmd, isSfcm) {
   }
   let updateMask = new taskResult.TaskResultData();
   updateMask.key = docId;
-  updateMask.status = taskResult.FileStatus.SaveVersion;
-  updateMask.statusInfo = cmd.getData();
+  if (!isCrypted) {
+    updateMask.status = taskResult.FileStatus.SaveVersion;
+    updateMask.statusInfo = cmd.getData();
+  } else {
+    updateMask.status = taskResult.FileStatus.Ok;
+  }
   let updateIfTask = new taskResult.TaskResultData();
   updateIfTask.status = taskResult.FileStatus.UpdateVersion;
   updateIfTask.statusInfo = Math.floor(Date.now() / 60000);//minutes
@@ -664,6 +668,7 @@ function* commandSfcCallback(cmd, isSfcm) {
     logger.debug('Callback commandSfcCallback: docId = %s callback = %s', docId, getRes.server.href);
     var outputSfc = new commonDefines.OutputSfcData();
     outputSfc.setKey(docId);
+    outputSfc.setCrypted(isCrypted);
     var users = [];
     let isOpenFromForgotten = false;
     //setUserId - set from changes in convert
@@ -696,7 +701,7 @@ function* commandSfcCallback(cmd, isSfcm) {
           isSendHistory = !isOpenFromForgotten;
           logger.debug('commandSfcCallback forgotten no empty: docId = %s isSendHistory = %s', docId, isSendHistory);
         }
-        if (isSendHistory) {
+        if (isSendHistory && !isCrypted) {
           //don't send history info because changes isn't from file in storage
           var data = yield storage.getObject(savePathHistory);
           outputSfc.setChangeHistory(JSON.parse(data.toString('utf-8')));
@@ -743,7 +748,7 @@ function* commandSfcCallback(cmd, isSfcm) {
       //if anybody in document stop save
       var hasEditors = yield* docsCoServer.hasEditors(docId);
       logger.debug('hasEditors commandSfcCallback: docId = %s hasEditors = %d', docId, hasEditors);
-      if (!hasEditors) {
+      if (!hasEditors || isCrypted) {
         let lastSave = yield* docsCoServer.getLastSave(docId);
         let notModified = yield* docsCoServer.getLastForceSave(docId, lastSave);
         var lastSaveDate = lastSave ? new Date(lastSave.time) : new Date();
@@ -817,6 +822,7 @@ function* commandSfcCallback(cmd, isSfcm) {
     yield utils.promiseRedis(redisClient, redisClient.srem, keyRedis, docId);
   }
   logger.debug('End commandSfcCallback: docId = %s', docId);
+  return !isError;
 }
 function* commandSendMMCallback(cmd) {
   var docId = cmd.getDocId();
@@ -890,7 +896,9 @@ exports.openDocument = function(conn, cmd, opt_upsertRes, opt_bIsRestore) {
       let res = true;
       switch (cmd.getCommand()) {
         case 'open':
-          yield* commandOpen(conn, cmd, outputData, opt_upsertRes, opt_bIsRestore);
+          if (!conn.crypted) {
+            yield* commandOpen(conn, cmd, outputData, opt_upsertRes, opt_bIsRestore);
+          }
           break;
         case 'reopen':
           res = yield* commandReopen(cmd);
@@ -997,6 +1005,52 @@ exports.downloadAs = function(req, res) {
     }
     catch (e) {
       logger.error('Error downloadAs: docId = %s\r\n%s', docId, e.stack);
+      res.sendStatus(400);
+    }
+  });
+};
+exports.saveFile = function(req, res) {
+  return co(function*() {
+    let docId = 'null';
+    try {
+      let startDate = null;
+      if (clientStatsD) {
+        startDate = new Date();
+      }
+
+      let strCmd = req.query['cmd'];
+      let cmd = new commonDefines.InputCommand(JSON.parse(strCmd));
+      docId = cmd.getDocId();
+      logger.debug('Start saveFile: docId = %s %s', docId);
+
+      if (cfgTokenEnableBrowser) {
+        let isValidJwt = false;
+        let checkJwtRes = docsCoServer.checkJwt(docId, cmd.getJwt(), commonDefines.c_oAscSecretType.Session);
+        if (checkJwtRes.decoded) {
+          let doc = checkJwtRes.decoded.document;
+          isValidJwt = true;
+          docId = doc.key;
+          cmd.setDocId(doc.key);
+        } else {
+          logger.warn('Error saveFile jwt: docId = %s\r\n%s', docId, checkJwtRes.description);
+        }
+        if (!isValidJwt) {
+          res.sendStatus(400);
+          return;
+        }
+      }
+      cmd.setStatusInfo(constants.NO_ERROR);
+      yield* addRandomKeyTaskCmd(cmd);
+      yield storage.putObject(cmd.getSaveKey() + '/' + cmd.getOutputPath(), req.body, req.body.length);
+      let sfcRes = yield* commandSfcCallback(cmd, false, true);
+      res.sendStatus(sfcRes ? 200 : 400);
+      logger.debug('End saveFile: docId = %s %s', docId, sfcRes);
+      if (clientStatsD) {
+        clientStatsD.timing('coauth.saveFile', new Date() - startDate);
+      }
+    }
+    catch (e) {
+      logger.error('Error saveFile: docId = %s\r\n%s', docId, e.stack);
       res.sendStatus(400);
     }
   });
