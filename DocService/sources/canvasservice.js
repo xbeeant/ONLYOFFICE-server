@@ -401,6 +401,18 @@ function* commandReopen(cmd) {
   }
   return res;
 }
+function* commandOpenEncrypted(cmd) {
+  let updateMask = new taskResult.TaskResultData();
+  updateMask.key = cmd.getDocId();
+  updateMask.status = taskResult.FileStatus.None;
+
+  let task = new taskResult.TaskResultData();
+  task.key = cmd.getDocId();
+  task.status = taskResult.FileStatus.Ok;
+  task.statusInfo = constants.NO_ERROR;
+
+  yield taskResult.updateIf(task, updateMask);
+}
 function* commandSave(cmd, outputData) {
   var completeParts = yield* saveParts(cmd, "Editor.bin");
   if (completeParts) {
@@ -897,6 +909,8 @@ exports.openDocument = function(conn, cmd, opt_upsertRes, opt_bIsRestore) {
         case 'open':
           if (!conn.encrypted) {
             yield* commandOpen(conn, cmd, outputData, opt_upsertRes, opt_bIsRestore);
+          } else {
+            yield* commandOpenEncrypted(cmd);
           }
           break;
         case 'reopen':
