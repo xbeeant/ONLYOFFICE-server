@@ -402,16 +402,13 @@ function* commandReopen(cmd) {
   return res;
 }
 function* commandOpenEncrypted(cmd) {
-  let updateMask = new taskResult.TaskResultData();
-  updateMask.key = cmd.getDocId();
-  updateMask.status = taskResult.FileStatus.None;
+  //todo if None, NeedPassword
+  let updateTask = new taskResult.TaskResultData();
+  updateTask.key = cmd.getDocId();
+  updateTask.status = taskResult.FileStatus.Ok;
+  updateTask.statusInfo = constants.NO_ERROR;
 
-  let task = new taskResult.TaskResultData();
-  task.key = cmd.getDocId();
-  task.status = taskResult.FileStatus.Ok;
-  task.statusInfo = constants.NO_ERROR;
-
-  yield taskResult.updateIf(task, updateMask);
+  yield taskResult.update(updateTask);
 }
 function* commandSave(cmd, outputData) {
   var completeParts = yield* saveParts(cmd, "Editor.bin");
