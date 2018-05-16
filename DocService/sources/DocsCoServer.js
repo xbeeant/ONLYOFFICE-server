@@ -1381,7 +1381,7 @@ exports.install = function(server, callbackFunction) {
             needSaveChanges = forgotten.length > 0;
             logger.debug('closeDocument hasForgotten %s: docId = %s', needSaveChanges, docId);
           }
-          if (needSaveChanges && needSendStatus) {
+          if (needSaveChanges && !conn.encrypted) {
             // Send changes to save server
             yield* _createSaveTimer(docId, tmpUser.idOriginal);
           } else if (needSendStatus) {
