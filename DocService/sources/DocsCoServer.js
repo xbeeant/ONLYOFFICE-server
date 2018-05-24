@@ -536,8 +536,8 @@ function* getAllPresence(docId, opt_userId, opt_connInfo) {
   }
   return hvals;
 }
-function* hasEditors(docId, opt_hvals) {
-  var elem, hasEditors = false;
+function* getEditorsCount(docId, opt_hvals) {
+  var elem, editorsCount = 0;
   var hvals;
   if(opt_hvals){
     hvals = opt_hvals;
@@ -547,11 +547,15 @@ function* hasEditors(docId, opt_hvals) {
   for (var i = 0; i < hvals.length; ++i) {
     elem = JSON.parse(hvals[i]);
     if(!elem.view && !elem.isCloseCoAuthoring) {
-      hasEditors = true;
+      editorsCount++;
       break;
     }
   }
-  return hasEditors;
+  return editorsCount;
+}
+function* hasEditors(docId, opt_hvals) {
+  let editorsCount = yield* getEditorsCount(docId, opt_hvals);
+  return editorsCount > 0;
 }
 function* isUserReconnect(docId, userId, connectionId) {
   var elem;
@@ -1101,7 +1105,7 @@ function getRequestParams(docId, req, opt_isNotInBody, opt_tokenAssign) {
       if (checkJwtRes.decoded) {
         res.code = constants.NO_ERROR;
         if (cfgTokenInboxInBody && !opt_tokenAssign) {
-          res.params = checkJwtRes.decoded.payload || {};
+          res.params = checkJwtRes.decoded;
         } else {
           //for compatibility
           if (!utils.isEmptyObject(checkJwtRes.decoded.payload)) {
@@ -1135,6 +1139,7 @@ exports.publish = publish;
 exports.addTask = addTask;
 exports.removeResponse = removeResponse;
 exports.hasEditors = hasEditors;
+exports.getEditorsCountPromise = co.wrap(getEditorsCount);
 exports.getCallback = getCallback;
 exports.getIsShutdown = getIsShutdown;
 exports.getChangesIndexPromise = co.wrap(getChangesIndex);
@@ -1376,7 +1381,7 @@ exports.install = function(server, callbackFunction) {
             needSaveChanges = forgotten.length > 0;
             logger.debug('closeDocument hasForgotten %s: docId = %s', needSaveChanges, docId);
           }
-          if (needSaveChanges && needSendStatus) {
+          if (needSaveChanges && !conn.encrypted) {
             // Send changes to save server
             yield* _createSaveTimer(docId, tmpUser.idOriginal);
           } else if (needSendStatus) {
