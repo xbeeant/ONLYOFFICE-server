@@ -536,8 +536,8 @@ function* getAllPresence(docId, opt_userId, opt_connInfo) {
   }
   return hvals;
 }
-function* hasEditors(docId, opt_hvals) {
-  var elem, hasEditors = false;
+function* getEditorsCount(docId, opt_hvals) {
+  var elem, editorsCount = 0;
   var hvals;
   if(opt_hvals){
     hvals = opt_hvals;
@@ -547,11 +547,15 @@ function* hasEditors(docId, opt_hvals) {
   for (var i = 0; i < hvals.length; ++i) {
     elem = JSON.parse(hvals[i]);
     if(!elem.view && !elem.isCloseCoAuthoring) {
-      hasEditors = true;
+      editorsCount++;
       break;
     }
   }
-  return hasEditors;
+  return editorsCount;
+}
+function* hasEditors(docId, opt_hvals) {
+  let editorsCount = yield* getEditorsCount(docId, opt_hvals);
+  return editorsCount > 0;
 }
 function* isUserReconnect(docId, userId, connectionId) {
   var elem;
@@ -1101,7 +1105,7 @@ function getRequestParams(docId, req, opt_isNotInBody, opt_tokenAssign) {
       if (checkJwtRes.decoded) {
         res.code = constants.NO_ERROR;
         if (cfgTokenInboxInBody && !opt_tokenAssign) {
-          res.params = checkJwtRes.decoded.payload || {};
+          res.params = checkJwtRes.decoded;
         } else {
           //for compatibility
           if (!utils.isEmptyObject(checkJwtRes.decoded.payload)) {
@@ -1135,6 +1139,7 @@ exports.publish = publish;
 exports.addTask = addTask;
 exports.removeResponse = removeResponse;
 exports.hasEditors = hasEditors;
+exports.getEditorsCountPromise = co.wrap(getEditorsCount);
 exports.getCallback = getCallback;
 exports.getIsShutdown = getIsShutdown;
 exports.getChangesIndexPromise = co.wrap(getChangesIndex);
@@ -1353,6 +1358,16 @@ exports.install = function(server, callbackFunction) {
         var puckerIndex = yield* getChangesIndex(docId);
         bHasChanges = puckerIndex > 0;
 
+        let needSendStatus = true;
+        if (conn.encrypted) {
+          let selectRes = yield taskResult.select(docId);
+          if (selectRes.length > 0) {
+            var row = selectRes[0];
+            if (taskResult.FileStatus.UpdateVersion === row.status) {
+              needSendStatus = false;
+            }
+          }
+        }
         // Если у нас нет пользователей, то удаляем все сообщения
         if (!bHasEditors) {
           // На всякий случай снимаем lock
@@ -1366,13 +1381,15 @@ exports.install = function(server, callbackFunction) {
             needSaveChanges = forgotten.length > 0;
             logger.debug('closeDocument hasForgotten %s: docId = %s', needSaveChanges, docId);
           }
-          if (needSaveChanges) {
+          if (needSaveChanges && !conn.encrypted) {
             // Send changes to save server
             yield* _createSaveTimer(docId, tmpUser.idOriginal);
-          } else {
+          } else if (needSendStatus) {
             yield* cleanDocumentOnExitNoChanges(docId, tmpUser.idOriginal);
+          } else {
+            yield* cleanDocumentOnExit(docId);
           }
-        } else {
+        } else if (needSendStatus) {
           yield* sendStatusDocument(docId, c_oAscChangeBase.No, new commonDefines.OutputAction(commonDefines.c_oAscUserAction.Out, tmpUser.idOriginal));
         }
 
@@ -1821,6 +1838,9 @@ exports.install = function(server, callbackFunction) {
           openCmd.url = doc.url;
         }
       }
+      if (null != doc.ds_encrypted) {
+        data.encrypted = doc.ds_encrypted;
+      }
     }
     if (decoded.editorConfig) {
       var edit = decoded.editorConfig;
@@ -1859,6 +1879,7 @@ exports.install = function(server, callbackFunction) {
         }
       }
     }
+
     //issuer for secret
     if (decoded.iss) {
       data.iss = decoded.iss;
@@ -1888,6 +1909,7 @@ exports.install = function(server, callbackFunction) {
     var doc = payload.document;
     doc.key = conn.docId;
     doc.permissions = conn.permissions;
+    doc.ds_encrypted = conn.encrypted;
     var edit = payload.editorConfig;
     //todo
     //edit.callbackUrl = callbackUrl;
@@ -1964,6 +1986,7 @@ exports.install = function(server, callbackFunction) {
       if (data.sessionTimeIdle >= 0) {
         conn.sessionTimeLastAction = new Date().getTime() - data.sessionTimeIdle;
       }
+      conn.encrypted = data.encrypted;
 
       const c_LR = constants.LICENSE_RESULT;
       conn.licenseType = c_LR.Success;
