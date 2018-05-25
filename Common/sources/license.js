@@ -127,7 +127,7 @@ exports.readLicense = function*() {
 	}
 	if (res.type === c_LR.Expired || res.type === c_LR.ExpiredTrial) {
 		res.count = 1;
-		logger.error('License Expired!!!');
+		logger.error('License: License Expired!!!');
 	}
 
 	if (checkFile) {

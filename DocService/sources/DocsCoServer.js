@@ -143,6 +143,7 @@ const cfgForceSaveStep = ms(config.get('autoAssembly.step'));
 const cfgQueueRetentionPeriod = configCommon.get('queue.retentionPeriod');
 const cfgForgottenFiles = config.get('server.forgottenfiles');
 const cfgMaxRequestChanges = config.get('server.maxRequestChanges');
+const cfgWarningLimitPercents = configCommon.get('license.warning_limit_percents') / 100;
 
 const redisKeySaveLock = cfgRedisPrefix + constants.REDIS_KEY_SAVE_LOCK;
 const redisKeyPresenceHash = cfgRedisPrefix + constants.REDIS_KEY_PRESENCE_HASH;
@@ -2695,6 +2696,7 @@ exports.install = function(server, callbackFunction) {
 	}
 
 	function* _checkLicenseAuth(userId) {
+		let licenseWarningLimit = false;
 		const c_LR = constants.LICENSE_RESULT;
 		let licenseType = licenseInfo.type;
 		if (licenseInfo.usersCount) {
@@ -2712,6 +2714,7 @@ exports.install = function(server, callbackFunction) {
 				} else {
 					licenseType = -1 === execRes[0].indexOf(userId) ? c_LR.UsersCount : c_LR.Success;
 				}
+				licenseWarningLimit = licenseInfo.usersCount * cfgWarningLimitPercents <= execRes[0].length;
 			}
 		} else {
 			// Warning. Cluster version or if workers > 1 will work with increasing numbers.
@@ -2727,6 +2730,7 @@ exports.install = function(server, callbackFunction) {
 					return true !== el.isCloseCoAuthoring && el.user.view !== true;
 				})).length;
 				licenseType = (connectionsCount > editConnectionsCount) ? licenseType : c_LR.Connections;
+				licenseWarningLimit = connectionsCount * cfgWarningLimitPercents <= editConnectionsCount;
 			}
 			/*if (constants.PACKAGE_TYPE_OS === licenseInfo.packageType && c_LR.Error === licenseType) {
 			licenseType = c_LR.SuccessLimit;
@@ -2760,6 +2764,14 @@ exports.install = function(server, callbackFunction) {
 			}
 		  }*/
 		}
+
+		if (c_LR.UsersCount === licenseType) {
+		  logger.error('License: User limit exceeded!!!');
+        } else if (c_LR.Connections === licenseType) {
+		  logger.error('License: Connection limit exceeded!!!');
+        } else if (licenseWarningLimit) {
+		  logger.warn('License: Warning limit exceeded!!!');
+        }
 		return licenseType;
 	}
 
