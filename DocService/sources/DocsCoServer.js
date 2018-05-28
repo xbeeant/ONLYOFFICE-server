@@ -2766,8 +2766,14 @@ exports.install = function(server, callbackFunction) {
 		}
 
 		if (c_LR.UsersCount === licenseType) {
+		  if (!licenseInfo.hasLicense) {
+		    licenseType = c_LR.UsersCountOS;
+          }
 		  logger.error('License: User limit exceeded!!!');
         } else if (c_LR.Connections === licenseType) {
+		  if (!licenseInfo.hasLicense) {
+		    licenseType = c_LR.ConnectionsOS;
+          }
 		  logger.error('License: Connection limit exceeded!!!');
         } else if (licenseWarningLimit) {
 		  logger.warn('License: Warning limit exceeded!!!');

@@ -53,14 +53,16 @@ exports.LICENSE_MODE = {
 };
 
 exports.LICENSE_RESULT = {
-  Error       : 1,
-  Expired     : 2,
-  Success     : 3,
-  UnknownUser : 4,
-  Connections : 5,
-  ExpiredTrial: 6,
-  SuccessLimit: 7,
-  UsersCount  : 8
+  Error         : 1,
+  Expired       : 2,
+  Success       : 3,
+  UnknownUser   : 4,
+  Connections   : 5,
+  ExpiredTrial  : 6,
+  SuccessLimit  : 7,
+  UsersCount    : 8,
+  ConnectionsOS : 9,
+  UsersCountOS  : 10
 };
 
 exports.LICENSE_CONNECTIONS = 20;
