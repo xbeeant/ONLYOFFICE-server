@@ -2247,7 +2247,7 @@ exports.install = function(server, callbackFunction) {
   function* onMessage(conn, data) {
     var docId = conn.docId;
     var userId = conn.user.id;
-    var msg = {docid: docId, message: data.message, time: Date.now(), user: userId, username: conn.user.username};
+    var msg = {docid: docId, message: data.message, time: Date.now(), user: userId, useridoriginal: conn.user.idOriginal, username: conn.user.username};
     var msgStr = JSON.stringify(msg);
     var multi = redisClient.multi([
       ['rpush', redisKeyMessage + docId, msgStr],
