@@ -830,7 +830,7 @@ function handleDeadLetter(data) {
  * @param callback
  * @param baseUrl
  */
-function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl, opt_userData) {
+function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl, opt_userData, opt_forceClose) {
   if (!callback) {
     var getRes = yield* getCallback(docId);
     if (getRes) {
@@ -848,7 +848,7 @@ function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl, 
   var participants = yield* getOriginalParticipantsId(docId);
   if (0 === participants.length) {
     var puckerIndex = yield* getChangesIndex(docId);
-    if (!(puckerIndex > 0)) {
+    if (!(puckerIndex > 0) || opt_forceClose) {
       status = c_oAscServerStatus.Closed;
     }
   }
@@ -1000,10 +1000,10 @@ function* cleanDocumentOnExit(docId, deleteChanges) {
     yield storage.deletePath(cfgForgottenFiles + '/' + docId);
   }
 }
-function* cleanDocumentOnExitNoChanges(docId, opt_userId) {
+function* cleanDocumentOnExitNoChanges(docId, opt_userId, opt_forceClose) {
   var userAction = opt_userId ? new commonDefines.OutputAction(commonDefines.c_oAscUserAction.Out, opt_userId) : null;
   // Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
-  yield* sendStatusDocument(docId, c_oAscChangeBase.No, userAction);
+  yield* sendStatusDocument(docId, c_oAscChangeBase.No, userAction, undefined, undefined, undefined, opt_forceClose);
   //если пользователь зашел в документ, соединение порвалось, на сервере удалилась вся информация,
   //при восстановлении соединения userIndex сохранится и он совпадет с userIndex следующего пользователя
   yield* cleanDocumentOnExit(docId, false);
