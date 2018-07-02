@@ -225,3 +225,5 @@ exports.CONTENT_DISPOSITION_INLINE = 'inline';
 exports.CONTENT_DISPOSITION_ATTACHMENT = 'attachment';
 
 exports.CONN_CLOSED = 3;
+
+exports.FILE_STATUS_UPDATE_VERSION = 'updateversion';

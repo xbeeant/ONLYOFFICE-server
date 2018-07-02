@@ -139,7 +139,7 @@ function* getOutputData(cmd, outputData, key, status, statusInfo, optConn, optAd
         (!opt_bIsRestore && taskResult.FileStatus.UpdateVersion === status &&
         Date.now() - statusInfo * 60000 > cfgExpUpdateVersionStatus)) {
         if ((optConn && optConn.user.view) || optConn.isCloseCoAuthoring) {
-          outputData.setStatus('updateversion');
+          outputData.setStatus(constants.FILE_STATUS_UPDATE_VERSION);
         } else {
           if (taskResult.FileStatus.UpdateVersion === status) {
             logger.warn("UpdateVersion expired: docId = %s", docId);
@@ -155,11 +155,11 @@ function* getOutputData(cmd, outputData, key, status, statusInfo, optConn, optAd
           if (updateIfRes.affectedRows > 0) {
             outputData.setStatus('ok');
           } else {
-            outputData.setStatus('updateversion');
+            outputData.setStatus(constants.FILE_STATUS_UPDATE_VERSION);
           }
         }
       } else {
-        outputData.setStatus('updateversion');
+        outputData.setStatus(constants.FILE_STATUS_UPDATE_VERSION);
       }
       var command = cmd.getCommand();
       if ('open' != command && 'reopen' != command && !cmd.getOutputUrls()) {
@@ -317,7 +317,13 @@ function* commandOpen(conn, cmd, outputData, opt_upsertRes, opt_bIsRestore) {
   if (!bCreate) {
     needAddTask = yield* commandOpenFillOutput(conn, cmd, outputData, opt_bIsRestore);
   }
-  if (needAddTask) {
+  if (conn.encrypted) {
+    logger.debug("commandOpen encrypted %j: docId = %s", outputData, cmd.getDocId());
+    if (constants.FILE_STATUS_UPDATE_VERSION !== outputData.getStatus()) {
+      //don't send output data
+      outputData.setStatus(undefined);
+    }
+  } else if (needAddTask) {
     let updateMask = new taskResult.TaskResultData();
     updateMask.key = cmd.getDocId();
     updateMask.status = taskResult.FileStatus.None;
@@ -400,15 +406,6 @@ function* commandReopen(cmd) {
     res = false;
   }
   return res;
-}
-function* commandOpenEncrypted(cmd) {
-  //todo if None, NeedPassword
-  let updateTask = new taskResult.TaskResultData();
-  updateTask.key = cmd.getDocId();
-  updateTask.status = taskResult.FileStatus.Ok;
-  updateTask.statusInfo = constants.NO_ERROR;
-
-  yield taskResult.update(updateTask);
 }
 function* commandSave(cmd, outputData) {
   var completeParts = yield* saveParts(cmd, "Editor.bin");
@@ -663,13 +660,23 @@ function* commandSfcCallback(cmd, isSfcm, isEncrypted) {
       statusOk = docsCoServer.c_oAscServerStatus.MustSave;
       statusErr = docsCoServer.c_oAscServerStatus.Corrupted;
     }
+    let recoverTask = new taskResult.TaskResultData();
+    recoverTask.status = taskResult.FileStatus.Ok;
+    recoverTask.statusInfo = constants.NO_ERROR;
     let updateMask = new taskResult.TaskResultData();
     updateMask.key = docId;
     if (!isEncrypted) {
       updateMask.status = taskResult.FileStatus.SaveVersion;
       updateMask.statusInfo = cmd.getData();
     } else {
-      updateMask.status = taskResult.FileStatus.Ok;
+      let selectRes = yield taskResult.select(docId);
+      let row = selectRes.length > 0 ? selectRes[0] : null;
+      if (row) {
+        recoverTask.status = updateMask.status = row.status;
+        recoverTask.statusInfo = updateMask.statusInfo = row.status_info;
+      } else {
+        isError = true;
+      }
     }
     let updateIfTask = new taskResult.TaskResultData();
     updateIfTask.status = taskResult.FileStatus.UpdateVersion;
@@ -806,12 +813,12 @@ function* commandSfcCallback(cmd, isSfcm, isEncrypted) {
       storeForgotten = true;
     }
     if (undefined !== updateIfTask && !isSfcm) {
-      logger.debug('commandSfcCallback restore FileStatus.Ok status: docId = %s', docId);
-      updateIfTask.status = taskResult.FileStatus.Ok;
-      updateIfTask.statusInfo = constants.NO_ERROR;
+      logger.debug('commandSfcCallback restore %d status: docId = %s', recoverTask.status, docId);
+      updateIfTask.status = recoverTask.status;
+      updateIfTask.statusInfo = recoverTask.statusInfo;
       updateIfRes = yield taskResult.updateIf(updateIfTask, updateMask);
       if (!(updateIfRes.affectedRows > 0)) {
-        logger.debug('commandSfcCallback restore FileStatus.Ok status failed: docId = %s', docId);
+        logger.debug('commandSfcCallback restore %d status failed: docId = %s', recoverTask.status, docId);
       }
     }
     if (storeForgotten && (!isError || isErrorCorrupted)) {
@@ -910,11 +917,7 @@ exports.openDocument = function(conn, cmd, opt_upsertRes, opt_bIsRestore) {
       let res = true;
       switch (cmd.getCommand()) {
         case 'open':
-          if (!conn.encrypted) {
-            yield* commandOpen(conn, cmd, outputData, opt_upsertRes, opt_bIsRestore);
-          } else {
-            yield* commandOpenEncrypted(cmd);
-          }
+          yield* commandOpen(conn, cmd, outputData, opt_upsertRes, opt_bIsRestore);
           break;
         case 'reopen':
           res = yield* commandReopen(cmd);
@@ -1037,7 +1040,7 @@ exports.saveFile = function(req, res) {
       let strCmd = req.query['cmd'];
       let cmd = new commonDefines.InputCommand(JSON.parse(strCmd));
       docId = cmd.getDocId();
-      logger.debug('Start saveFile: docId = %s %s', docId);
+      logger.debug('Start saveFile: docId = %s', docId);
 
       if (cfgTokenEnableBrowser) {
         let isValidJwt = false;

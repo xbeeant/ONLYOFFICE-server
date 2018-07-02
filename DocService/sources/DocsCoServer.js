@@ -2053,6 +2053,8 @@ exports.install = function(server, callbackFunction) {
               // error version
               yield* sendFileErrorAuth(conn, data.sessionId, 'Update Version error');
               return;
+            } else if (taskResult.FileStatus.None === status && conn.encrypted) {
+              //ok
             } else {
               // Other error
               yield* sendFileErrorAuth(conn, data.sessionId, 'Other error');
