@@ -145,21 +145,21 @@ clean:
 	rm -rf $(CORE_FONTS) $(OUTPUT) $(GRUNT_FILES) 
 
 install:
-	sudo mkdir -pv /var/www/onlyoffice
-	if ! sudo id -u onlyoffice > /dev/null 2>&1; then sudo useradd -m -d /var/www/onlyoffice -r -U onlyoffice; fi
+	mkdir -pv /var/www/onlyoffice
+	if ! id -u onlyoffice > /dev/null 2>&1; then useradd -m -d /var/www/onlyoffice -r -U onlyoffice; fi
 
-	sudo mkdir -p /var/www/onlyoffice/documentserver
-	sudo mkdir -p /var/www/onlyoffice/documentserver/fonts
-	sudo mkdir -p /var/log/onlyoffice/documentserver
-	sudo mkdir -p /var/lib/onlyoffice/documentserver/App_Data
+	mkdir -p /var/www/onlyoffice/documentserver
+	mkdir -p /var/www/onlyoffice/documentserver/fonts
+	mkdir -p /var/log/onlyoffice/documentserver
+	mkdir -p /var/lib/onlyoffice/documentserver/App_Data
 	
-	sudo cp -fr -t /var/www/onlyoffice/documentserver build/* ../web-apps/deploy/*
-	sudo mkdir -p /etc/onlyoffice/documentserver
-	sudo mv /var/www/onlyoffice/documentserver/server/Common/config/* /etc/onlyoffice/documentserver
+	cp -fr -t /var/www/onlyoffice/documentserver build/* ../web-apps/deploy/*
+	mkdir -p /etc/onlyoffice/documentserver
+	mv /var/www/onlyoffice/documentserver/server/Common/config/* /etc/onlyoffice/documentserver
 	
-	sudo chown onlyoffice:onlyoffice -R /var/www/onlyoffice
-	sudo chown onlyoffice:onlyoffice -R /var/log/onlyoffice
-	sudo chown onlyoffice:onlyoffice -R /var/lib/onlyoffice
+	chown onlyoffice:onlyoffice -R /var/www/onlyoffice
+	chown onlyoffice:onlyoffice -R /var/log/onlyoffice
+	chown onlyoffice:onlyoffice -R /var/lib/onlyoffice
 
 	# Make symlinks for shared libs
 	find \
@@ -178,12 +178,12 @@ install:
 		--use-system="true"
 
 uninstall:
-	sudo userdel onlyoffice
+	userdel onlyoffice
 	
 	# Unlink installed shared libs
 	find /lib -type l | while IFS= read -r lnk; do if (readlink "$$lnk" | grep -q '^${DOCUMENT_ROOT}/server/FileConverter/bin/'); then rm "$$lnk"; fi; done
 
-	sudo rm -rf /var/www/onlyoffice/documentserver
-	sudo rm -rf /var/log/onlyoffice/documentserver
-	sudo rm -rf /var/lib/onlyoffice/documentserver	
-	sudo rm -rf /etc/onlyoffice/documentserver
+	rm -rf /var/www/onlyoffice/documentserver
+	rm -rf /var/log/onlyoffice/documentserver
+	rm -rf /var/lib/onlyoffice/documentserver	
+	rm -rf /etc/onlyoffice/documentserver
