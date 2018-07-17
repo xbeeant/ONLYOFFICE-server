@@ -333,6 +333,7 @@ exports.getStringFromFormat = function(format) {
       return 'csv';
 
     case constants.AVS_OFFICESTUDIO_FILE_CROSSPLATFORM_PDF:
+    case constants.AVS_OFFICESTUDIO_FILE_OTHER_PDFA:
       return 'pdf';
     case constants.AVS_OFFICESTUDIO_FILE_CROSSPLATFORM_SWF:
       return 'swf';
