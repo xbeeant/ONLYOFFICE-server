@@ -313,6 +313,7 @@ function* downloadFileFromStorage(id, strPath, dir) {
   }
 }
 function* processDownloadFromStorage(dataConvert, cmd, task, tempDirs) {
+  let res = constants.NO_ERROR;
   let needConcatFiles = false;
   if (task.getFromOrigin() || task.getFromSettings()) {
     dataConvert.fileFrom = path.join(tempDirs.source, 'origin.' + cmd.getFormat());
@@ -332,8 +333,9 @@ function* processDownloadFromStorage(dataConvert, cmd, task, tempDirs) {
     yield* concatFiles(tempDirs.source);
   }
   if (task.getFromChanges()) {
-    yield* processChanges(tempDirs, cmd);
+    res = yield* processChanges(tempDirs, cmd);
   }
+  return res;
 }
 
 function* concatFiles(source) {
@@ -362,6 +364,7 @@ function* concatFiles(source) {
 }
 
 function* processChanges(tempDirs, cmd) {
+  let res = constants.NO_ERROR;
   let changesDir = path.join(tempDirs.source, 'changes');
   fs.mkdirSync(changesDir);
   let indexFile = 0;
@@ -384,6 +387,12 @@ function* processChanges(tempDirs, cmd) {
     let changes = yield baseConnector.getChangesPromise(cmd.getDocId(), curIndexStart, curIndexEnd, forceSaveTime);
     for (let i = 0; i < changes.length; ++i) {
       let change = changes[i];
+      if (change.change_data.startsWith('ENCRYPTED;')) {
+        logger.warn('processChanges encrypted changes (id=%s)', cmd.getDocId());
+        //todo sql request instead?
+        res = constants.EDITOR_CHANGES;
+        break;
+      }
       if (null === changesAuthor || changesAuthor !== change.user_id_original) {
         if (null !== changesAuthor) {
           yield* streamEnd(streamObj, ']');
@@ -412,6 +421,7 @@ function* processChanges(tempDirs, cmd) {
   }
   cmd.setUserId(changesAuthor);
   fs.writeFileSync(path.join(tempDirs.result, 'changesHistory.json'), JSON.stringify(changesHistory), 'utf8');
+  return res;
 }
 
 function* streamCreate(docId, changesDir, indexFile, opt_options) {
@@ -582,7 +592,7 @@ function* ExecuteTask(task) {
       clientStatsD.timing('conv.downloadFileFromStorage', new Date() - curDate);
       curDate = new Date();
     }
-    yield* processDownloadFromStorage(dataConvert, cmd, task, tempDirs);
+    error = yield* processDownloadFromStorage(dataConvert, cmd, task, tempDirs);
   } else if (cmd.getForgotten()) {
     yield* downloadFileFromStorage(cmd.getDocId(), cmd.getForgotten(), tempDirs.source);
     logger.debug('downloadFileFromStorage complete(id=%s)', dataConvert.key);

@@ -182,7 +182,8 @@
 		}
 	},
 	"license" : {
-		"license_file": ""
+		"license_file": "",
+		"warning_limit_percents": "70"
 	},
 	"FileConverter": {
 		"converter": {

@@ -52,6 +52,8 @@ var cfgImageSize = configServer.get('limits_image_size');
 var cfgTypesUpload = configUtils.get('limits_image_types_upload');
 var cfgTokenEnableBrowser = config.get('services.CoAuthoring.token.enable.browser');
 
+const PATTERN_ENCRYPTED = 'ENCRYPTED;';
+
 exports.uploadTempFile = function(req, res) {
   return co(function* () {
     var docId = 'uploadTempFile';
@@ -85,7 +87,7 @@ exports.uploadTempFile = function(req, res) {
   });
 };
 function checkJwtUpload(docId, errorName, token){
-  var res = {err: true, docId: null, userid: null};
+  var res = {err: true, docId: null, userid: null, encrypted: null};
   var checkJwtRes = docsCoServer.checkJwt(docId, token, commonDefines.c_oAscSecretType.Session);
   if (checkJwtRes.decoded) {
     var doc = checkJwtRes.decoded.document;
@@ -93,6 +95,7 @@ function checkJwtUpload(docId, errorName, token){
     if (!edit.ds_view && !edit.ds_isCloseCoAuthoring) {
       res.err = false;
       res.docId = doc.key;
+      res.encrypted = doc.ds_encrypted;
       if (edit.user) {
         res.userid = edit.user.id;
       }
@@ -190,9 +193,11 @@ exports.uploadImageFile = function(req, res) {
   return co(function* () {
     var isError = true;
     var docId = 'null';
+    let output = {};
     try {
       docId = req.params.docid;
       var userid = req.params.userid;
+      let encrypted = false;
       logger.debug('Start uploadImageFile: docId = %s', docId);
 
       var isValidJwt = true;
@@ -201,6 +206,7 @@ exports.uploadImageFile = function(req, res) {
         if (!checkJwtRes.err) {
           docId = checkJwtRes.docId || docId;
           userid = checkJwtRes.userid || userid;
+          encrypted = checkJwtRes.encrypted;
         } else {
           isValidJwt = false;
         }
@@ -208,29 +214,45 @@ exports.uploadImageFile = function(req, res) {
 
       var index = parseInt(req.params.index);
       if (isValidJwt && docId && req.body && Buffer.isBuffer(req.body)) {
-        var buffer = req.body;
-        var format = formatChecker.getImageFormat(buffer);
-        var formatStr = formatChecker.getStringFromFormat(format);
-        var supportedFormats = cfgTypesUpload || 'jpg';
-        if (formatStr && -1 !== supportedFormats.indexOf(formatStr) && buffer.length <= cfgImageSize) {
-          //в начале пишется хеш, чтобы избежать ошибок при параллельном upload в совместном редактировании
-          var strImageName = utils.crc32(userid).toString(16) + '_image' + index;
-          var strPathRel = 'media/' + strImageName + '.' + formatStr;
-          var strPath = docId + '/' + strPathRel;
-          yield storageBase.putObject(strPath, buffer, buffer.length);
-          var output = {};
-          output[strPathRel] = yield storageBase.getSignedUrl(utils.getBaseUrlByRequest(req), strPath,
-                                                              commonDefines.c_oAscUrlTypes.Session);
-          res.send(JSON.stringify(output));
-          isError = false;
+        let buffer = req.body;
+        if (buffer.length <= cfgImageSize) {
+          var format = formatChecker.getImageFormat(buffer, undefined);
+          var formatStr = formatChecker.getStringFromFormat(format);
+          var supportedFormats = cfgTypesUpload || 'jpg';
+          let formatLimit = formatStr && -1 !== supportedFormats.indexOf(formatStr);
+          if (!formatLimit && encrypted && PATTERN_ENCRYPTED == buffer.toString('utf8', 0, PATTERN_ENCRYPTED.length)) {
+            formatLimit = true;
+            formatStr = buffer.toString('utf8', PATTERN_ENCRYPTED.length, buffer.indexOf(';', PATTERN_ENCRYPTED.length));
+          }
+          if (formatLimit) {
+            //в начале пишется хеш, чтобы избежать ошибок при параллельном upload в совместном редактировании
+            var strImageName = utils.crc32(userid).toString(16) + '_image' + index;
+            var strPathRel = 'media/' + strImageName + '.' + formatStr;
+            var strPath = docId + '/' + strPathRel;
+            yield storageBase.putObject(strPath, buffer, buffer.length);
+            output[strPathRel] = yield storageBase.getSignedUrl(utils.getBaseUrlByRequest(req), strPath,
+                                                                commonDefines.c_oAscUrlTypes.Session);
+            isError = false;
+          } else {
+            logger.debug('uploadImageFile format is not supported: docId = %s', docId);
+          }
+        } else {
+          logger.debug('uploadImageFile size limit exceeded: buffer.length = %d docId = %s', buffer.length, docId);
         }
       }
-      logger.debug('End uploadImageFile: isError = %d docId = %s', isError, docId);
     } catch (e) {
+      isError = true;
       logger.error('Error uploadImageFile: docId = %s\r\n%s', docId, e.stack);
     } finally {
-      if (isError) {
-        res.sendStatus(400);
+      try {
+        if (!isError) {
+          res.send(JSON.stringify(output));
+        } else {
+          res.sendStatus(400);
+        }
+        logger.debug('End uploadImageFile: isError = %s docId = %s', isError, docId);
+      } catch (e) {
+        logger.error('Error uploadImageFile: docId = %s\r\n%s', docId, e.stack);
       }
     }
   });
