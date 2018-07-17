@@ -143,6 +143,7 @@ const cfgForceSaveStep = ms(config.get('autoAssembly.step'));
 const cfgQueueRetentionPeriod = configCommon.get('queue.retentionPeriod');
 const cfgForgottenFiles = config.get('server.forgottenfiles');
 const cfgMaxRequestChanges = config.get('server.maxRequestChanges');
+const cfgWarningLimitPercents = configCommon.get('license.warning_limit_percents') / 100;
 
 const redisKeySaveLock = cfgRedisPrefix + constants.REDIS_KEY_SAVE_LOCK;
 const redisKeyPresenceHash = cfgRedisPrefix + constants.REDIS_KEY_PRESENCE_HASH;
@@ -829,7 +830,7 @@ function handleDeadLetter(data) {
  * @param callback
  * @param baseUrl
  */
-function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl, opt_userData) {
+function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl, opt_userData, opt_forceClose) {
   if (!callback) {
     var getRes = yield* getCallback(docId);
     if (getRes) {
@@ -847,7 +848,7 @@ function* sendStatusDocument(docId, bChangeBase, userAction, callback, baseUrl, 
   var participants = yield* getOriginalParticipantsId(docId);
   if (0 === participants.length) {
     var puckerIndex = yield* getChangesIndex(docId);
-    if (!(puckerIndex > 0)) {
+    if (!(puckerIndex > 0) || opt_forceClose) {
       status = c_oAscServerStatus.Closed;
     }
   }
@@ -999,10 +1000,10 @@ function* cleanDocumentOnExit(docId, deleteChanges) {
     yield storage.deletePath(cfgForgottenFiles + '/' + docId);
   }
 }
-function* cleanDocumentOnExitNoChanges(docId, opt_userId) {
+function* cleanDocumentOnExitNoChanges(docId, opt_userId, opt_forceClose) {
   var userAction = opt_userId ? new commonDefines.OutputAction(commonDefines.c_oAscUserAction.Out, opt_userId) : null;
   // Отправляем, что все ушли и нет изменений (чтобы выставить статус на сервере об окончании редактирования)
-  yield* sendStatusDocument(docId, c_oAscChangeBase.No, userAction);
+  yield* sendStatusDocument(docId, c_oAscChangeBase.No, userAction, undefined, undefined, undefined, opt_forceClose);
   //если пользователь зашел в документ, соединение порвалось, на сервере удалилась вся информация,
   //при восстановлении соединения userIndex сохранится и он совпадет с userIndex следующего пользователя
   yield* cleanDocumentOnExit(docId, false);
@@ -2052,6 +2053,8 @@ exports.install = function(server, callbackFunction) {
               // error version
               yield* sendFileErrorAuth(conn, data.sessionId, 'Update Version error');
               return;
+            } else if (taskResult.FileStatus.None === status && conn.encrypted) {
+              //ok
             } else {
               // Other error
               yield* sendFileErrorAuth(conn, data.sessionId, 'Other error');
@@ -2695,6 +2698,7 @@ exports.install = function(server, callbackFunction) {
 	}
 
 	function* _checkLicenseAuth(userId) {
+		let licenseWarningLimit = false;
 		const c_LR = constants.LICENSE_RESULT;
 		let licenseType = licenseInfo.type;
 		if (licenseInfo.usersCount) {
@@ -2712,6 +2716,7 @@ exports.install = function(server, callbackFunction) {
 				} else {
 					licenseType = -1 === execRes[0].indexOf(userId) ? c_LR.UsersCount : c_LR.Success;
 				}
+				licenseWarningLimit = licenseInfo.usersCount * cfgWarningLimitPercents <= execRes[0].length;
 			}
 		} else {
 			// Warning. Cluster version or if workers > 1 will work with increasing numbers.
@@ -2727,6 +2732,7 @@ exports.install = function(server, callbackFunction) {
 					return true !== el.isCloseCoAuthoring && el.user.view !== true;
 				})).length;
 				licenseType = (connectionsCount > editConnectionsCount) ? licenseType : c_LR.Connections;
+				licenseWarningLimit = connectionsCount * cfgWarningLimitPercents <= editConnectionsCount;
 			}
 			/*if (constants.PACKAGE_TYPE_OS === licenseInfo.packageType && c_LR.Error === licenseType) {
 			licenseType = c_LR.SuccessLimit;
@@ -2760,6 +2766,20 @@ exports.install = function(server, callbackFunction) {
 			}
 		  }*/
 		}
+
+		if (c_LR.UsersCount === licenseType) {
+		  if (!licenseInfo.hasLicense) {
+		    licenseType = c_LR.UsersCountOS;
+          }
+		  logger.error('License: User limit exceeded!!!');
+        } else if (c_LR.Connections === licenseType) {
+		  if (!licenseInfo.hasLicense) {
+		    licenseType = c_LR.ConnectionsOS;
+          }
+		  logger.error('License: Connection limit exceeded!!!');
+        } else if (licenseWarningLimit) {
+		  logger.warn('License: Warning limit exceeded!!!');
+        }
 		return licenseType;
 	}
 

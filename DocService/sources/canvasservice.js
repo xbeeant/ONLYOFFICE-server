@@ -139,7 +139,7 @@ function* getOutputData(cmd, outputData, key, status, statusInfo, optConn, optAd
         (!opt_bIsRestore && taskResult.FileStatus.UpdateVersion === status &&
         Date.now() - statusInfo * 60000 > cfgExpUpdateVersionStatus)) {
         if ((optConn && optConn.user.view) || optConn.isCloseCoAuthoring) {
-          outputData.setStatus('updateversion');
+          outputData.setStatus(constants.FILE_STATUS_UPDATE_VERSION);
         } else {
           if (taskResult.FileStatus.UpdateVersion === status) {
             logger.warn("UpdateVersion expired: docId = %s", docId);
@@ -155,11 +155,11 @@ function* getOutputData(cmd, outputData, key, status, statusInfo, optConn, optAd
           if (updateIfRes.affectedRows > 0) {
             outputData.setStatus('ok');
           } else {
-            outputData.setStatus('updateversion');
+            outputData.setStatus(constants.FILE_STATUS_UPDATE_VERSION);
           }
         }
       } else {
-        outputData.setStatus('updateversion');
+        outputData.setStatus(constants.FILE_STATUS_UPDATE_VERSION);
       }
       var command = cmd.getCommand();
       if ('open' != command && 'reopen' != command && !cmd.getOutputUrls()) {
@@ -317,7 +317,13 @@ function* commandOpen(conn, cmd, outputData, opt_upsertRes, opt_bIsRestore) {
   if (!bCreate) {
     needAddTask = yield* commandOpenFillOutput(conn, cmd, outputData, opt_bIsRestore);
   }
-  if (needAddTask) {
+  if (conn.encrypted) {
+    logger.debug("commandOpen encrypted %j: docId = %s", outputData, cmd.getDocId());
+    if (constants.FILE_STATUS_UPDATE_VERSION !== outputData.getStatus()) {
+      //don't send output data
+      outputData.setStatus(undefined);
+    }
+  } else if (needAddTask) {
     let updateMask = new taskResult.TaskResultData();
     updateMask.key = cmd.getDocId();
     updateMask.status = taskResult.FileStatus.None;
@@ -328,35 +334,35 @@ function* commandOpen(conn, cmd, outputData, opt_upsertRes, opt_bIsRestore) {
     task.statusInfo = constants.NO_ERROR;
 
     let updateIfRes = yield taskResult.updateIf(task, updateMask);
-    if (updateIfRes.affectedRows > 0) {
-      let forgottenId = cfgForgottenFiles + '/' + cmd.getDocId();
-      let forgotten = yield storage.listObjects(forgottenId);
-      //replace url with forgotten file because it absorbed all lost changes
-      if (forgotten.length > 0) {
-        logger.debug("commandOpen from forgotten: docId = %s", cmd.getDocId());
-        cmd.setUrl(undefined);
-        cmd.setForgotten(forgottenId);
+      if (updateIfRes.affectedRows > 0) {
+        let forgottenId = cfgForgottenFiles + '/' + cmd.getDocId();
+        let forgotten = yield storage.listObjects(forgottenId);
+        //replace url with forgotten file because it absorbed all lost changes
+        if (forgotten.length > 0) {
+          logger.debug("commandOpen from forgotten: docId = %s", cmd.getDocId());
+          cmd.setUrl(undefined);
+          cmd.setForgotten(forgottenId);
+        }
+        //add task
+        cmd.setOutputFormat(constants.AVS_OFFICESTUDIO_FILE_CANVAS);
+        cmd.setEmbeddedFonts(false);
+        var dataQueue = new commonDefines.TaskQueueData();
+        dataQueue.setCmd(cmd);
+        dataQueue.setToFile('Editor.bin');
+        var priority = constants.QUEUE_PRIORITY_HIGH;
+        var formatIn = formatChecker.getFormatFromString(cmd.getFormat());
+        //decrease pdf, djvu, xps convert priority becase long open time
+        if (constants.AVS_OFFICESTUDIO_FILE_CROSSPLATFORM_PDF === formatIn ||
+          constants.AVS_OFFICESTUDIO_FILE_CROSSPLATFORM_DJVU === formatIn ||
+          constants.AVS_OFFICESTUDIO_FILE_CROSSPLATFORM_XPS === formatIn) {
+          priority = constants.QUEUE_PRIORITY_LOW;
+        }
+        yield* docsCoServer.addTask(dataQueue, priority);
+      } else {
+        yield* commandOpenFillOutput(conn, cmd, outputData, opt_bIsRestore);
       }
-      //add task
-      cmd.setOutputFormat(constants.AVS_OFFICESTUDIO_FILE_CANVAS);
-      cmd.setEmbeddedFonts(false);
-      var dataQueue = new commonDefines.TaskQueueData();
-      dataQueue.setCmd(cmd);
-      dataQueue.setToFile('Editor.bin');
-      var priority = constants.QUEUE_PRIORITY_HIGH;
-      var formatIn = formatChecker.getFormatFromString(cmd.getFormat());
-      //decrease pdf, djvu, xps convert priority becase long open time
-      if (constants.AVS_OFFICESTUDIO_FILE_CROSSPLATFORM_PDF === formatIn ||
-        constants.AVS_OFFICESTUDIO_FILE_CROSSPLATFORM_DJVU === formatIn ||
-        constants.AVS_OFFICESTUDIO_FILE_CROSSPLATFORM_XPS === formatIn) {
-        priority = constants.QUEUE_PRIORITY_LOW;
-      }
-      yield* docsCoServer.addTask(dataQueue, priority);
-    } else {
-      yield* commandOpenFillOutput(conn, cmd, outputData, opt_bIsRestore);
     }
   }
-}
 function* commandOpenFillOutput(conn, cmd, outputData, opt_bIsRestore) {
   let needAddTask = false;
   let selectRes = yield taskResult.select(cmd.getDocId());
@@ -400,15 +406,6 @@ function* commandReopen(cmd) {
     res = false;
   }
   return res;
-}
-function* commandOpenEncrypted(cmd) {
-  //todo if None, NeedPassword
-  let updateTask = new taskResult.TaskResultData();
-  updateTask.key = cmd.getDocId();
-  updateTask.status = taskResult.FileStatus.Ok;
-  updateTask.statusInfo = constants.NO_ERROR;
-
-  yield taskResult.update(updateTask);
 }
 function* commandSave(cmd, outputData) {
   var completeParts = yield* saveParts(cmd, "Editor.bin");
@@ -640,191 +637,207 @@ function checkAuthorizationLength(authorization, data){
 function* commandSfcCallback(cmd, isSfcm, isEncrypted) {
   var docId = cmd.getDocId();
   logger.debug('Start commandSfcCallback: docId = %s', docId);
-  var saveKey = cmd.getSaveKey();
   var statusInfo = cmd.getStatusInfo();
-  var isError = constants.NO_ERROR != statusInfo;
-  var isErrorCorrupted = constants.CONVERT_CORRUPTED == statusInfo;
-  var savePathDoc = saveKey + '/' + cmd.getOutputPath();
-  var savePathChanges = saveKey + '/changes.zip';
-  var savePathHistory = saveKey + '/changesHistory.json';
-  var getRes = yield* docsCoServer.getCallback(docId);
-  var forceSave = cmd.getForceSave();
-  var forceSaveType = forceSave ? forceSave.getType() : commonDefines.c_oAscForceSaveTypes.Command;
-  var isSfcmSuccess = false;
-  let storeForgotten = false;
   let replyStr;
-  var statusOk;
-  var statusErr;
-  if (isSfcm) {
-    statusOk = docsCoServer.c_oAscServerStatus.MustSaveForce;
-    statusErr = docsCoServer.c_oAscServerStatus.CorruptedForce;
-  } else {
-    statusOk = docsCoServer.c_oAscServerStatus.MustSave;
-    statusErr = docsCoServer.c_oAscServerStatus.Corrupted;
-  }
-  let updateMask = new taskResult.TaskResultData();
-  updateMask.key = docId;
-  if (!isEncrypted) {
-    updateMask.status = taskResult.FileStatus.SaveVersion;
-    updateMask.statusInfo = cmd.getData();
-  } else {
-    updateMask.status = taskResult.FileStatus.Ok;
-  }
-  let updateIfTask = new taskResult.TaskResultData();
-  updateIfTask.status = taskResult.FileStatus.UpdateVersion;
-  updateIfTask.statusInfo = Math.floor(Date.now() / 60000);//minutes
-  let updateIfRes;
-  if (getRes) {
-    logger.debug('Callback commandSfcCallback: docId = %s callback = %s', docId, getRes.server.href);
-    var outputSfc = new commonDefines.OutputSfcData();
-    outputSfc.setKey(docId);
-    outputSfc.setEncrypted(isEncrypted);
-    var users = [];
-    let isOpenFromForgotten = false;
-    //setUserId - set from changes in convert
-    //setUserActionId - used in case of save without changes(forgotten files)
-    let userLastChangeId = cmd.getUserId() || cmd.getUserActionId();
-    if (userLastChangeId) {
-      users.push(userLastChangeId);
+  if (constants.EDITOR_CHANGES !== statusInfo || isSfcm) {
+    var saveKey = cmd.getSaveKey();
+    var isError = constants.NO_ERROR != statusInfo;
+    var isErrorCorrupted = constants.CONVERT_CORRUPTED == statusInfo;
+    var savePathDoc = saveKey + '/' + cmd.getOutputPath();
+    var savePathChanges = saveKey + '/changes.zip';
+    var savePathHistory = saveKey + '/changesHistory.json';
+    var getRes = yield* docsCoServer.getCallback(docId);
+    var forceSave = cmd.getForceSave();
+    var forceSaveType = forceSave ? forceSave.getType() : commonDefines.c_oAscForceSaveTypes.Command;
+    var isSfcmSuccess = false;
+    let storeForgotten = false;
+    var statusOk;
+    var statusErr;
+    if (isSfcm) {
+      statusOk = docsCoServer.c_oAscServerStatus.MustSaveForce;
+      statusErr = docsCoServer.c_oAscServerStatus.CorruptedForce;
+    } else {
+      statusOk = docsCoServer.c_oAscServerStatus.MustSave;
+      statusErr = docsCoServer.c_oAscServerStatus.Corrupted;
     }
-    outputSfc.setUsers(users);
-    if (!isSfcm) {
-      var actions = [];
-      //use UserId case UserActionId miss in gc convertion
-      var userActionId = cmd.getUserActionId() || cmd.getUserId();
-      if (userActionId) {
-        actions.push(new commonDefines.OutputAction(commonDefines.c_oAscUserAction.Out, userActionId));
-      }
-      outputSfc.setActions(actions);
-    }
-    outputSfc.setUserData(cmd.getUserData());
-    if (!isError || isErrorCorrupted) {
-      try {
-        let forgottenId = cfgForgottenFiles + '/' + docId;
-        let forgotten = yield storage.listObjects(forgottenId);
-        let isSendHistory = 0 === forgotten.length;
-        if (!isSendHistory) {
-          //check indicator file to determine if opening was from the forgotten file
-          var forgottenMarkPath = docId + '/' + cfgForgottenFilesName + '.txt';
-          var forgottenMark = yield storage.listObjects(forgottenMarkPath);
-          isOpenFromForgotten = 0 !== forgottenMark.length;
-          isSendHistory = !isOpenFromForgotten;
-          logger.debug('commandSfcCallback forgotten no empty: docId = %s isSendHistory = %s', docId, isSendHistory);
-        }
-        if (isSendHistory && !isEncrypted) {
-          //don't send history info because changes isn't from file in storage
-          var data = yield storage.getObject(savePathHistory);
-          outputSfc.setChangeHistory(JSON.parse(data.toString('utf-8')));
-          let changeUrl = yield storage.getSignedUrl(getRes.baseUrl, savePathChanges,
-                                                     commonDefines.c_oAscUrlTypes.Temporary);
-          outputSfc.setChangeUrl(changeUrl);
-        } else {
-          //for backward compatibility. remove this when Community is ready
-          outputSfc.setChangeHistory({});
-        }
-        let url = yield storage.getSignedUrl(getRes.baseUrl, savePathDoc, commonDefines.c_oAscUrlTypes.Temporary);
-        outputSfc.setUrl(url);
-      } catch (e) {
-        logger.error('Error commandSfcCallback: docId = %s\r\n%s', docId, e.stack);
-      }
-      if (outputSfc.getUrl() && outputSfc.getUsers().length > 0) {
-        outputSfc.setStatus(statusOk);
+    let recoverTask = new taskResult.TaskResultData();
+    recoverTask.status = taskResult.FileStatus.Ok;
+    recoverTask.statusInfo = constants.NO_ERROR;
+    let updateMask = new taskResult.TaskResultData();
+    updateMask.key = docId;
+    if (!isEncrypted) {
+      updateMask.status = taskResult.FileStatus.SaveVersion;
+      updateMask.statusInfo = cmd.getData();
+    } else {
+      let selectRes = yield taskResult.select(docId);
+      let row = selectRes.length > 0 ? selectRes[0] : null;
+      if (row) {
+        recoverTask.status = updateMask.status = row.status;
+        recoverTask.statusInfo = updateMask.statusInfo = row.status_info;
       } else {
         isError = true;
       }
     }
-    if (isError) {
-      outputSfc.setStatus(statusErr);
-    }
-    var uri = getRes.server.href;
-    if (isSfcm) {
-      var selectRes = yield taskResult.select(docId);
-      var row = selectRes.length > 0 ? selectRes[0] : null;
-      //send only if FileStatus.Ok to prevent forcesave after final save
-      if (row && row.status == taskResult.FileStatus.Ok) {
-        if (forceSave) {
-          outputSfc.setForceSaveType(forceSaveType);
-          outputSfc.setLastSave(new Date(forceSave.getTime()).toISOString());
+    let updateIfTask = new taskResult.TaskResultData();
+    updateIfTask.status = taskResult.FileStatus.UpdateVersion;
+    updateIfTask.statusInfo = Math.floor(Date.now() / 60000);//minutes
+    let updateIfRes;
+    if (getRes) {
+      logger.debug('Callback commandSfcCallback: docId = %s callback = %s', docId, getRes.server.href);
+      var outputSfc = new commonDefines.OutputSfcData();
+      outputSfc.setKey(docId);
+      outputSfc.setEncrypted(isEncrypted);
+      var users = [];
+      let isOpenFromForgotten = false;
+      //setUserId - set from changes in convert
+      //setUserActionId - used in case of save without changes(forgotten files)
+      let userLastChangeId = cmd.getUserId() || cmd.getUserActionId();
+      if (userLastChangeId) {
+        users.push(userLastChangeId);
+      }
+      outputSfc.setUsers(users);
+      if (!isSfcm) {
+        var actions = [];
+        //use UserId case UserActionId miss in gc convertion
+        var userActionId = cmd.getUserActionId() || cmd.getUserId();
+        if (userActionId) {
+          actions.push(new commonDefines.OutputAction(commonDefines.c_oAscUserAction.Out, userActionId));
         }
+        outputSfc.setActions(actions);
+      }
+      outputSfc.setUserData(cmd.getUserData());
+      if (!isError || isErrorCorrupted) {
         try {
-          replyStr = yield* docsCoServer.sendServerRequest(docId, uri, outputSfc, checkAuthorizationLength);
-          let replyData = docsCoServer.parseReplyData(docId, replyStr);
-          isSfcmSuccess = replyData && commonDefines.c_oAscServerCommandErrors.NoError == replyData.error;
-        } catch (err) {
-          logger.error('sendServerRequest error: docId = %s;url = %s;data = %j\r\n%s', docId, uri, outputSfc, err.stack);
+          let forgottenId = cfgForgottenFiles + '/' + docId;
+          let forgotten = yield storage.listObjects(forgottenId);
+          let isSendHistory = 0 === forgotten.length;
+          if (!isSendHistory) {
+            //check indicator file to determine if opening was from the forgotten file
+            var forgottenMarkPath = docId + '/' + cfgForgottenFilesName + '.txt';
+            var forgottenMark = yield storage.listObjects(forgottenMarkPath);
+            isOpenFromForgotten = 0 !== forgottenMark.length;
+            isSendHistory = !isOpenFromForgotten;
+            logger.debug('commandSfcCallback forgotten no empty: docId = %s isSendHistory = %s', docId, isSendHistory);
+          }
+          if (isSendHistory && !isEncrypted) {
+            //don't send history info because changes isn't from file in storage
+            var data = yield storage.getObject(savePathHistory);
+            outputSfc.setChangeHistory(JSON.parse(data.toString('utf-8')));
+            let changeUrl = yield storage.getSignedUrl(getRes.baseUrl, savePathChanges,
+                                                       commonDefines.c_oAscUrlTypes.Temporary);
+            outputSfc.setChangeUrl(changeUrl);
+          } else {
+            //for backward compatibility. remove this when Community is ready
+            outputSfc.setChangeHistory({});
+          }
+          let url = yield storage.getSignedUrl(getRes.baseUrl, savePathDoc, commonDefines.c_oAscUrlTypes.Temporary);
+          outputSfc.setUrl(url);
+        } catch (e) {
+          logger.error('Error commandSfcCallback: docId = %s\r\n%s', docId, e.stack);
+        }
+        if (outputSfc.getUrl() && outputSfc.getUsers().length > 0) {
+          outputSfc.setStatus(statusOk);
+        } else {
+          isError = true;
         }
       }
-    } else {
-      //if anybody in document stop save
-      let editorsCount = yield docsCoServer.getEditorsCountPromise(docId);
-      logger.debug('commandSfcCallback presence: docId = %s count = %d', docId, editorsCount);
-      if (0 === editorsCount || (isEncrypted && 1 === editorsCount)) {
-        let lastSave = yield* docsCoServer.getLastSave(docId);
-        let notModified = yield* docsCoServer.getLastForceSave(docId, lastSave);
-        var lastSaveDate = lastSave ? new Date(lastSave.time) : new Date();
-        outputSfc.setLastSave(lastSaveDate.toISOString());
-        outputSfc.setNotModified(notModified);
-        updateIfRes = yield taskResult.updateIf(updateIfTask, updateMask);
-        if (updateIfRes.affectedRows > 0) {
-          updateMask.status = updateIfTask.status;
-          updateMask.statusInfo = updateIfTask.statusInfo;
+      if (isError) {
+        outputSfc.setStatus(statusErr);
+      }
+      var uri = getRes.server.href;
+      if (isSfcm) {
+        var selectRes = yield taskResult.select(docId);
+        var row = selectRes.length > 0 ? selectRes[0] : null;
+        //send only if FileStatus.Ok to prevent forcesave after final save
+        if (row && row.status == taskResult.FileStatus.Ok) {
+          if (forceSave) {
+            outputSfc.setForceSaveType(forceSaveType);
+            outputSfc.setLastSave(new Date(forceSave.getTime()).toISOString());
+          }
           try {
             replyStr = yield* docsCoServer.sendServerRequest(docId, uri, outputSfc, checkAuthorizationLength);
+            let replyData = docsCoServer.parseReplyData(docId, replyStr);
+            isSfcmSuccess = replyData && commonDefines.c_oAscServerCommandErrors.NoError == replyData.error;
           } catch (err) {
             logger.error('sendServerRequest error: docId = %s;url = %s;data = %j\r\n%s', docId, uri, outputSfc, err.stack);
           }
-          var requestRes = false;
-          var replyData = docsCoServer.parseReplyData(docId, replyStr);
-          if (replyData && commonDefines.c_oAscServerCommandErrors.NoError == replyData.error) {
-            //в случае comunity server придет запрос в CommandService проверяем результат
-            var multi = redisClient.multi([
-              ['get', redisKeySaved + docId],
-              ['del', redisKeySaved + docId]
-            ]);
-            var execRes = yield utils.promiseRedis(multi, multi.exec);
-            var savedVal = execRes[0];
-            requestRes = (null == savedVal || '1' === savedVal);
-          }
-          if (requestRes) {
-            updateIfTask = undefined;
-            yield docsCoServer.cleanDocumentOnExitPromise(docId, true);
-            if (isOpenFromForgotten) {
-              //remove forgotten file in cache
-              yield cleanupCache(docId);
+        }
+      } else {
+        //if anybody in document stop save
+        let editorsCount = yield docsCoServer.getEditorsCountPromise(docId);
+        logger.debug('commandSfcCallback presence: docId = %s count = %d', docId, editorsCount);
+        if (0 === editorsCount || (isEncrypted && 1 === editorsCount)) {
+          let lastSave = yield* docsCoServer.getLastSave(docId);
+          let notModified = yield* docsCoServer.getLastForceSave(docId, lastSave);
+          var lastSaveDate = lastSave ? new Date(lastSave.time) : new Date();
+          outputSfc.setLastSave(lastSaveDate.toISOString());
+          outputSfc.setNotModified(notModified);
+          updateIfRes = yield taskResult.updateIf(updateIfTask, updateMask);
+          if (updateIfRes.affectedRows > 0) {
+            updateMask.status = updateIfTask.status;
+            updateMask.statusInfo = updateIfTask.statusInfo;
+            try {
+              replyStr = yield* docsCoServer.sendServerRequest(docId, uri, outputSfc, checkAuthorizationLength);
+            } catch (err) {
+              logger.error('sendServerRequest error: docId = %s;url = %s;data = %j\r\n%s', docId, uri, outputSfc, err.stack);
+            }
+            var requestRes = false;
+            var replyData = docsCoServer.parseReplyData(docId, replyStr);
+            if (replyData && commonDefines.c_oAscServerCommandErrors.NoError == replyData.error) {
+              //в случае comunity server придет запрос в CommandService проверяем результат
+              var multi = redisClient.multi([
+                                              ['get', redisKeySaved + docId],
+                                              ['del', redisKeySaved + docId]
+                                            ]);
+              var execRes = yield utils.promiseRedis(multi, multi.exec);
+              var savedVal = execRes[0];
+              requestRes = (null == savedVal || '1' === savedVal);
+            }
+            if (requestRes) {
+              updateIfTask = undefined;
+              yield docsCoServer.cleanDocumentOnExitPromise(docId, true);
+              if (isOpenFromForgotten) {
+                //remove forgotten file in cache
+                yield cleanupCache(docId);
+              }
+            } else {
+              storeForgotten = true;
             }
           } else {
-            storeForgotten = true;
+            updateIfTask = undefined;
           }
-        } else {
-          updateIfTask = undefined;
         }
       }
+    } else {
+      logger.warn('Empty Callback commandSfcCallback: docId = %s', docId);
+      storeForgotten = true;
+    }
+    if (undefined !== updateIfTask && !isSfcm) {
+      logger.debug('commandSfcCallback restore %d status: docId = %s', recoverTask.status, docId);
+      updateIfTask.status = recoverTask.status;
+      updateIfTask.statusInfo = recoverTask.statusInfo;
+      updateIfRes = yield taskResult.updateIf(updateIfTask, updateMask);
+      if (!(updateIfRes.affectedRows > 0)) {
+        logger.debug('commandSfcCallback restore %d status failed: docId = %s', recoverTask.status, docId);
+      }
+    }
+    if (storeForgotten && (!isError || isErrorCorrupted)) {
+      try {
+        logger.debug("storeForgotten: docId = %s", docId);
+        let forgottenName = cfgForgottenFilesName + pathModule.extname(cmd.getOutputPath());
+        yield storage.copyObject(savePathDoc, cfgForgottenFiles + '/' + docId + '/' + forgottenName);
+      } catch (err) {
+        logger.error('Error storeForgotten: docId = %s\r\n%s', docId, err.stack);
+      }
+    }
+    if (forceSave) {
+      yield* docsCoServer.setForceSave(docId, forceSave, cmd, isSfcmSuccess && !isError);
     }
   } else {
-    logger.warn('Empty Callback commandSfcCallback: docId = %s', docId);
-    storeForgotten = true;
+    logger.debug('commandSfcCallback cleanDocumentOnExitNoChangesPromise: docId = %s', docId);
+    yield docsCoServer.cleanDocumentOnExitNoChangesPromise(docId, undefined, true);
   }
-  if (undefined !== updateIfTask && !isSfcm) {
-    logger.debug('commandSfcCallback restore FileStatus.Ok status: docId = %s', docId);
-    updateIfTask.status = taskResult.FileStatus.Ok;
-    updateIfTask.statusInfo = constants.NO_ERROR;
-    updateIfRes = yield taskResult.updateIf(updateIfTask, updateMask);
-    if (!(updateIfRes.affectedRows > 0)) {
-      logger.debug('commandSfcCallback restore FileStatus.Ok status failed: docId = %s', docId);
-    }
-  }
-  if (storeForgotten && (!isError || isErrorCorrupted)) {
-    try {
-      logger.debug("storeForgotten: docId = %s", docId);
-      let forgottenName = cfgForgottenFilesName + pathModule.extname(cmd.getOutputPath());
-      yield storage.copyObject(savePathDoc, cfgForgottenFiles + '/' + docId + '/' + forgottenName);
-    } catch (err) {
-      logger.error('Error storeForgotten: docId = %s\r\n%s', docId, err.stack);
-    }
-  }
-  if (forceSave) {
-    yield* docsCoServer.setForceSave(docId, forceSave, cmd, isSfcmSuccess && !isError);
-  }
+
   if ((docsCoServer.getIsShutdown() && !isSfcm) || cmd.getRedisKey()) {
     let keyRedis = cmd.getRedisKey() ? cmd.getRedisKey() : redisKeyShutdown;
     yield utils.promiseRedis(redisClient, redisClient.srem, keyRedis, docId);
@@ -904,11 +917,7 @@ exports.openDocument = function(conn, cmd, opt_upsertRes, opt_bIsRestore) {
       let res = true;
       switch (cmd.getCommand()) {
         case 'open':
-          if (!conn.encrypted) {
-            yield* commandOpen(conn, cmd, outputData, opt_upsertRes, opt_bIsRestore);
-          } else {
-            yield* commandOpenEncrypted(cmd);
-          }
+          yield* commandOpen(conn, cmd, outputData, opt_upsertRes, opt_bIsRestore);
           break;
         case 'reopen':
           res = yield* commandReopen(cmd);
@@ -1031,7 +1040,7 @@ exports.saveFile = function(req, res) {
       let strCmd = req.query['cmd'];
       let cmd = new commonDefines.InputCommand(JSON.parse(strCmd));
       docId = cmd.getDocId();
-      logger.debug('Start saveFile: docId = %s %s', docId);
+      logger.debug('Start saveFile: docId = %s', docId);
 
       if (cfgTokenEnableBrowser) {
         let isValidJwt = false;

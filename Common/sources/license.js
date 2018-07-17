@@ -63,12 +63,13 @@ exports.readLicense = function*() {
 		branding: false,
 		connections: constants.LICENSE_CONNECTIONS,
 		usersCount: 0,
-		usersExpire: constants.LICENSE_EXPIRE_USERS_ONE_DAY
+		usersExpire: constants.LICENSE_EXPIRE_USERS_ONE_DAY,
+		hasLicense: false
 	};
 	let checkFile = false;
 	try {
 		const oFile = fs.readFileSync(configL.get('license_file')).toString();
-		checkFile = true;
+		res.hasLicense = checkFile = true;
 		const oLicense = JSON.parse(oFile);
 		const sign = oLicense['signature'];
 		delete oLicense['signature'];
@@ -127,7 +128,7 @@ exports.readLicense = function*() {
 	}
 	if (res.type === c_LR.Expired || res.type === c_LR.ExpiredTrial) {
 		res.count = 1;
-		logger.error('License Expired!!!');
+		logger.error('License: License Expired!!!');
 	}
 
 	if (checkFile) {
