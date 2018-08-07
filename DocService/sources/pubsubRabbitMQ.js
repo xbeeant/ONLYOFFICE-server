@@ -43,7 +43,7 @@ function init(pubsub, callback) {
   return co(function* () {
     var e = null;
     try {
-      var conn = yield rabbitMQCore.connetPromise(function() {
+      var conn = yield rabbitMQCore.connetPromise(true, function() {
         clear(pubsub);
         if (!pubsub.isClose) {
           init(pubsub, null);

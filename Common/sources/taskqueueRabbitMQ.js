@@ -50,7 +50,7 @@ function init(taskqueue, isAddTask, isAddResponse, isAddTaskReceive, isAddRespon
   return co(function* () {
     var e = null;
     try {
-      var conn = yield rabbitMQCore.connetPromise(function() {
+      var conn = yield rabbitMQCore.connetPromise(true, function() {
         clear(taskqueue);
         if (!taskqueue.isClose) {
           init(taskqueue, isAddTask, isAddResponse, isAddTaskReceive, isAddResponseReceive, null);

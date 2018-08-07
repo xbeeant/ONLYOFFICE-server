@@ -3061,10 +3061,14 @@ exports.healthCheck = function(req, res) {
       //database
       promises.push(sqlBase.healthCheck());
       //redis
-      promises.push(utils.promiseRedis(redisClient, redisClient.ping));
-      yield Promise.all(promises);
+      if (redisClient.connected) {
+        promises.push(utils.promiseRedis(redisClient, redisClient.ping));
+        yield Promise.all(promises);
+      } else {
+        throw new Error('redis disconnected');
+      }
       //rabbitMQ
-      let conn = yield rabbitMQCore.connetPromise(function() {});
+      let conn = yield rabbitMQCore.connetPromise(false, function() {});
       yield rabbitMQCore.closePromise(conn);
       //storage
       const clusterId = cluster.isWorker ? cluster.worker.id : '';
