@@ -198,6 +198,7 @@
 			"docbuilderPath": "null",
 			"docbuilderAllFontsPath": "null",
 			"args": "",
+			"spawnOptions": {},
 			"errorfiles": "",
 			"streamWriterBufferSize": 8388608,
 			"maxRedeliveredCount": 2,

@@ -61,6 +61,10 @@ var cfgX2tPath = configConverter.get('x2tPath');
 var cfgDocbuilderPath = configConverter.get('docbuilderPath');
 var cfgDocbuilderAllFontsPath = configConverter.get('docbuilderAllFontsPath');
 var cfgArgs = configConverter.get('args');
+var cfgSpawnOptions = configConverter.get('spawnOptions');
+if (cfgSpawnOptions.env) {
+  Object.assign(cfgSpawnOptions.env, process.env);
+}
 var cfgErrorFiles = configConverter.get('errorfiles');
 var cfgInputLimits = configConverter.get('inputLimits');
 const cfgStreamWriterBufferSize = configConverter.get('streamWriterBufferSize');
@@ -647,7 +651,7 @@ function* ExecuteTask(task) {
       }
       let timeoutId;
       try {
-        let spawnAsyncPromise = spawnAsync(processPath, childArgs);
+        let spawnAsyncPromise = spawnAsync(processPath, childArgs, cfgSpawnOptions);
         childRes = spawnAsyncPromise.child;
         let waitMS = task.getVisibilityTimeout() * 1000 - (new Date().getTime() - getTaskTime.getTime());
         timeoutId = setTimeout(function() {
