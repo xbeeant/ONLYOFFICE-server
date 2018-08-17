@@ -1016,6 +1016,7 @@ exports.downloadAs = function(req, res) {
           break;
       }
       var strRes = JSON.stringify(outputData);
+      res.setHeader('Content-Type', 'application/json');
       res.send(strRes);
       logger.debug('End downloadAs: docId = %s %s', docId, strRes);
       if(clientStatsD) {

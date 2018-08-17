@@ -174,6 +174,7 @@ exports.uploadImageFileOld = function(req, res) {
             output += '", "*"); }</script></head><body onload="load()"></body></html>';
 
             //res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Content-Type', 'text/html');
             res.send(output);
             logger.debug('End uploadImageFileOld: docId = %s %s', docId, output);
           }
@@ -246,6 +247,7 @@ exports.uploadImageFile = function(req, res) {
     } finally {
       try {
         if (!isError) {
+          res.setHeader('Content-Type', 'application/json');
           res.send(JSON.stringify(output));
         } else {
           res.sendStatus(400);

@@ -3088,6 +3088,7 @@ exports.healthCheck = function(req, res) {
     } catch (err) {
       logger.error('healthCheck error\r\n%s', err.stack);
     } finally {
+      res.setHeader('Content-Type', 'text/plain');
       res.send(output.toString());
     }
   });
