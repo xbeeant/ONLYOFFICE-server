@@ -26,6 +26,7 @@ else
     ifeq ($(UNAME_S),Linux)
         PLATFORM := linux
         SHARED_EXT := .so*
+        LIB_PREFIX := lib
     endif
     UNAME_M := $(shell uname -m)
     ifeq ($(UNAME_M),x86_64)
@@ -39,7 +40,16 @@ endif
 TARGET := $(PLATFORM)_$(ARCHITECTURE)
 
 FILE_CONVERTER = $(OUTPUT)/FileConverter/bin
-FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/*$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)DjVuFile$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)docrenderer$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)graphics$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)HtmlFileFile$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)HtmlRenderer$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)kernel$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)PdfReader$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)PdfWriter$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)UnicodeConverter$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)XpsFile$(SHARED_EXT)
 
 ifeq ($(PLATFORM),linux)
 FILE_CONVERTER_FILES += ../core/Common/3dParty/icu/$(TARGET)/build/libicudata$(SHARED_EXT)
