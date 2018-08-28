@@ -41,9 +41,9 @@ TARGET := $(PLATFORM)_$(ARCHITECTURE)
 
 FILE_CONVERTER = $(OUTPUT)/FileConverter/bin
 FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)DjVuFile$(SHARED_EXT)
-FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)docrenderer$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)doctrenderer$(SHARED_EXT)
 FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)graphics$(SHARED_EXT)
-FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)HtmlFileFile$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)HtmlFile$(SHARED_EXT)
 FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)HtmlRenderer$(SHARED_EXT)
 FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)kernel$(SHARED_EXT)
 FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)PdfReader$(SHARED_EXT)
