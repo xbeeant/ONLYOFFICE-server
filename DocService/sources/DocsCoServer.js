@@ -619,13 +619,12 @@ function* sendServerRequest(docId, uri, dataObject, opt_checkAuthorization) {
   let auth;
   if (cfgTokenEnableRequestOutbox) {
     auth = utils.fillJwtForRequest(dataObject);
-    if (opt_checkAuthorization && !opt_checkAuthorization(auth, dataObject)) {
-      auth = utils.fillJwtForRequest(dataObject);
-      logger.warn('authorization reduced to: docId = %s; length=%d', docId, auth.length);
-    }
     if (cfgTokenOutboxInBody) {
       dataObject = {token: auth};
       auth = undefined;
+    } else if (opt_checkAuthorization && !opt_checkAuthorization(auth, dataObject)) {
+      auth = utils.fillJwtForRequest(dataObject);
+      logger.warn('authorization reduced to: docId = %s; length=%d', docId, auth.length);
     }
   }
   let res = yield utils.postRequestPromise(uri, JSON.stringify(dataObject), cfgCallbackRequestTimeout * 1000, auth);
