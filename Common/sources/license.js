@@ -91,7 +91,7 @@ exports.readLicense = function*() {
 			}
 
 			res.light = (true === oLicense['light'] || 'true' === oLicense['light']); // Someone who likes to put json string instead of bool
-			res.branding = (true === oLicense['branding'] || 'true' === oLicense['branding']); // Someone who likes to put json string instead of bool
+			res.branding = getBranding(oLicense['branding']);
 			if (oLicense.hasOwnProperty('connections')) {
 				res.connections = oLicense['connections'] >> 0;
 			}
@@ -142,6 +142,10 @@ exports.packageType = oPackageType;
 function getLicenseMode(mode) {
 	const c_LM = constants.LICENSE_MODE;
 	return 'developer' === mode ? c_LM.Developer : ('trial' === mode ? c_LM.Trial : c_LM.None);
+}
+function getBranding(mode) {
+	// Someone who likes to put json string instead of bool
+	return ((typeof mode === 'string') ? 'true' === mode : (mode || 0)) - 0;
 }
 
 function* _getFileState() {
