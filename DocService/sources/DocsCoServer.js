@@ -2382,7 +2382,7 @@ exports.install = function(server, callbackFunction) {
   // Для Excel необходимо делать пересчет lock-ов при добавлении/удалении строк/столбцов
   function* saveChanges(conn, data) {
     const docId = conn.docId, userId = conn.user.id;
-    logger.info("Start saveChanges docid: %s", docId);
+    logger.info("Start saveChanges docid: %s; reSave: %s", docId, data.reSave);
 
     let puckerIndex = yield* getChangesIndex(docId);
 
