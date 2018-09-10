@@ -163,7 +163,7 @@ install:
 	mkdir -p /var/log/onlyoffice/documentserver
 	mkdir -p /var/lib/onlyoffice/documentserver/App_Data
 	
-	cp -fr -t /var/www/onlyoffice/documentserver build/* ../web-apps/deploy/*
+	cp -fr -t /var/www/onlyoffice/documentserver build/* ../web-apps-pro/deploy/*
 	mkdir -p /etc/onlyoffice/documentserver
 	mv /var/www/onlyoffice/documentserver/server/Common/config/* /etc/onlyoffice/documentserver
 	
