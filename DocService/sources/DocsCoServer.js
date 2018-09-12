@@ -159,6 +159,7 @@ const redisKeyForceSaveTimer = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_T
 const redisKeyForceSaveTimerLock = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_TIMER_LOCK;
 const redisKeySaved = cfgRedisPrefix + constants.REDIS_KEY_SAVED;
 const redisKeyPresenceUniqueUsers = cfgRedisPrefix + constants.REDIS_KEY_PRESENCE_UNIQUE_USERS;
+const redisKeyEditorConnections = cfgRedisPrefix + constants.REDIS_KEY_EDITOR_CONNECTIONS;
 
 const EditorTypes = {
   document : 0,
@@ -180,6 +181,10 @@ const MIN_SAVE_EXPIRATION = 60000;
 const FORCE_SAVE_EXPIRATION = Math.min(Math.max(cfgForceSaveInterval, MIN_SAVE_EXPIRATION),
                                        cfgQueueRetentionPeriod * 1000);
 const HEALTH_CHECK_KEY_MAX = 10000;
+
+const PRECISION = [{name: 'hour', val: ms('1h')}, {name: 'day', val: ms('1d')}, {name: 'week', val: ms('1w')},
+  {name: 'month', val: ms('31d')},
+];
 
 function getIsShutdown() {
   return shutdownFlag;
@@ -2952,6 +2957,19 @@ exports.install = function(server, callbackFunction) {
       }
     });
   }
+
+  function* collectStats(countEdit, countView) {
+    let now = Date.now();
+    var multi = redisClient.multi(
+      [
+        ['lpop', redisKeyEditorConnections],
+        ['rpush', redisKeyEditorConnections, JSON.stringify({time: now, edit: countEdit, view: countView})]
+      ]);
+    let multiRes = yield utils.promiseRedis(multi, multi.exec);
+    if (multiRes.length > 1 && JSON.parse(multiRes[0]).time > now - PRECISION[PRECISION.length - 1].val) {
+      yield utils.promiseRedis(redisClient, redisClient.lpush, redisKeyEditorConnections, multiRes[0]);
+    }
+  }
   function expireDoc() {
     var cronJob = this;
     return co(function* () {
@@ -3006,6 +3024,7 @@ exports.install = function(server, callbackFunction) {
         idSet.forEach(function(value1, value2, set) {
           commands.push(['zadd', redisKeyDocuments, expireAt, value1]);
         });
+        yield* collectStats(countEdit, countView);
         if (commands.length > 0) {
           var multi = redisClient.multi(commands);
           yield utils.promiseRedis(multi, multi.exec);
@@ -3090,6 +3109,73 @@ exports.healthCheck = function(req, res) {
     } finally {
       res.setHeader('Content-Type', 'text/plain');
       res.send(output.toString());
+    }
+  });
+};
+exports.licenseInfo = function(req, res) {
+  return co(function*() {
+    let isError = false;
+    let output = {connectionsStat: {}};
+    Object.assign(output, licenseInfo);
+    try {
+      logger.debug('licenseInfo start');
+      var precisionSum = {};
+      for (let i = 0; i < PRECISION.length; ++i) {
+        precisionSum[PRECISION[i].name] = {
+          edit: {min: Number.MAX_VALUE, sum: 0, count: 0, max: 0},
+          view: {min: Number.MAX_VALUE, sum: 0, count: 0, max: 0}
+        };
+        output.connectionsStat[PRECISION[i].name] = {
+          edit: {min: 0, avr: 0, max: 0},
+          view: {min: 0, avr: 0, max: 0}
+        };
+      }
+      var redisRes = yield utils.promiseRedis(redisClient, redisClient.lrange, redisKeyEditorConnections, 0, -1);
+      const now = Date.now();
+      var precisionIndex = 0;
+      for (let i = redisRes.length - 1; i >= 1; i -= 2) {
+        for (let j = precisionIndex; j < PRECISION.length; ++j) {
+          let elem = JSON.parse(redisRes[i]);
+          if (now - elem.time < PRECISION[j].val) {
+            let precision = precisionSum[PRECISION[j].name];
+            precision.edit.min = Math.min(precision.edit.min, elem.edit);
+            precision.edit.max = Math.max(precision.edit.max, elem.edit);
+            precision.edit.sum += elem.edit;
+            precision.edit.count++;
+            precision.view.min = Math.min(precision.view.min, elem.view);
+            precision.view.max = Math.max(precision.view.max, elem.view);
+            precision.view.sum += elem.view;
+            precision.view.count++;
+          } else {
+            precisionIndex = j + 1;
+          }
+        }
+      }
+      for (let i in precisionSum) {
+        let precision = precisionSum[i];
+        let precisionOut = output.connectionsStat[i];
+        if (precision.edit.count > 0) {
+          precisionOut.edit.avr = Math.round(precision.edit.sum / precision.edit.count);
+          precisionOut.edit.min = precision.edit.min;
+          precisionOut.edit.max = precision.edit.max;
+        }
+        if (precision.view.count > 0) {
+          precisionOut.view.avr = Math.round(precision.view.sum / precision.view.count);
+          precisionOut.view.min = precision.view.min;
+          precisionOut.view.max = precision.view.max;
+        }
+      }
+      logger.debug('licenseInfo end');
+    } catch (err) {
+      isError = true;
+      logger.error('licenseInfo error\r\n%s', err.stack);
+    } finally {
+      if (!isError) {
+        res.setHeader('Content-Type', 'application/json');
+        res.send(JSON.stringify(output));
+      } else {
+        res.sendStatus(400);
+      }
     }
   });
 };
