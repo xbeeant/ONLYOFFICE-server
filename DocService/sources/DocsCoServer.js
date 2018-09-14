@@ -3122,7 +3122,7 @@ exports.licenseInfo = function(req, res) {
       var precisionSum = {};
       for (let i = 0; i < PRECISION.length; ++i) {
         precisionSum[PRECISION[i].name] = {
-          edit: {min: Number.MAX_VALUE, sum: 0, count: 0, max: 0},
+          edit: {min: Number.MAX_VALUE, sum: 0, count: 0, max: 0, time: null, period: PRECISION[i].val},
           view: {min: Number.MAX_VALUE, sum: 0, count: 0, max: 0}
         };
         output.connectionsStat[PRECISION[i].name] = {
@@ -3142,6 +3142,7 @@ exports.licenseInfo = function(req, res) {
             precision.edit.max = Math.max(precision.edit.max, elem.edit);
             precision.edit.sum += elem.edit;
             precision.edit.count++;
+			precision.edit.time = elem.time;
             precision.view.min = Math.min(precision.view.min, elem.view);
             precision.view.max = Math.max(precision.view.max, elem.view);
             precision.view.sum += elem.view;
@@ -3154,13 +3155,15 @@ exports.licenseInfo = function(req, res) {
       for (let i in precisionSum) {
         let precision = precisionSum[i];
         let precisionOut = output.connectionsStat[i];
+		//scale compensates for the lack of points at server start
+		let scale = (now - precision.edit.time) / precision.edit.period;
         if (precision.edit.count > 0) {
-          precisionOut.edit.avr = Math.round(precision.edit.sum / precision.edit.count);
+          precisionOut.edit.avr = Math.round((precision.edit.sum / precision.edit.count) * scale);
           precisionOut.edit.min = precision.edit.min;
           precisionOut.edit.max = precision.edit.max;
         }
         if (precision.view.count > 0) {
-          precisionOut.view.avr = Math.round(precision.view.sum / precision.view.count);
+          precisionOut.view.avr = Math.round((precision.view.sum / precision.view.count) * scale);
           precisionOut.view.min = precision.view.min;
           precisionOut.view.max = precision.view.max;
         }
