@@ -206,6 +206,7 @@ exports.REDIS_KEY_SHUTDOWN = 'shutdown';
 exports.REDIS_KEY_COLLECT_LOST = 'collectlost';
 exports.REDIS_KEY_LICENSE = 'license';
 exports.REDIS_KEY_LICENSE_T = 'licenseT';
+exports.REDIS_KEY_EDITOR_CONNECTIONS = 'editorconnections';
 
 exports.SHUTDOWN_CODE = 4001;
 exports.SHUTDOWN_REASON = 'server shutdown';
