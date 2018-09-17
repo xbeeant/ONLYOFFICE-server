@@ -203,7 +203,7 @@
         };
         function fillInfo(licenseInfo, serverInfo) {
             var elem = document.getElementById('build-type');
-            elem.innerText = (licenseInfo.packageType == 0) ? 'Opensource' : ((licenseInfo.packageType == 1) ? 'Integration' : 'Developer');
+            elem.innerText = (licenseInfo.packageType == 0) ? 'Open source' : ((licenseInfo.packageType == 1) ? 'Integration' : 'Developer');
 
             elem = document.getElementById('build-date');
             var builddate = new Date(licenseInfo.buildDate);
