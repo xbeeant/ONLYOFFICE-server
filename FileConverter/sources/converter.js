@@ -61,6 +61,10 @@ var cfgX2tPath = configConverter.get('x2tPath');
 var cfgDocbuilderPath = configConverter.get('docbuilderPath');
 var cfgDocbuilderAllFontsPath = configConverter.get('docbuilderAllFontsPath');
 var cfgArgs = configConverter.get('args');
+var cfgSpawnOptions = configConverter.get('spawnOptions');
+if (cfgSpawnOptions.env) {
+  Object.assign(cfgSpawnOptions.env, process.env);
+}
 var cfgErrorFiles = configConverter.get('errorfiles');
 var cfgInputLimits = configConverter.get('inputLimits');
 const cfgStreamWriterBufferSize = configConverter.get('streamWriterBufferSize');
@@ -89,7 +93,12 @@ function TaskQueueDataConvert(task) {
   this.key = cmd.savekey ? cmd.savekey : cmd.id;
   this.fileFrom = null;
   this.fileTo = null;
-  this.formatTo = cmd.outputformat;
+  if(constants.AVS_OFFICESTUDIO_FILE_OTHER_PDFA !== cmd.outputformat){
+    this.formatTo = cmd.outputformat;
+  } else {
+    this.formatTo = constants.AVS_OFFICESTUDIO_FILE_CROSSPLATFORM_PDF;
+    this.isPDFA = true;
+  }
   this.csvTxtEncoding = cmd.getCodepage();
   this.csvDelimiter = cmd.getDelimiter();
   this.csvDelimiterChar = cmd.getDelimiterChar();
@@ -119,6 +128,7 @@ TaskQueueDataConvert.prototype = {
     xml += this.serializeXmlProp('m_sFileFrom', this.fileFrom);
     xml += this.serializeXmlProp('m_sFileTo', this.fileTo);
     xml += this.serializeXmlProp('m_nFormatTo', this.formatTo);
+    xml += this.serializeXmlProp('m_bIsPDFA', this.isPDFA);
     xml += this.serializeXmlProp('m_nCsvTxtEncoding', this.csvTxtEncoding);
     xml += this.serializeXmlProp('m_nCsvDelimiter', this.csvDelimiter);
     xml += this.serializeXmlProp('m_nCsvDelimiterChar', this.csvDelimiterChar);
@@ -641,7 +651,7 @@ function* ExecuteTask(task) {
       }
       let timeoutId;
       try {
-        let spawnAsyncPromise = spawnAsync(processPath, childArgs);
+        let spawnAsyncPromise = spawnAsync(processPath, childArgs, cfgSpawnOptions);
         childRes = spawnAsyncPromise.child;
         let waitMS = task.getVisibilityTimeout() * 1000 - (new Date().getTime() - getTaskTime.getTime());
         timeoutId = setTimeout(function() {

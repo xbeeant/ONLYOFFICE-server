@@ -53,7 +53,6 @@ var pubsubRedis = require('./pubsubRedis');
 
 
 var cfgTypesUpload = config_utils.get('limits_image_types_upload');
-var cfgTypesCopy = config_utils.get('limits_image_types_copy');
 var cfgImageSize = config_server.get('limits_image_size');
 var cfgImageDownloadTimeout = config_server.get('limits_image_download_timeout');
 var cfgRedisPrefix = config.get('services.CoAuthoring.redis.prefix');
@@ -262,7 +261,7 @@ function getUpdateResponse(cmd) {
     updateTask.status = taskResult.FileStatus.NeedParams;
   } else if (constants.CONVERT_DRM == statusInfo) {
     if (cfgOpenProtectedFile) {
-      updateTask.status = taskResult.FileStatus.NeedPassword;
+    updateTask.status = taskResult.FileStatus.NeedPassword;
     } else {
       updateTask.status = taskResult.FileStatus.Err;
     }
@@ -380,31 +379,31 @@ function* commandReopen(cmd) {
   let res = true;
   let isPassword = undefined !== cmd.getPassword();
   if (!isPassword || cfgOpenProtectedFile) {
-    let updateMask = new taskResult.TaskResultData();
-    updateMask.key = cmd.getDocId();
+  let updateMask = new taskResult.TaskResultData();
+  updateMask.key = cmd.getDocId();
     updateMask.status = isPassword ? taskResult.FileStatus.NeedPassword : taskResult.FileStatus.NeedParams;
 
-    var task = new taskResult.TaskResultData();
-    task.key = cmd.getDocId();
-    task.status = taskResult.FileStatus.WaitQueue;
-    task.statusInfo = constants.NO_ERROR;
+  var task = new taskResult.TaskResultData();
+  task.key = cmd.getDocId();
+  task.status = taskResult.FileStatus.WaitQueue;
+  task.statusInfo = constants.NO_ERROR;
 
-    var upsertRes = yield taskResult.updateIf(task, updateMask);
-    if (upsertRes.affectedRows > 0) {
-      //add task
-      cmd.setUrl(null);//url may expire
-      cmd.setSaveKey(cmd.getDocId());
-      cmd.setOutputFormat(constants.AVS_OFFICESTUDIO_FILE_CANVAS);
-      cmd.setEmbeddedFonts(false);
-      var dataQueue = new commonDefines.TaskQueueData();
-      dataQueue.setCmd(cmd);
-      dataQueue.setToFile('Editor.bin');
-      dataQueue.setFromSettings(true);
-      yield* docsCoServer.addTask(dataQueue, constants.QUEUE_PRIORITY_HIGH);
-    }
+  var upsertRes = yield taskResult.updateIf(task, updateMask);
+  if (upsertRes.affectedRows > 0) {
+    //add task
+    cmd.setUrl(null);//url may expire
+    cmd.setSaveKey(cmd.getDocId());
+    cmd.setOutputFormat(constants.AVS_OFFICESTUDIO_FILE_CANVAS);
+    cmd.setEmbeddedFonts(false);
+    var dataQueue = new commonDefines.TaskQueueData();
+    dataQueue.setCmd(cmd);
+    dataQueue.setToFile('Editor.bin');
+    dataQueue.setFromSettings(true);
+    yield* docsCoServer.addTask(dataQueue, constants.QUEUE_PRIORITY_HIGH);
+  }
   } else {
     res = false;
-  }
+}
   return res;
 }
 function* commandSave(cmd, outputData) {
@@ -475,20 +474,14 @@ function isDisplayedImage(strName) {
   return res;
 }
 function* commandImgurls(conn, cmd, outputData) {
-  var supportedFormats;
+  var supportedFormats = cfgTypesUpload || 'jpg';
   var urls;
   var docId = cmd.getDocId();
   var errorCode = constants.NO_ERROR;
   var outputUrls = [];
   var isImgUrl = 'imgurl' == cmd.getCommand();
   if (!conn.user.view && !conn.isCloseCoAuthoring) {
-    if (isImgUrl) {
-      urls = [cmd.getData()];
-      supportedFormats = cfgTypesUpload || 'jpg';
-    } else {
-      urls = cmd.getData();
-      supportedFormats = cfgTypesCopy || 'jpg';
-    }
+    urls = isImgUrl ? [cmd.getData()] : cmd.getData();
     //todo Promise.all()
     var displayedImageMap = {};//to make one imageIndex for ole object urls
     var imageCount = 0;
@@ -523,6 +516,10 @@ function* commandImgurls(conn, cmd, outputData) {
         if (constants.AVS_OFFICESTUDIO_FILE_UNKNOWN !== format) {
           formatStr = formatChecker.getStringFromFormat(format);
           if (formatStr && -1 !== supportedFormats.indexOf(formatStr)) {
+            isAllow = true;
+          } else if (!isImgUrl && 'svg' === formatStr && isDisplayedImage(pathModule.basename(urlParsed.pathname)) > 0) {
+            //paste case
+            //todo refactoring
             isAllow = true;
           }
         }
@@ -937,8 +934,8 @@ exports.openDocument = function(conn, cmd, opt_upsertRes, opt_bIsRestore) {
           break;
       }
       if(!res){
-        outputData.setStatus('err');
-        outputData.setData(constants.UNKNOWN);
+          outputData.setStatus('err');
+          outputData.setData(constants.UNKNOWN);
       }
       if(clientStatsD) {
         clientStatsD.timing('coauth.openDocument.' + cmd.getCommand(), new Date() - startDate);
@@ -1016,6 +1013,7 @@ exports.downloadAs = function(req, res) {
           break;
       }
       var strRes = JSON.stringify(outputData);
+      res.setHeader('Content-Type', 'application/json');
       res.send(strRes);
       logger.debug('End downloadAs: docId = %s %s', docId, strRes);
       if(clientStatsD) {

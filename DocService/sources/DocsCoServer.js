@@ -159,6 +159,7 @@ const redisKeyForceSaveTimer = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_T
 const redisKeyForceSaveTimerLock = cfgRedisPrefix + constants.REDIS_KEY_FORCE_SAVE_TIMER_LOCK;
 const redisKeySaved = cfgRedisPrefix + constants.REDIS_KEY_SAVED;
 const redisKeyPresenceUniqueUsers = cfgRedisPrefix + constants.REDIS_KEY_PRESENCE_UNIQUE_USERS;
+const redisKeyEditorConnections = cfgRedisPrefix + constants.REDIS_KEY_EDITOR_CONNECTIONS;
 
 const EditorTypes = {
   document : 0,
@@ -173,13 +174,17 @@ let connections = []; // Активные соединения
 let lockDocumentsTimerId = {};//to drop connection that can't unlockDocument
 let pubsub;
 let queue;
-let licenseInfo = {type: constants.LICENSE_RESULT.Error, light: false, branding: false};
+let licenseInfo = {type: constants.LICENSE_RESULT.Error, light: false, branding: false, plugins: false};
 let shutdownFlag = false;
 
 const MIN_SAVE_EXPIRATION = 60000;
 const FORCE_SAVE_EXPIRATION = Math.min(Math.max(cfgForceSaveInterval, MIN_SAVE_EXPIRATION),
                                        cfgQueueRetentionPeriod * 1000);
 const HEALTH_CHECK_KEY_MAX = 10000;
+
+const PRECISION = [{name: 'hour', val: ms('1h')}, {name: 'day', val: ms('1d')}, {name: 'week', val: ms('7d')},
+  {name: 'month', val: ms('31d')},
+];
 
 function getIsShutdown() {
   return shutdownFlag;
@@ -619,13 +624,12 @@ function* sendServerRequest(docId, uri, dataObject, opt_checkAuthorization) {
   let auth;
   if (cfgTokenEnableRequestOutbox) {
     auth = utils.fillJwtForRequest(dataObject);
-    if (opt_checkAuthorization && !opt_checkAuthorization(auth, dataObject)) {
-      auth = utils.fillJwtForRequest(dataObject);
-      logger.warn('authorization reduced to: docId = %s; length=%d', docId, auth.length);
-    }
     if (cfgTokenOutboxInBody) {
       dataObject = {token: auth};
       auth = undefined;
+    } else if (opt_checkAuthorization && !opt_checkAuthorization(auth, dataObject)) {
+      auth = utils.fillJwtForRequest(dataObject);
+      logger.warn('authorization reduced to: docId = %s; length=%d', docId, auth.length);
     }
   }
   let res = yield utils.postRequestPromise(uri, JSON.stringify(dataObject), cfgCallbackRequestTimeout * 1000, auth);
@@ -1396,7 +1400,7 @@ exports.install = function(server, callbackFunction) {
 
         //Давайдосвиданья!
         //Release locks
-        userLocks = yield* getUserLocks(docId, conn.sessionId);
+        userLocks = yield* getUserLocks(docId, conn.user.id);
         if (0 < userLocks.length) {
           //todo на close себе ничего не шлем
           //sendReleaseLock(conn, userLocks);
@@ -1486,13 +1490,13 @@ exports.install = function(server, callbackFunction) {
       yield utils.promiseRedis(multi, multi.exec);
     }
   }
-  function* getUserLocks(docId, sessionId) {
+  function* getUserLocks(docId, userId) {
     var userLocks = [], i;
     var toCache = [];
     var docLock = yield* getAllLocks(docId);
     for (i = 0; i < docLock.length; ++i) {
       var elem = docLock[i];
-      if (elem.sessionId === sessionId) {
+      if (elem.user === userId) {
         userLocks.push(elem);
       } else {
         toCache.push(JSON.stringify(elem));
@@ -1558,7 +1562,7 @@ exports.install = function(server, callbackFunction) {
 		//Release locks
 		if (isSave && conn) {
 			if (releaseLocks) {
-				const userLocks = yield* getUserLocks(docId, conn.sessionId);
+				const userLocks = yield* getUserLocks(docId, userId);
 				if (0 < userLocks.length) {
 					sendReleaseLock(conn, userLocks);
 					yield* publish({
@@ -1804,7 +1808,7 @@ exports.install = function(server, callbackFunction) {
     if (permissions && mode) {
       //as in web-apps/apps/documenteditor/main/app/controller/Main.js
       return ((permissions.edit !== false || permissions.review === true) && mode !== 'view') ||
-        permissions.comment === true;
+        permissions.comment === true || permissions.fillForms === true;
     } else {
       return def;
     }
@@ -2250,7 +2254,7 @@ exports.install = function(server, callbackFunction) {
   function* onMessage(conn, data) {
     var docId = conn.docId;
     var userId = conn.user.id;
-    var msg = {docid: docId, message: data.message, time: Date.now(), user: userId, username: conn.user.username};
+    var msg = {docid: docId, message: data.message, time: Date.now(), user: userId, useridoriginal: conn.user.idOriginal, username: conn.user.username};
     var msgStr = JSON.stringify(msg);
     var multi = redisClient.multi([
       ['rpush', redisKeyMessage + docId, msgStr],
@@ -2306,7 +2310,7 @@ exports.install = function(server, callbackFunction) {
       var toCache = [];
       for (i = 0; i < arrayBlocks.length; ++i) {
         var block = arrayBlocks[i];
-        var elem = {time: Date.now(), user: userId, block: block, sessionId: conn.sessionId};
+        var elem = {time: Date.now(), user: userId, block: block};
         documentLocks[block] = elem;
         toCache.push(JSON.stringify(elem));
       }
@@ -2331,7 +2335,7 @@ exports.install = function(server, callbackFunction) {
       var toCache = [];
       for (i = 0; i < arrayBlocks.length; ++i) {
         var block = arrayBlocks[i];
-        var elem = {time: Date.now(), user: userId, block: block, sessionId: conn.sessionId};
+        var elem = {time: Date.now(), user: userId, block: block};
         documentLocks.push(elem);
         toCache.push(JSON.stringify(elem));
       }
@@ -2356,7 +2360,7 @@ exports.install = function(server, callbackFunction) {
       var toCache = [];
       for (i = 0; i < arrayBlocks.length; ++i) {
         var block = arrayBlocks[i];
-        var elem = {time: Date.now(), user: userId, block: block, sessionId: conn.sessionId};
+        var elem = {time: Date.now(), user: userId, block: block};
         documentLocks.push(elem);
         toCache.push(JSON.stringify(elem));
       }
@@ -2383,7 +2387,7 @@ exports.install = function(server, callbackFunction) {
   // Для Excel необходимо делать пересчет lock-ов при добавлении/удалении строк/столбцов
   function* saveChanges(conn, data) {
     const docId = conn.docId, userId = conn.user.id;
-    logger.info("Start saveChanges docid: %s", docId);
+    logger.info("Start saveChanges docid: %s; reSave: %s", docId, data.reSave);
 
     let puckerIndex = yield* getChangesIndex(docId);
 
@@ -2446,7 +2450,7 @@ exports.install = function(server, callbackFunction) {
       let userLocks = [];
       if (data.releaseLocks) {
 		  //Release locks
-		  userLocks = yield* getUserLocks(docId, conn.sessionId);
+		  userLocks = yield* getUserLocks(docId, userId);
       }
       // Для данного пользователя снимаем Lock с документа, если пришел флаг unlock
       const checkEndAuthLockRes = yield* checkEndAuthLock(data.unlock, false, docId, userId);
@@ -2688,7 +2692,8 @@ exports.install = function(server, callbackFunction) {
 						rights: rights,
 						buildVersion: commonDefines.buildVersion,
 						buildNumber: commonDefines.buildNumber,
-						branding: licenseInfo.branding
+						branding: licenseInfo.branding,
+						plugins: licenseInfo.plugins
 					}
 				});
 			} catch (err) {
@@ -2952,6 +2957,19 @@ exports.install = function(server, callbackFunction) {
       }
     });
   }
+
+  function* collectStats(countEdit, countView) {
+    let now = Date.now();
+    var multi = redisClient.multi(
+      [
+        ['lpop', redisKeyEditorConnections],
+        ['rpush', redisKeyEditorConnections, JSON.stringify({time: now, edit: countEdit, view: countView})]
+      ]);
+    let multiRes = yield utils.promiseRedis(multi, multi.exec);
+    if (multiRes.length > 1 && JSON.parse(multiRes[0]).time > now - PRECISION[PRECISION.length - 1].val) {
+      yield utils.promiseRedis(redisClient, redisClient.lpush, redisKeyEditorConnections, multiRes[0]);
+    }
+  }
   function expireDoc() {
     var cronJob = this;
     return co(function* () {
@@ -3006,6 +3024,7 @@ exports.install = function(server, callbackFunction) {
         idSet.forEach(function(value1, value2, set) {
           commands.push(['zadd', redisKeyDocuments, expireAt, value1]);
         });
+        yield* collectStats(countEdit, countView);
         if (commands.length > 0) {
           var multi = redisClient.multi(commands);
           yield utils.promiseRedis(multi, multi.exec);
@@ -3061,10 +3080,14 @@ exports.healthCheck = function(req, res) {
       //database
       promises.push(sqlBase.healthCheck());
       //redis
-      promises.push(utils.promiseRedis(redisClient, redisClient.ping));
-      yield Promise.all(promises);
+      if (redisClient.connected) {
+        promises.push(utils.promiseRedis(redisClient, redisClient.ping));
+        yield Promise.all(promises);
+      } else {
+        throw new Error('redis disconnected');
+      }
       //rabbitMQ
-      let conn = yield rabbitMQCore.connetPromise(function() {});
+      let conn = yield rabbitMQCore.connetPromise(false, function() {});
       yield rabbitMQCore.closePromise(conn);
       //storage
       const clusterId = cluster.isWorker ? cluster.worker.id : '';
@@ -3084,7 +3107,82 @@ exports.healthCheck = function(req, res) {
     } catch (err) {
       logger.error('healthCheck error\r\n%s', err.stack);
     } finally {
+      res.setHeader('Content-Type', 'text/plain');
       res.send(output.toString());
+    }
+  });
+};
+exports.licenseInfo = function(req, res) {
+  return co(function*() {
+    let isError = false;
+    let output = {
+		connectionsStat: {}, licenseInfo: {}, serverInfo: {
+			buildVersion: commonDefines.buildVersion, buildNumber: commonDefines.buildNumber,
+		}
+	};
+    Object.assign(output.licenseInfo, licenseInfo);
+    try {
+      logger.debug('licenseInfo start');
+      var precisionSum = {};
+      for (let i = 0; i < PRECISION.length; ++i) {
+        precisionSum[PRECISION[i].name] = {
+          edit: {min: Number.MAX_VALUE, sum: 0, count: 0, max: 0, time: null, period: PRECISION[i].val},
+          view: {min: Number.MAX_VALUE, sum: 0, count: 0, max: 0}
+        };
+        output.connectionsStat[PRECISION[i].name] = {
+          edit: {min: 0, avr: 0, max: 0},
+          view: {min: 0, avr: 0, max: 0}
+        };
+      }
+      var redisRes = yield utils.promiseRedis(redisClient, redisClient.lrange, redisKeyEditorConnections, 0, -1);
+      const now = Date.now();
+      var precisionIndex = 0;
+      for (let i = redisRes.length - 1; i >= 1; i -= 2) {
+        for (let j = precisionIndex; j < PRECISION.length; ++j) {
+          let elem = JSON.parse(redisRes[i]);
+          if (now - elem.time < PRECISION[j].val) {
+            let precision = precisionSum[PRECISION[j].name];
+            precision.edit.min = Math.min(precision.edit.min, elem.edit);
+            precision.edit.max = Math.max(precision.edit.max, elem.edit);
+            precision.edit.sum += elem.edit;
+            precision.edit.count++;
+			precision.edit.time = elem.time;
+            precision.view.min = Math.min(precision.view.min, elem.view);
+            precision.view.max = Math.max(precision.view.max, elem.view);
+            precision.view.sum += elem.view;
+            precision.view.count++;
+          } else {
+            precisionIndex = j + 1;
+          }
+        }
+      }
+      for (let i in precisionSum) {
+        let precision = precisionSum[i];
+        let precisionOut = output.connectionsStat[i];
+		//scale compensates for the lack of points at server start
+		let scale = (now - precision.edit.time) / precision.edit.period;
+        if (precision.edit.count > 0) {
+          precisionOut.edit.avr = Math.round((precision.edit.sum / precision.edit.count) * scale);
+          precisionOut.edit.min = precision.edit.min;
+          precisionOut.edit.max = precision.edit.max;
+        }
+        if (precision.view.count > 0) {
+          precisionOut.view.avr = Math.round((precision.view.sum / precision.view.count) * scale);
+          precisionOut.view.min = precision.view.min;
+          precisionOut.view.max = precision.view.max;
+        }
+      }
+      logger.debug('licenseInfo end');
+    } catch (err) {
+      isError = true;
+      logger.error('licenseInfo error\r\n%s', err.stack);
+    } finally {
+      if (!isError) {
+        res.setHeader('Content-Type', 'application/json');
+        res.send(JSON.stringify(output));
+      } else {
+        res.sendStatus(400);
+      }
     }
   });
 };

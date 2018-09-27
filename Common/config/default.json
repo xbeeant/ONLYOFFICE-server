@@ -78,8 +78,7 @@
 				"utils_common_fontdir": "null",
 				"utils_fonts_search_patterns": "*.ttf;*.ttc;*.otf",
 				"resource_expires": 31536000,
-				"limits_image_types_upload": "jpg;png;gif;bmp",
-				"limits_image_types_copy": "jpg;png;gif;bmp;svg"
+				"limits_image_types_upload": "jpg;png;gif;bmp"
 			},
 			"sql": {
 				"type": "postgres",
@@ -187,7 +186,7 @@
 	},
 	"FileConverter": {
 		"converter": {
-			"maxDownloadBytes": 100000000,
+			"maxDownloadBytes": 104857600,
 			"downloadTimeout": 120,
 			"downloadAttemptMaxCount": 3,
 			"downloadAttemptDelay": 1000,
@@ -198,6 +197,7 @@
 			"docbuilderPath": "null",
 			"docbuilderAllFontsPath": "null",
 			"args": "",
+			"spawnOptions": {},
 			"errorfiles": "",
 			"streamWriterBufferSize": 8388608,
 			"maxRedeliveredCount": 2,

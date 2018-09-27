@@ -12,6 +12,7 @@ FileConverter/bin/*.S
 FileConverter/bin/font_selection.bin
 FileConverter/bin/HtmlFileInternal
 FileConverter/bin/core.zip
+FileConverter/bin/core.tar.gz
 FileConverter/bin/core
 DocService/npm-debug.log
 build
