@@ -26,6 +26,7 @@ else
     ifeq ($(UNAME_S),Linux)
         PLATFORM := linux
         SHARED_EXT := .so*
+        LIB_PREFIX := lib
     endif
     UNAME_M := $(shell uname -m)
     ifeq ($(UNAME_M),x86_64)
@@ -39,7 +40,16 @@ endif
 TARGET := $(PLATFORM)_$(ARCHITECTURE)
 
 FILE_CONVERTER = $(OUTPUT)/FileConverter/bin
-FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/*$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)DjVuFile$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)doctrenderer$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)graphics$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)HtmlFile$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)HtmlRenderer$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)kernel$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)PdfReader$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)PdfWriter$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)UnicodeConverter$(SHARED_EXT)
+FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)XpsFile$(SHARED_EXT)
 
 ifeq ($(PLATFORM),linux)
 FILE_CONVERTER_FILES += ../core/Common/3dParty/icu/$(TARGET)/build/libicudata$(SHARED_EXT)
@@ -83,6 +93,10 @@ WELCOME_DIR = welcome
 WELCOME_FILES = $(WELCOME_DIR)/**
 WELCOME = $(OUTPUT)/$(WELCOME_DIR)/
 
+INFO_DIR = info
+INFO_FILES = $(INFO_DIR)/**
+INFO = $(OUTPUT)/$(INFO_DIR)/
+
 CORE_FONTS_DIR = core-fonts
 CORE_FONTS_FILES = ../$(CORE_FONTS_DIR)/**
 CORE_FONTS = $(OUTPUT)/../$(CORE_FONTS_DIR)/
@@ -90,7 +104,7 @@ CORE_FONTS = $(OUTPUT)/../$(CORE_FONTS_DIR)/
 .PHONY: all clean install uninstall build-date htmlfileinternal docbuilder
 
 .NOTPARALLEL:
-all: $(FILE_CONVERTER) $(SPELLCHECKER_DICTIONARIES) $(TOOLS) $(SCHEMA) $(CORE_FONTS) $(LICENSE) $(WELCOME) build-date
+all: $(FILE_CONVERTER) $(SPELLCHECKER_DICTIONARIES) $(TOOLS) $(SCHEMA) $(CORE_FONTS) $(LICENSE) $(WELCOME) $(INFO) build-date
 
 ext: htmlfileinternal docbuilder
 
@@ -136,6 +150,10 @@ $(GRUNT_FILES):
 $(WELCOME):
 	mkdir -p $(WELCOME) && \
 		cp -r -t $(WELCOME) $(WELCOME_FILES)
+
+$(INFO):
+	mkdir -p $(INFO) && \
+		cp -r -t $(INFO) $(INFO_FILES)
 
 $(CORE_FONTS):
 	mkdir -p $(CORE_FONTS) && \
