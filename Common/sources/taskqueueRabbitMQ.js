@@ -38,7 +38,9 @@ var co = require('co');
 var utils = require('./utils');
 var constants = require('./constants');
 var rabbitMQCore = require('./rabbitMQCore');
+const logger = require('./logger');
 
+const cfgMaxRedeliveredCount = config.get('FileConverter.converter.maxRedeliveredCount');
 var cfgVisibilityTimeout = config.get('queue.visibilityTimeout');
 var cfgQueueRetentionPeriod = config.get('queue.retentionPeriod');
 var cfgRabbitQueueConvertTask = config.get('rabbitmq.queueconverttask');
@@ -104,9 +106,15 @@ function init(taskqueue, isAddTask, isAddResponse, isAddTaskReceive, isAddRespon
         }
         yield rabbitMQCore.consumePromise(taskqueue.channelConvertTaskReceive, cfgRabbitQueueConvertTask,
           function (message) {
-            if (message) {
-              taskqueue.emit('task', message.content.toString(), message);
-            }
+            co(function* () {
+              let redelivered = yield* pushBackRedelivered(taskqueue, message);
+              if (!redelivered) {
+                if (message) {
+                  taskqueue.emit('task', message.content.toString());
+                }
+                taskqueue.channelConvertTaskReceive.ack(message);
+              }
+            });
           }, optionsReceive);
       }
       if (isAddResponseReceive) {
@@ -118,8 +126,9 @@ function init(taskqueue, isAddTask, isAddResponse, isAddTaskReceive, isAddRespon
         yield rabbitMQCore.consumePromise(taskqueue.channelConvertResponseReceive, cfgRabbitQueueConvertResponse,
           function (message) {
             if (message) {
-              taskqueue.emit('response', message.content.toString(), message);
+              taskqueue.emit('response', message.content.toString());
             }
+            taskqueue.channelConvertResponseReceive.ack(message);
           }, optionsReceive);
       }
       //process messages received while reconnection time
@@ -138,6 +147,28 @@ function clear(taskqueue) {
   taskqueue.channelConvertDead = null;
   taskqueue.channelConvertResponse = null;
   taskqueue.channelConvertResponseReceive = null;
+}
+function* pushBackRedelivered(taskqueue, message) {
+  if (true || message.fields.redelivered) {
+    try {
+      logger.warn('checkRedelivered redelivered data=%j', message);
+      //remove current task and add new into tail of queue to remove redelivered flag
+      taskqueue.channelConvertTaskReceive.ack(message);
+
+      let data = message.content.toString();
+      let redeliveredCount = message.properties.headers['x-redelivered-count'];
+      if (!redeliveredCount || redeliveredCount < cfgMaxRedeliveredCount) {
+        message.properties.headers['x-redelivered-count'] = redeliveredCount ? redeliveredCount + 1 : 1;
+        yield addTaskString(taskqueue, data, message.properties.priority, undefined, message.properties.headers);
+      } else if (taskqueue.simulateErrorResponse) {
+        yield taskqueue.addResponse(taskqueue.simulateErrorResponse(data));
+      }
+    } catch (err) {
+      logger.error('checkRedelivered error: %s', err.stack);
+    }
+    return true;
+  }
+  return false;
 }
 function repeat(taskqueue) {
   //repeat addTask because they are lost after the reconnection
@@ -159,18 +190,30 @@ function addTask(taskqueue, content, priority, callback, opt_expiration, opt_hea
   }
   taskqueue.channelConvertTask.sendToQueue(cfgRabbitQueueConvertTask, content, options, callback);
 }
+function addTaskString(taskqueue, task, priority, opt_expiration, opt_headers) {
+  //todo confirmation mode
+  return new Promise(function (resolve, reject) {
+    var content = new Buffer(task);
+    if (null != taskqueue.channelConvertTask) {
+      addTask(taskqueue, content, priority, function (err, ok) {
+        if (null != err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      }, opt_expiration, opt_headers);
+    } else {
+      taskqueue.addTaskStore.push({task: content, priority: priority, expiration: opt_expiration, headers: opt_headers});
+      resolve();
+    }
+  });
+}
 function addResponse(taskqueue, content, callback) {
   var options = {persistent: true};
   taskqueue.channelConvertResponse.sendToQueue(cfgRabbitQueueConvertResponse, content, options, callback);
 }
-function removeTask(taskqueue, data) {
-  taskqueue.channelConvertTaskReceive.ack(data);
-}
-function removeResponse(taskqueue, data) {
-  taskqueue.channelConvertResponseReceive.ack(data);
-}
 
-function TaskQueueRabbitMQ() {
+function TaskQueueRabbitMQ(simulateErrorResponse) {
   this.isClose = false;
   this.connection = null;
   this.channelConvertTask = null;
@@ -179,6 +222,7 @@ function TaskQueueRabbitMQ() {
   this.channelConvertResponse = null;
   this.channelConvertResponseReceive = null;
   this.addTaskStore = [];
+  this.simulateErrorResponse = simulateErrorResponse;
 }
 util.inherits(TaskQueueRabbitMQ, events.EventEmitter);
 TaskQueueRabbitMQ.prototype.init = function (isAddTask, isAddResponse, isAddTaskReceive, isAddResponseReceive, callback) {
@@ -197,24 +241,8 @@ TaskQueueRabbitMQ.prototype.initPromise = function(isAddTask, isAddResponse, isA
   });
 };
 TaskQueueRabbitMQ.prototype.addTask = function (task, priority, opt_expiration, opt_headers) {
-  //todo confirmation mode
-  var t = this;
-  return new Promise(function (resolve, reject) {
-    task.setVisibilityTimeout(cfgVisibilityTimeout);
-    var content = new Buffer(JSON.stringify(task));
-    if (null != t.channelConvertTask) {
-      addTask(t, content, priority, function (err, ok) {
-        if (null != err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      }, opt_expiration, opt_headers);
-    } else {
-      t.addTaskStore.push({task: content, priority: priority, expiration: opt_expiration, headers: opt_headers});
-      resolve();
-    }
-  });
+  task.setVisibilityTimeout(cfgVisibilityTimeout);
+  return addTaskString(this, JSON.stringify(task), priority, opt_expiration);
 };
 TaskQueueRabbitMQ.prototype.addResponse = function (task) {
   var t = this;
@@ -231,24 +259,6 @@ TaskQueueRabbitMQ.prototype.addResponse = function (task) {
     } else {
       resolve();
     }
-  });
-};
-TaskQueueRabbitMQ.prototype.removeTask = function (data) {
-  var t = this;
-  return new Promise(function (resolve, reject) {
-    if (null != t.channelConvertTaskReceive) {
-      removeTask(t, data);
-    }
-    resolve();
-  });
-};
-TaskQueueRabbitMQ.prototype.removeResponse = function (data) {
-  var t = this;
-  return new Promise(function (resolve, reject) {
-    if (null != t.channelConvertResponseReceive) {
-      removeResponse(t, data);
-    }
-    resolve();
   });
 };
 TaskQueueRabbitMQ.prototype.close = function () {

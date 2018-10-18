@@ -600,9 +600,6 @@ function* addTask(data, priority, opt_queue, opt_expiration) {
   var realQueue = opt_queue ? opt_queue : queue;
   yield realQueue.addTask(data, priority, opt_expiration);
 }
-function* removeResponse(data) {
-  yield queue.removeResponse(data);
-}
 
 function* getOriginalParticipantsId(docId) {
   var result = [], tmpObject = {};
@@ -1142,7 +1139,6 @@ exports.createSaveTimerPromise = co.wrap(_createSaveTimer);
 exports.getAllPresencePromise = co.wrap(getAllPresence);
 exports.publish = publish;
 exports.addTask = addTask;
-exports.removeResponse = removeResponse;
 exports.hasEditors = hasEditors;
 exports.getEditorsCountPromise = co.wrap(getEditorsCount);
 exports.getCallback = getCallback;
