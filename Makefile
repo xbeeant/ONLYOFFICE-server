@@ -9,6 +9,8 @@ GRUNT_FILES = Gruntfile.js.out
 PRODUCT_VERSION ?= 0.0.0
 BUILD_NUMBER ?= 0
 
+BRANDING_DIR ?= ./branding
+
 DOCUMENT_ROOT ?= /var/www/onlyoffice/documentserver
 
 ifeq ($(OS),Windows_NT)
@@ -90,11 +92,11 @@ LICENSE_JS := $(OUTPUT)/Common/sources/license.js
 COMMON_DEFINES_JS := $(OUTPUT)/Common/sources/commondefines.js
 
 WELCOME_DIR = welcome
-WELCOME_FILES = $(WELCOME_DIR)/**
+WELCOME_FILES = $(BRANDING_DIR)/$(WELCOME_DIR)/**
 WELCOME = $(OUTPUT)/$(WELCOME_DIR)/
 
 INFO_DIR = info
-INFO_FILES = $(INFO_DIR)/**
+INFO_FILES = $(BRANDING_DIR)/$(INFO_DIR)/**
 INFO = $(OUTPUT)/$(INFO_DIR)/
 
 CORE_FONTS_DIR = core-fonts
