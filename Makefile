@@ -9,6 +9,14 @@ GRUNT_FILES = Gruntfile.js.out
 PRODUCT_VERSION ?= 0.0.0
 BUILD_NUMBER ?= 0
 
+PUBLISHER_NAME ?= Ascensio System SIA
+PUBLISHER_URL ?= https://www.onlyoffice.com/
+
+GRUNT_ENV += PRODUCT_VERSION=$(PRODUCT_VERSION)
+GRUNT_ENV += BUILD_NUMBER=$(BUILD_NUMBER)
+GRUNT_ENV += PUBLISHER_NAME="$(PUBLISHER_NAME)"
+GRUNT_ENV += PUBLISHER_URL="$(PUBLISHER_URL)"
+
 BRANDING_DIR ?= ./branding
 
 DOCUMENT_ROOT ?= /var/www/onlyoffice/documentserver
@@ -146,7 +154,7 @@ $(LICENSE):
 $(GRUNT_FILES):
 	cd $(@D) && \
 		npm install && \
-		$(GRUNT) $(GRUNT_FLAGS)
+		$(GRUNT_ENV) $(GRUNT) $(GRUNT_FLAGS)
 	echo "Done" > $@
 
 $(WELCOME):
