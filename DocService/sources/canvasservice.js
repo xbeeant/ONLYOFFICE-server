@@ -490,9 +490,18 @@ function* commandImgurls(conn, cmd, outputData) {
       var urlParsed;
       var data = undefined;
       if (urlSource.startsWith('data:')) {
-        var delimiterIndex = urlSource.indexOf(',');
-        if (-1 != delimiterIndex && (urlSource.length - (delimiterIndex + 1)) * 0.75 <= cfgImageSize) {
-          data = new Buffer(urlSource.substring(delimiterIndex + 1), 'base64');
+        let delimiterIndex = urlSource.indexOf(',');
+        if (-1 != delimiterIndex) {
+          let dataLen = urlSource.length - (delimiterIndex + 1);
+          if ('hex' === urlSource.substring(delimiterIndex - 3, delimiterIndex).toLowerCase()) {
+            if (dataLen * 0.5 <= cfgImageSize) {
+              data = Buffer.from(urlSource.substring(delimiterIndex + 1), 'hex');
+            }
+          } else {
+            if (dataLen * 0.75 <= cfgImageSize) {
+              data = Buffer.from(urlSource.substring(delimiterIndex + 1), 'base64');
+            }
+          }
         }
       } else if (urlSource) {
         try {
