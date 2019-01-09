@@ -129,7 +129,7 @@
 			"ipfilter": {
 				"rules": [{"address": "*", "allowed": true}],
 				"useforrequest": false,
-				"errorcode": 401
+				"errorcode": 403
 			},
 			"secret": {
 				"browser": {"string": "secret", "file": "", "tenants": {}},

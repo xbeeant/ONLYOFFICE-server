@@ -996,7 +996,7 @@ exports.downloadAs = function(req, res) {
           logger.warn('Error downloadAs jwt: docId = %s\r\n%s', docId, checkJwtRes.description);
         }
         if (!isValidJwt) {
-          res.sendStatus(400);
+          res.sendStatus(403);
           return;
         }
       }
@@ -1066,7 +1066,7 @@ exports.saveFile = function(req, res) {
           logger.warn('Error saveFile jwt: docId = %s\r\n%s', docId, checkJwtRes.description);
         }
         if (!isValidJwt) {
-          res.sendStatus(400);
+          res.sendStatus(403);
           return;
         }
       }
