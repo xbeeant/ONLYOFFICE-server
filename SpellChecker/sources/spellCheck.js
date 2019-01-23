@@ -103,7 +103,7 @@ exports.install = function (server, callbackFunction) {
 			try {
 				let data = JSON.parse(message);
 				switch (data.type) {
-					case 'spellCheck':	spellCheck(conn, data);break;
+					case 'spellCheck':	spellCheck(conn, data.spellCheckData);break;
 				}
 			} catch (e) {
 				logger.error("error receiving response: %s", e);
@@ -125,8 +125,6 @@ exports.install = function (server, callbackFunction) {
 
 	function spellCheck(conn, data) {
 		return co(function*() {
-			data = JSON.parse(data.spellCheckData);
-
 			let promises = [];
 			for (let i = 0, length = data.usrWords.length; i < length; ++i) {
 				promises.push(spell(data.type, data.usrWords[i], data.usrLang[i]));
