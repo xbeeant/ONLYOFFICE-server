@@ -223,7 +223,12 @@ if (cluster.isMaster) {
 
 		app.get('/baseurl', (req, res) => {
 			res.send(utils.getBaseUrlByRequest(req));
-	  });
+		});
+		
+		app.get('/robots.txt', (req, res) => {
+			res.setHeader('Content-Type', 'plain/text');
+			res.send("User-agent: *\nDisallow: /");
+		});
 
 		app.post('/docbuilder', utils.checkClientIp, rawFileParser, (req, res) => {
 			const licenseInfo = docsCoServer.getLicenseInfo();
