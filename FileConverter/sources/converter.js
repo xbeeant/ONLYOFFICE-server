@@ -315,7 +315,7 @@ function* downloadFileFromStorage(id, strPath, dir) {
     fs.writeFileSync(path.join(dir, fileRel), data);
   }
 }
-function* processDownloadFromStorage(dataConvert, cmd, task, tempDirs) {
+function* processDownloadFromStorage(dataConvert, cmd, task, tempDirs, authorProps) {
   let res = constants.NO_ERROR;
   let needConcatFiles = false;
   if (task.getFromOrigin() || task.getFromSettings()) {
@@ -336,7 +336,7 @@ function* processDownloadFromStorage(dataConvert, cmd, task, tempDirs) {
     yield* concatFiles(tempDirs.source);
   }
   if (task.getFromChanges()) {
-    res = yield* processChanges(tempDirs, cmd);
+    res = yield* processChanges(tempDirs, cmd, authorProps);
   }
   return res;
 }
@@ -366,7 +366,7 @@ function* concatFiles(source) {
   }
 }
 
-function* processChanges(tempDirs, cmd) {
+function* processChanges(tempDirs, cmd, authorProps) {
   let res = constants.NO_ERROR;
   let changesDir = path.join(tempDirs.source, constants.CHANGES_NAME);
   fs.mkdirSync(changesDir);
@@ -402,6 +402,8 @@ function* processChanges(tempDirs, cmd) {
           streamObj = yield* streamCreate(cmd.getDocId(), changesDir, indexFile++);
         }
         changesAuthor = change.user_id_original;
+        authorProps.lastModifiedBy = change.user_name;
+        authorProps.modified = change.change_date.toISOString().slice(0, 19) + 'Z';
         let strDate = baseConnector.getDateTime(change.change_date);
         changesHistory.changes.push({'created': strDate, 'user': {'id': changesAuthor, 'name': change.user_name}});
         yield* streamWrite(streamObj, '[');
@@ -578,6 +580,7 @@ function* ExecuteTask(task) {
   let fileTo = task.getToFile();
   dataConvert.fileTo = fileTo ? path.join(tempDirs.result, fileTo) : '';
   let isBuilder = cmd.getIsBuilder();
+  let authorProps = {lastModifiedBy: null, modified: null};
   if (cmd.getUrl()) {
     dataConvert.fileFrom = path.join(tempDirs.source, dataConvert.key + '.' + cmd.getFormat());
     var isDownload = yield* downloadFile(dataConvert.key, cmd.getUrl(), dataConvert.fileFrom);
@@ -595,7 +598,7 @@ function* ExecuteTask(task) {
       clientStatsD.timing('conv.downloadFileFromStorage', new Date() - curDate);
       curDate = new Date();
     }
-    error = yield* processDownloadFromStorage(dataConvert, cmd, task, tempDirs);
+    error = yield* processDownloadFromStorage(dataConvert, cmd, task, tempDirs, authorProps);
   } else if (cmd.getForgotten()) {
     yield* downloadFileFromStorage(cmd.getDocId(), cmd.getForgotten(), tempDirs.source);
     logger.debug('downloadFileFromStorage complete(id=%s)', dataConvert.key);
@@ -650,7 +653,16 @@ function* ExecuteTask(task) {
       }
       let timeoutId;
       try {
-        let spawnAsyncPromise = spawnAsync(processPath, childArgs, cfgSpawnOptions);
+        let spawnOptions = cfgSpawnOptions;
+        if (authorProps.lastModifiedBy) {
+          if (!spawnOptions.env) {
+            spawnOptions.env = Object.assign({}, process.env);
+          }
+          spawnOptions.env['LAST_MODIFIED_BY'] = authorProps.lastModifiedBy;
+          spawnOptions.env['MODIFIED'] = authorProps.modified;
+          console.log(JSON.stringify(spawnOptions));
+        }
+        let spawnAsyncPromise = spawnAsync(processPath, childArgs, spawnOptions);
         childRes = spawnAsyncPromise.child;
         let waitMS = task.getVisibilityTimeout() * 1000 - (new Date().getTime() - getTaskTime.getTime());
         timeoutId = setTimeout(function() {
@@ -684,8 +696,8 @@ function* ExecuteTask(task) {
     curDate = new Date();
   }
   if (tempDirs) {
-    deleteFolderRecursive(tempDirs.temp);
-    logger.debug('deleteFolderRecursive (id=%s)', dataConvert.key);
+    //deleteFolderRecursive(tempDirs.temp);
+    logger.debug('deleteFolderRecursive %s (id=%s)', tempDirs.temp, dataConvert.key);
     if(clientStatsD) {
       clientStatsD.timing('conv.deleteFolderRecursive', new Date() - curDate);
       curDate = new Date();
