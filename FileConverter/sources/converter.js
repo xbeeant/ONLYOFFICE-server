@@ -660,7 +660,6 @@ function* ExecuteTask(task) {
           }
           spawnOptions.env['LAST_MODIFIED_BY'] = authorProps.lastModifiedBy;
           spawnOptions.env['MODIFIED'] = authorProps.modified;
-          console.log(JSON.stringify(spawnOptions));
         }
         let spawnAsyncPromise = spawnAsync(processPath, childArgs, spawnOptions);
         childRes = spawnAsyncPromise.child;
