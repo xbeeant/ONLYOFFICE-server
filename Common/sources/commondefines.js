@@ -85,6 +85,7 @@ function InputCommand(data) {
     this['nobase64'] = data['nobase64'];
     this['forgotten'] = data['forgotten'];
     this['isbuilder'] = data['isbuilder'];
+    this['withAuthorization'] = data['withAuthorization'];
   } else {
     this['c'] = undefined;//string command
     this['id'] = undefined;//string document id
@@ -127,6 +128,7 @@ function InputCommand(data) {
     this['nobase64'] = true;
     this['forgotten'] = undefined;
     this['isbuilder'] = undefined;
+    this['withAuthorization'] = undefined;
   }
 }
 InputCommand.prototype = {
@@ -342,6 +344,12 @@ InputCommand.prototype = {
   },
   setIsBuilder: function(data) {
     this['isbuilder'] = data;
+  },
+  getWithAuthorization: function() {
+    return this['withAuthorization'];
+  },
+  setWithAuthorization: function(data) {
+    this['withAuthorization'] = data;
   }
 };
 
