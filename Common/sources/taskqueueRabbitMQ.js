@@ -40,8 +40,10 @@ var constants = require('./constants');
 var rabbitMQCore = require('./rabbitMQCore');
 var activeMQCore = require('./activeMQCore');
 const logger = require('./logger');
+const commonDefines = require('./commondefines');
 
 const cfgMaxRedeliveredCount = config.get('FileConverter.converter.maxRedeliveredCount');
+const cfgQueueType = config.get('queue.type');
 var cfgVisibilityTimeout = config.get('queue.visibilityTimeout');
 var cfgQueueRetentionPeriod = config.get('queue.retentionPeriod');
 var cfgRabbitQueueConvertTask = config.get('rabbitmq.queueconverttask');
@@ -327,7 +329,7 @@ let init;
 let addTask;
 let addResponse;
 let close;
-if (constants.USE_RABBIT_MQ) {
+if (commonDefines.c_oAscQueueType.rabbitmq === cfgQueueType) {
   init = initRabbit;
   addTask = addTaskRabbit;
   addResponse = addResponseRabbit;

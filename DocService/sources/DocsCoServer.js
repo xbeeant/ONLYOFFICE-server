@@ -141,6 +141,7 @@ const cfgSecretSession = config.get('secret.session');
 const cfgForceSaveEnable = config.get('autoAssembly.enable');
 const cfgForceSaveInterval = ms(config.get('autoAssembly.interval'));
 const cfgForceSaveStep = ms(config.get('autoAssembly.step'));
+const cfgQueueType = configCommon.get('queue.type');
 const cfgQueueRetentionPeriod = configCommon.get('queue.retentionPeriod');
 const cfgForgottenFiles = config.get('server.forgottenfiles');
 const cfgMaxRequestChanges = config.get('server.maxRequestChanges');
@@ -3116,7 +3117,7 @@ exports.healthCheck = function(req, res) {
         throw new Error('redis disconnected');
       }
       //rabbitMQ
-      if (constants.USE_RABBIT_MQ) {
+      if (commonDefines.c_oAscQueueType.rabbitmq === cfgQueueType) {
         let conn = yield rabbitMQCore.connetPromise(false, function() {});
         yield rabbitMQCore.closePromise(conn);
       } else {

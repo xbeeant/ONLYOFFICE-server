@@ -909,6 +909,10 @@ const c_oAscSecretType = {
   Outbox: 2,
   Session: 3
 };
+const c_oAscQueueType = {
+  rabbitmq: 'rabbitmq',
+  activemq: 'activemq'
+};
 
 const buildVersion = '4.1.2';
 const buildNumber = 37;
@@ -931,5 +935,6 @@ exports.c_oAscServerCommandErrors = c_oAscServerCommandErrors;
 exports.c_oAscForceSaveTypes = c_oAscForceSaveTypes;
 exports.c_oAscUrlTypes = c_oAscUrlTypes;
 exports.c_oAscSecretType = c_oAscSecretType;
+exports.c_oAscQueueType = c_oAscQueueType;
 exports.buildVersion = buildVersion;
 exports.buildNumber = buildNumber;

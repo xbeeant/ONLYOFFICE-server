@@ -12,6 +12,7 @@
 		}
 	},
 	"queue": {
+		"type": "rabbitmq",
 		"visibilityTimeout": 300,
 		"retentionPeriod": 900
 	},
