@@ -497,10 +497,14 @@ function* commandImgurls(conn, cmd, outputData) {
           if ('hex' === urlSource.substring(delimiterIndex - 3, delimiterIndex).toLowerCase()) {
             if (dataLen * 0.5 <= cfgImageSize) {
               data = Buffer.from(urlSource.substring(delimiterIndex + 1), 'hex');
+            } else {
+              errorCode = constants.UPLOAD_CONTENT_LENGTH;
             }
           } else {
             if (dataLen * 0.75 <= cfgImageSize) {
               data = Buffer.from(urlSource.substring(delimiterIndex + 1), 'base64');
+            } else {
+              errorCode = constants.UPLOAD_CONTENT_LENGTH;
             }
           }
         }
@@ -516,7 +520,11 @@ function* commandImgurls(conn, cmd, outputData) {
         } catch (e) {
           data = undefined;
           logger.error('error commandImgurls download: url = %s; docId = %s\r\n%s', urlSource, docId, e.stack);
-          errorCode = constants.UPLOAD_URL;
+          if (e.code === 'EMSGSIZE') {
+            errorCode = constants.UPLOAD_CONTENT_LENGTH;
+          } else {
+            errorCode = constants.UPLOAD_URL;
+          }
           if (isImgUrl) {
             break;
           }
