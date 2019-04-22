@@ -128,6 +128,7 @@ exports.readLicense = function*() {
 				if (res.type === c_LR.Success) {
 					res.mode = c_LM.Trial;
 					res.count = resMax.count;
+					res.customization = constants.PACKAGE_TYPE_D === oPackageType;
 					return res;
 				}
 			}
