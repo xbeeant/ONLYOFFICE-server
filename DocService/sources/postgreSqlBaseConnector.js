@@ -98,25 +98,7 @@ exports.sqlEscape = function(value) {
   //todo parameterized queries
   return undefined !== value ? pgEscape.literal(value.toString()) : 'NULL';
 };
-var isSupportOnConflict = false;
-(function checkIsSupportOnConflict() {
-  var sqlCommand = 'INSERT INTO checkIsSupportOnConflict (id) VALUES(1) ON CONFLICT DO NOTHING;';
-  exports.sqlQuery(sqlCommand, function(error, result) {
-    if (error) {
-      if ('42601' == error.code) {
-        //SYNTAX ERROR
-        isSupportOnConflict = false;
-        logger.debug('checkIsSupportOnConflict false');
-      } else if ('42P01' == error.code) {
-        //	UNDEFINED TABLE
-        isSupportOnConflict = true;
-        logger.debug('checkIsSupportOnConflict true');
-      } else {
-        logger.error('checkIsSupportOnConflict unexpected error code:\r\n%s', error.stack);
-      }
-    }
-  }, true, true);
-})();
+var isSupportOnConflict = true;
 
 function getUpsertString(task) {
   task.completeDefaults();
@@ -142,7 +124,14 @@ exports.upsert = function(task) {
     var sqlCommand = getUpsertString(task);
     exports.sqlQuery(sqlCommand, function(error, result) {
       if (error) {
-        reject(error);
+        if (isSupportOnConflict && '42601' == error.code) {
+          //SYNTAX ERROR
+          isSupportOnConflict = false;
+          logger.debug('checkIsSupportOnConflict false');
+          resolve(exports.upsert(task));
+        } else {
+          reject(error);
+        }
       } else {
         if (result && result.rows.length > 0) {
           var first = result.rows[0];
