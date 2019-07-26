@@ -87,7 +87,6 @@ function InputCommand(data) {
     this['isbuilder'] = data['isbuilder'];
     this['status_info_in'] = data['status_info_in'];
     this['attempt'] = data['attempt'];
-    this['withAuthorization'] = data['withAuthorization'];
   } else {
     this['c'] = undefined;//string command
     this['id'] = undefined;//string document id
@@ -132,7 +131,6 @@ function InputCommand(data) {
     this['isbuilder'] = undefined;
     this['status_info_in'] = undefined;
     this['attempt'] = undefined;
-    this['withAuthorization'] = undefined;
   }
 }
 InputCommand.prototype = {
@@ -360,12 +358,6 @@ InputCommand.prototype = {
   },
   setAttempt: function(data) {
     this['attempt'] = data;
-  },
-  getWithAuthorization: function() {
-    return this['withAuthorization'];
-  },
-  setWithAuthorization: function(data) {
-    this['withAuthorization'] = data;
   }
 };
 

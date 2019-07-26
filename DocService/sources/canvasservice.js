@@ -480,14 +480,29 @@ function isDisplayedImage(strName) {
   return res;
 }
 function* commandImgurls(conn, cmd, outputData) {
-  var supportedFormats = cfgTypesUpload || 'jpg';
-  var urls;
-  var docId = cmd.getDocId();
+  let docId = cmd.getDocId();
   var errorCode = constants.NO_ERROR;
+  let isImgUrl = 'imgurl' == cmd.getCommand();
+  let urls = isImgUrl ? [cmd.getData()] : cmd.getData();
+  let authorization;
+  let token = cmd.getJwt();
+  if (cfgTokenEnableBrowser && token) {
+    let checkJwtRes = docsCoServer.checkJwt(docId, token, commonDefines.c_oAscSecretType.Browser);
+    if (checkJwtRes.decoded) {
+      //todo multiple url case
+      let url = checkJwtRes.decoded.url;
+      urls = [url];
+      if (cfgTokenEnableRequestOutbox) {
+        authorization = utils.fillJwtForRequest({url: url});
+      }
+    } else {
+      logger.warn('Error commandImgurls jwt: docId = %s\r\n%s', docId, checkJwtRes.description);
+      errorCode = constants.VKEY_ENCRYPT;
+    }
+  }
+  var supportedFormats = cfgTypesUpload || 'jpg';
   var outputUrls = [];
-  var isImgUrl = 'imgurl' == cmd.getCommand();
-  if (!conn.user.view && !conn.isCloseCoAuthoring) {
-    urls = isImgUrl ? [cmd.getData()] : cmd.getData();
+  if (constants.NO_ERROR === errorCode && !conn.user.view && !conn.isCloseCoAuthoring) {
     //todo Promise.all()
     var displayedImageMap = {};//to make one imageIndex for ole object urls
     var imageCount = 0;
@@ -515,10 +530,6 @@ function* commandImgurls(conn, cmd, outputData) {
         }
       } else if (urlSource) {
         try {
-          let authorization;
-          if (cfgTokenEnableRequestOutbox && cmd.getWithAuthorization()) {
-            authorization = utils.fillJwtForRequest({url: urlSource});
-          }
           //todo stream
           data = yield utils.downloadUrlPromise(urlSource, cfgImageDownloadTimeout, cfgImageSize, authorization);
           urlParsed = urlModule.parse(urlSource);
@@ -595,9 +606,9 @@ function* commandImgurls(conn, cmd, outputData) {
       }
       outputUrls.push(outputUrl);
     }
-  } else {
+  } else if(constants.NO_ERROR === errorCode) {
     logger.warn('error commandImgurls: docId = %s access deny', docId);
-    errorCode = errorCode.UPLOAD;
+    errorCode = constants.UPLOAD;
   }
   if (constants.NO_ERROR !== errorCode && 0 == outputUrls.length) {
     outputData.setStatus('err');
