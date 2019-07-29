@@ -625,9 +625,8 @@ function* commandImgurls(conn, cmd, outputData) {
 function* commandPathUrls(conn, cmd, outputData) {
   let contentDisposition = cmd.getInline() ? constants.CONTENT_DISPOSITION_INLINE :
     constants.CONTENT_DISPOSITION_ATTACHMENT;
-  let docId = cmd.getDocId();
   let listImages = cmd.getData().map(function callback(currentValue) {
-    return docId + '/' + currentValue;
+    return conn.docId + '/' + currentValue;
   });
   let urls = yield storage.getSignedUrlsArrayByArray(conn.baseUrl, listImages, commonDefines.c_oAscUrlTypes.Session,
                                                      contentDisposition);
@@ -637,7 +636,7 @@ function* commandPathUrls(conn, cmd, outputData) {
 function* commandPathUrl(conn, cmd, outputData) {
   var contentDisposition = cmd.getInline() ? constants.CONTENT_DISPOSITION_INLINE :
     constants.CONTENT_DISPOSITION_ATTACHMENT;
-  var strPath = cmd.getDocId() + '/' + cmd.getData();
+  var strPath = conn.docId + '/' + cmd.getData();
   var url = yield storage.getSignedUrl(conn.baseUrl, strPath, commonDefines.c_oAscUrlTypes.Temporary, cmd.getTitle(),
                                        contentDisposition);
   var errorCode = constants.NO_ERROR;
