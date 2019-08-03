@@ -803,7 +803,7 @@ function* startForceSave(docId, type, opt_userdata, opt_userConnectionId, opt_ba
   logger.debug('startForceSave end:docId = %s', docId);
   return res;
 }
-function handleDeadLetter(data) {
+function handleDeadLetter(data, ack) {
   return co(function*() {
     let docId = 'null';
     try {
@@ -828,12 +828,14 @@ function handleDeadLetter(data) {
         } else {
           //simulate error response
           cmd.setStatusInfo(constants.CONVERT_DEAD_LETTER);
-          canvasService.receiveTask(JSON.stringify(task))
+          canvasService.receiveTask(JSON.stringify(task), function(){});
         }
       }
       logger.warn('handleDeadLetter end: docId = %s; requeue = %s', docId, isRequeued);
     } catch (err) {
       logger.error('handleDeadLetter error: docId = %s\r\n%s', docId, err.stack);
+    } finally {
+      ack();
     }
   });
 }

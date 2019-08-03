@@ -1192,7 +1192,7 @@ exports.saveFromChanges = function(docId, statusInfo, optFormat, opt_userId, opt
     }
   });
 };
-exports.receiveTask = function(data) {
+exports.receiveTask = function(data, ack) {
   return co(function* () {
     var docId = 'null';
     try {
@@ -1238,6 +1238,8 @@ exports.receiveTask = function(data) {
       }
     } catch (err) {
       logger.debug('Error receiveTask: docId = %s\r\n%s', docId, err.stack);
+    } finally {
+      ack();
     }
   });
 };

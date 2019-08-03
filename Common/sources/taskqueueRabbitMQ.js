@@ -99,12 +99,14 @@ function initRabbit(taskqueue, isAddTask, isAddResponse, isAddTaskReceive, isAdd
         yield rabbitMQCore.consumePromise(taskqueue.channelConvertTaskReceive, cfgRabbitQueueConvertTask,
           function (message) {
             co(function* () {
-              let redelivered = yield* pushBackRedeliveredRabbit(taskqueue, message);
+              let ack = function() {
+                taskqueue.channelConvertTaskReceive.ack(message);
+              };
+              let redelivered = yield* pushBackRedeliveredRabbit(taskqueue, message, ack);
               if (!redelivered) {
                 if (message) {
-                  taskqueue.emit('task', message.content.toString());
+                  taskqueue.emit('task', message.content.toString(), ack);
                 }
-                taskqueue.channelConvertTaskReceive.ack(message);
               }
             });
           }, optionsReceive);
@@ -118,9 +120,10 @@ function initRabbit(taskqueue, isAddTask, isAddResponse, isAddTaskReceive, isAdd
         yield rabbitMQCore.consumePromise(taskqueue.channelConvertResponseReceive, cfgRabbitQueueConvertResponse,
           function (message) {
             if (message) {
-              taskqueue.emit('response', message.content.toString());
+              taskqueue.emit('response', message.content.toString(), function() {
+                taskqueue.channelConvertResponseReceive.ack(message);
+              });
             }
-            taskqueue.channelConvertResponseReceive.ack(message);
           }, optionsReceive);
       }
       if (isAddDelayed) {
@@ -142,9 +145,10 @@ function initRabbit(taskqueue, isAddTask, isAddResponse, isAddTaskReceive, isAdd
         yield rabbitMQCore.consumePromise(taskqueue.channelConvertDead, queue, function(message) {
           if (null != taskqueue.channelConvertDead) {
             if (message) {
-              taskqueue.emit('dead', message.content.toString());
+              taskqueue.emit('dead', message.content.toString(), function() {
+                taskqueue.channelConvertDead.ack(message);
+              });
             }
-            taskqueue.channelConvertDead.ack(message);
           }
         }, {noAck: false});
       }
@@ -182,13 +186,15 @@ function initActive(taskqueue, isAddTask, isAddResponse, isAddTaskReceive, isAdd
         receiver.add_credit(1);
         receiver.on("message", function(context) {
           co(function*() {
-            let redelivered = yield* pushBackRedeliveredActive(taskqueue, context);
-            if (!redelivered) {
-              if (context) {
-                taskqueue.emit('task', context.message.body);
-              }
+            let ack = function() {
               context.delivery.accept();
               receiver.add_credit(1);
+            };
+            let redelivered = yield* pushBackRedeliveredActive(taskqueue, context, ack);
+            if (!redelivered) {
+              if (context) {
+                taskqueue.emit('task', context.message.body, ack);
+              }
             }
           });
         });
@@ -200,10 +206,11 @@ function initActive(taskqueue, isAddTask, isAddResponse, isAddTaskReceive, isAdd
         receiver.add_credit(1);
         receiver.on("message", function(context) {
           if (context) {
-            taskqueue.emit('response', context.message.body);
+            taskqueue.emit('response', context.message.body, function() {
+              context.delivery.accept();
+              receiver.add_credit(1);
+            });
           }
-          context.delivery.accept();
-          receiver.add_credit(1);
         });
         taskqueue.channelConvertResponseReceive = receiver;
       }
@@ -216,10 +223,11 @@ function initActive(taskqueue, isAddTask, isAddResponse, isAddTaskReceive, isAdd
         receiver.add_credit(1);
         receiver.on("message", function(context) {
           if (context) {
-            taskqueue.emit('dead', context.message.body);
+            taskqueue.emit('dead', context.message.body, function(){
+              context.delivery.accept();
+              receiver.add_credit(1);
+            });
           }
-          context.delivery.accept();
-          receiver.add_credit(1);
         });
         taskqueue.channelConvertDead = receiver;
       }
@@ -242,13 +250,11 @@ function clear(taskqueue) {
   taskqueue.channelConvertResponseReceive = null;
   taskqueue.channelDelayed = null;
 }
-function* pushBackRedeliveredRabbit(taskqueue, message) {
+function* pushBackRedeliveredRabbit(taskqueue, message, ack) {
   if (message.fields.redelivered) {
     try {
       logger.warn('checkRedelivered redelivered data=%j', message);
       //remove current task and add new into tail of queue to remove redelivered flag
-      taskqueue.channelConvertTaskReceive.ack(message);
-
       let data = message.content.toString();
       let redeliveredCount = message.properties.headers['x-redelivered-count'];
       if (!redeliveredCount || redeliveredCount < cfgMaxRedeliveredCount) {
@@ -259,21 +265,25 @@ function* pushBackRedeliveredRabbit(taskqueue, message) {
       }
     } catch (err) {
       logger.error('checkRedelivered error: %s', err.stack);
+    } finally{
+      ack();
     }
     return true;
   }
   return false;
 }
-function* pushBackRedeliveredActive(taskqueue, context) {
+function* pushBackRedeliveredActive(taskqueue, context, ack) {
   if (undefined !== context.message.delivery_count) {
     logger.warn('checkRedelivered redelivered data=%j', context.message);
     if (context.message.delivery_count > cfgMaxRedeliveredCount) {
-      //remove current task and add new into tail of queue to remove redelivered flag
-      context.delivery.accept();
-      taskqueue.channelConvertTaskReceive.add_credit(1);
-
-      if (taskqueue.simulateErrorResponse) {
-        yield taskqueue.addResponse(taskqueue.simulateErrorResponse(context.message.body));
+      try {
+        if (taskqueue.simulateErrorResponse) {
+          yield taskqueue.addResponse(taskqueue.simulateErrorResponse(context.message.body));
+        }
+      } catch (err) {
+        logger.error('checkRedelivered error: %s', err.stack);
+      } finally {
+        ack();
       }
       return true;
     }
