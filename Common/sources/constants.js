@@ -240,6 +240,8 @@ exports.JWT_ERROR_CODE = 4006;
 exports.JWT_ERROR_REASON = 'token:';
 exports.DROP_CODE = 4007;
 exports.DROP_REASON = 'drop';
+exports.UPDATE_VERSION_CODE = 4008;
+exports.UPDATE_VERSION = 'update version';
 
 exports.CONTENT_DISPOSITION_INLINE = 'inline';
 exports.CONTENT_DISPOSITION_ATTACHMENT = 'attachment';

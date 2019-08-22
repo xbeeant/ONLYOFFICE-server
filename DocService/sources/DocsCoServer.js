@@ -1631,13 +1631,14 @@ exports.install = function(server, callbackFunction) {
     });
   }
 
-  function sendFileError(conn, errorId) {
+  function sendFileError(conn, errorId, code) {
     logger.warn('error description: docId = %s errorId = %s', conn.docId, errorId);
     conn.isCiriticalError = true;
-    sendData(conn, {type: 'error', description: errorId});
+    sendData(conn, {type: 'error', description: errorId, code: code});
   }
 
-  function* sendFileErrorAuth(conn, sessionId, errorId) {
+  function* sendFileErrorAuth(conn, sessionId, errorId, code) {
+    conn.isCloseCoAuthoring = true;
     conn.sessionId = sessionId;//restore old
     //Kill previous connections
     connections = _.reject(connections, function(el) {
@@ -1649,7 +1650,7 @@ exports.install = function(server, callbackFunction) {
       connections.push(conn);
       yield* updatePresence(conn.docId, conn.user.id, getConnectionInfo(conn));
 
-      sendFileError(conn, errorId);
+      sendFileError(conn, errorId, code);
     }
   }
 
@@ -2041,6 +2042,47 @@ exports.install = function(server, callbackFunction) {
         return;
       }
 
+      if (!conn.user.view) {
+        var result = yield sqlBase.checkStatusFilePromise(docId);
+
+        var status = result && result.length > 0 ? result[0]['status'] : null;
+        if (taskResult.FileStatus.Ok === status) {
+          // Все хорошо, статус обновлять не нужно
+        } else if (taskResult.FileStatus.SaveVersion === status ||
+          (!bIsRestore && taskResult.FileStatus.UpdateVersion === status &&
+          Date.now() - result[0]['status_info'] * 60000 > cfgExpUpdateVersionStatus)) {
+          let newStatus = taskResult.FileStatus.Ok;
+          if (taskResult.FileStatus.UpdateVersion === status) {
+            logger.warn("UpdateVersion expired: docId = %s", docId);
+            //FileStatus.None to open file again from new url
+            newStatus = taskResult.FileStatus.None;
+          }
+          // Обновим статус файла (идет сборка, нужно ее остановить)
+          var updateMask = new taskResult.TaskResultData();
+          updateMask.key = docId;
+          updateMask.status = status;
+          updateMask.statusInfo = result[0]['status_info'];
+          var updateTask = new taskResult.TaskResultData();
+          updateTask.status = newStatus;
+          updateTask.statusInfo = constants.NO_ERROR;
+          var updateIfRes = yield taskResult.updateIf(updateTask, updateMask);
+          if (!(updateIfRes.affectedRows > 0)) {
+            // error version
+            yield* sendFileErrorAuth(conn, data.sessionId, 'Update Version error', constants.UPDATE_VERSION_CODE);
+            return;
+          }
+        } else if (taskResult.FileStatus.UpdateVersion === status) {
+          // error version
+          yield* sendFileErrorAuth(conn, data.sessionId, 'Update Version error', constants.UPDATE_VERSION_CODE);
+          return;
+        } else if (taskResult.FileStatus.None === status && conn.encrypted) {
+          //ok
+        } else if (bIsRestore) {
+          // Other error
+          yield* sendFileErrorAuth(conn, data.sessionId, 'Other error');
+          return;
+        }
+      }
       //Set the unique ID
       if (bIsRestore) {
         logger.info("restored old session: docId = %s id = %s", docId, data.sessionId);
@@ -2049,37 +2091,6 @@ exports.install = function(server, callbackFunction) {
           // Останавливаем сборку (вдруг она началась)
           // Когда переподсоединение, нам нужна проверка на сборку файла
           try {
-            var result = yield sqlBase.checkStatusFilePromise(docId);
-
-            var status = result && result.length > 0 ? result[0]['status'] : null;
-            if (taskResult.FileStatus.Ok === status) {
-              // Все хорошо, статус обновлять не нужно
-            } else if (taskResult.FileStatus.SaveVersion === status) {
-              // Обновим статус файла (идет сборка, нужно ее остановить)
-              var updateMask = new taskResult.TaskResultData();
-              updateMask.key = docId;
-              updateMask.status = status;
-              updateMask.statusInfo = result[0]['status_info'];
-              var updateTask = new taskResult.TaskResultData();
-              updateTask.status = taskResult.FileStatus.Ok;
-              updateTask.statusInfo = constants.NO_ERROR;
-              var updateIfRes = yield taskResult.updateIf(updateTask, updateMask);
-              if (!(updateIfRes.affectedRows > 0)) {
-                // error version
-                yield* sendFileErrorAuth(conn, data.sessionId, 'Update Version error');
-                return;
-              }
-            } else if (taskResult.FileStatus.UpdateVersion === status) {
-              // error version
-              yield* sendFileErrorAuth(conn, data.sessionId, 'Update Version error');
-              return;
-            } else if (taskResult.FileStatus.None === status && conn.encrypted) {
-              //ok
-            } else {
-              // Other error
-              yield* sendFileErrorAuth(conn, data.sessionId, 'Other error');
-              return;
-            }
             var puckerIndex = yield* getChangesIndex(docId);
             var bIsSuccessRestore = true;
             if (puckerIndex > 0) {
