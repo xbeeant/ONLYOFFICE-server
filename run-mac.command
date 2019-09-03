@@ -70,8 +70,8 @@ echo "----------------------------------------"
 echo $BASEDIR
 cd "$BASEDIR/FileConverter/bin/core/build/bin"
 CreateDir "$BASEDIR/../fonts"
-chmod -v +x $BASEDIR/FileConverter/bin/core/build/bin/AllFontsGen/mac_64
-bash -cv "$BASEDIR/FileConverter/bin/core/build/bin/AllFontsGen/mac_64 '' '$BASEDIR/../sdkjs/Common/AllFonts.js' '$BASEDIR/../sdkjs/Common/Images' '$BASEDIR/FileConverter/bin/font_selection.bin' '$BASEDIR/../fonts'"
+chmod -v +x $BASEDIR/FileConverter/bin/core/build/bin/mac_64/allfontsgen
+bash -cv "$BASEDIR/FileConverter/bin/core/build/bin/mac_64/allfontsgen '' '$BASEDIR/../sdkjs/Common/AllFonts.js' '$BASEDIR/../sdkjs/Common/Images' '$BASEDIR/FileConverter/bin/font_selection.bin' '$BASEDIR/../fonts'"
 
 
 echo "----------------------------------------"

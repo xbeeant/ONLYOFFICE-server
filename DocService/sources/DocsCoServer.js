@@ -803,7 +803,7 @@ function* startForceSave(docId, type, opt_userdata, opt_userConnectionId, opt_ba
   logger.debug('startForceSave end:docId = %s', docId);
   return res;
 }
-function handleDeadLetter(data) {
+function handleDeadLetter(data, ack) {
   return co(function*() {
     let docId = 'null';
     try {
@@ -828,12 +828,14 @@ function handleDeadLetter(data) {
         } else {
           //simulate error response
           cmd.setStatusInfo(constants.CONVERT_DEAD_LETTER);
-          canvasService.receiveTask(JSON.stringify(task))
+          canvasService.receiveTask(JSON.stringify(task), function(){});
         }
       }
       logger.warn('handleDeadLetter end: docId = %s; requeue = %s', docId, isRequeued);
     } catch (err) {
       logger.error('handleDeadLetter error: docId = %s\r\n%s', docId, err.stack);
+    } finally {
+      ack();
     }
   });
 }
@@ -1629,13 +1631,14 @@ exports.install = function(server, callbackFunction) {
     });
   }
 
-  function sendFileError(conn, errorId) {
+  function sendFileError(conn, errorId, code) {
     logger.warn('error description: docId = %s errorId = %s', conn.docId, errorId);
     conn.isCiriticalError = true;
-    sendData(conn, {type: 'error', description: errorId});
+    sendData(conn, {type: 'error', description: errorId, code: code});
   }
 
-  function* sendFileErrorAuth(conn, sessionId, errorId) {
+  function* sendFileErrorAuth(conn, sessionId, errorId, code) {
+    conn.isCloseCoAuthoring = true;
     conn.sessionId = sessionId;//restore old
     //Kill previous connections
     connections = _.reject(connections, function(el) {
@@ -1647,7 +1650,7 @@ exports.install = function(server, callbackFunction) {
       connections.push(conn);
       yield* updatePresence(conn.docId, conn.user.id, getConnectionInfo(conn));
 
-      sendFileError(conn, errorId);
+      sendFileError(conn, errorId, code);
     }
   }
 
@@ -2039,6 +2042,47 @@ exports.install = function(server, callbackFunction) {
         return;
       }
 
+      if (!conn.user.view) {
+        var result = yield sqlBase.checkStatusFilePromise(docId);
+
+        var status = result && result.length > 0 ? result[0]['status'] : null;
+        if (taskResult.FileStatus.Ok === status) {
+          // Все хорошо, статус обновлять не нужно
+        } else if (taskResult.FileStatus.SaveVersion === status ||
+          (!bIsRestore && taskResult.FileStatus.UpdateVersion === status &&
+          Date.now() - result[0]['status_info'] * 60000 > cfgExpUpdateVersionStatus)) {
+          let newStatus = taskResult.FileStatus.Ok;
+          if (taskResult.FileStatus.UpdateVersion === status) {
+            logger.warn("UpdateVersion expired: docId = %s", docId);
+            //FileStatus.None to open file again from new url
+            newStatus = taskResult.FileStatus.None;
+          }
+          // Обновим статус файла (идет сборка, нужно ее остановить)
+          var updateMask = new taskResult.TaskResultData();
+          updateMask.key = docId;
+          updateMask.status = status;
+          updateMask.statusInfo = result[0]['status_info'];
+          var updateTask = new taskResult.TaskResultData();
+          updateTask.status = newStatus;
+          updateTask.statusInfo = constants.NO_ERROR;
+          var updateIfRes = yield taskResult.updateIf(updateTask, updateMask);
+          if (!(updateIfRes.affectedRows > 0)) {
+            // error version
+            yield* sendFileErrorAuth(conn, data.sessionId, 'Update Version error', constants.UPDATE_VERSION_CODE);
+            return;
+          }
+        } else if (taskResult.FileStatus.UpdateVersion === status) {
+          // error version
+          yield* sendFileErrorAuth(conn, data.sessionId, 'Update Version error', constants.UPDATE_VERSION_CODE);
+          return;
+        } else if (taskResult.FileStatus.None === status && conn.encrypted) {
+          //ok
+        } else if (bIsRestore) {
+          // Other error
+          yield* sendFileErrorAuth(conn, data.sessionId, 'Other error');
+          return;
+        }
+      }
       //Set the unique ID
       if (bIsRestore) {
         logger.info("restored old session: docId = %s id = %s", docId, data.sessionId);
@@ -2047,37 +2091,6 @@ exports.install = function(server, callbackFunction) {
           // Останавливаем сборку (вдруг она началась)
           // Когда переподсоединение, нам нужна проверка на сборку файла
           try {
-            var result = yield sqlBase.checkStatusFilePromise(docId);
-
-            var status = result && result.length > 0 ? result[0]['status'] : null;
-            if (taskResult.FileStatus.Ok === status) {
-              // Все хорошо, статус обновлять не нужно
-            } else if (taskResult.FileStatus.SaveVersion === status) {
-              // Обновим статус файла (идет сборка, нужно ее остановить)
-              var updateMask = new taskResult.TaskResultData();
-              updateMask.key = docId;
-              updateMask.status = status;
-              updateMask.statusInfo = result[0]['status_info'];
-              var updateTask = new taskResult.TaskResultData();
-              updateTask.status = taskResult.FileStatus.Ok;
-              updateTask.statusInfo = constants.NO_ERROR;
-              var updateIfRes = yield taskResult.updateIf(updateTask, updateMask);
-              if (!(updateIfRes.affectedRows > 0)) {
-                // error version
-                yield* sendFileErrorAuth(conn, data.sessionId, 'Update Version error');
-                return;
-              }
-            } else if (taskResult.FileStatus.UpdateVersion === status) {
-              // error version
-              yield* sendFileErrorAuth(conn, data.sessionId, 'Update Version error');
-              return;
-            } else if (taskResult.FileStatus.None === status && conn.encrypted) {
-              //ok
-            } else {
-              // Other error
-              yield* sendFileErrorAuth(conn, data.sessionId, 'Other error');
-              return;
-            }
             var puckerIndex = yield* getChangesIndex(docId);
             var bIsSuccessRestore = true;
             if (puckerIndex > 0) {
@@ -2145,7 +2158,10 @@ exports.install = function(server, callbackFunction) {
         }
       }
     }
-
+    if (constants.CONN_CLOSED === conn.readyState) {
+      //closing could happen during async action
+      return false;
+    }
     // Отправляем на внешний callback только для тех, кто редактирует
     let bindEventsRes = commonDefines.c_oAscServerCommandErrors.NoError;
     if (!tmpUser.view) {
@@ -2164,14 +2180,24 @@ exports.install = function(server, callbackFunction) {
       }
     }
 
+    if (constants.CONN_CLOSED === conn.readyState) {
+      //closing could happen during async action
+      return false;
+    }
     if (commonDefines.c_oAscServerCommandErrors.NoError === bindEventsRes) {
       let lockDocument = null;
+      let waitAuthUserId;
       if (!bIsRestore && 2 === countNoView && !tmpUser.view) {
         // Ставим lock на документ
         const isLock = yield utils.promiseRedis(redisClient, redisClient.setnx,
                                               redisKeyLockDoc + docId, JSON.stringify(firstParticipantNoView));
+        if (constants.CONN_CLOSED === conn.readyState) {
+          //closing could happen during async action
+          return false;
+        }
         if (isLock) {
           lockDocument = firstParticipantNoView;
+          waitAuthUserId = lockDocument.id;
           yield* setLockDocumentTimer(docId, lockDocument.id);
         }
       }
@@ -2185,9 +2211,11 @@ exports.install = function(server, callbackFunction) {
           }
         }
       }
-      let waitAuthUserId;
+      if (constants.CONN_CLOSED === conn.readyState) {
+        //closing could happen during async action
+        return false;
+      }
       if (lockDocument && !tmpUser.view) {
-        waitAuthUserId = lockDocument.id;
         // Для view не ждем снятия lock-а
         const sendObject = {
           type: "waitAuth",
@@ -2198,7 +2226,15 @@ exports.install = function(server, callbackFunction) {
         if (!bIsRestore) {
           yield* sendAuthChanges(conn.docId, [conn]);
         }
+        if (constants.CONN_CLOSED === conn.readyState) {
+          //closing could happen during async action
+          return false;
+        }
         yield* sendAuthInfo(conn, bIsRestore, participantsMap, hasForgotten);
+      }
+      if (constants.CONN_CLOSED === conn.readyState) {
+        //closing could happen during async action
+        return false;
       }
       yield* publish({type: commonDefines.c_oPublishType.participantsState, docId: docId, userId: tmpUser.id, participantsTimestamp: participantsTimestamp, participants: participantsMap, waitAuthUserId: waitAuthUserId}, docId, tmpUser.id);
     } else {
@@ -2223,7 +2259,7 @@ exports.install = function(server, callbackFunction) {
           changesJSON += changes[i].change_data;
         }
         changesJSON += ']\r\n';
-        let buffer = new Buffer(changesJSON, 'utf8');
+        let buffer = Buffer.from(changesJSON, 'utf8');
         yield storage.putObject(changesPrefix + (indexChunk++).toString().padStart(3, '0'), buffer, buffer.length);
       }
       index += cfgMaxRequestChanges;
@@ -3132,7 +3168,7 @@ exports.healthCheck = function(req, res) {
       //storage
       const clusterId = cluster.isWorker ? cluster.worker.id : '';
       const tempName = 'hc_' + os.hostname() + '_' + clusterId + '_' + Math.round(Math.random() * HEALTH_CHECK_KEY_MAX);
-      const tempBuffer = new Buffer([1, 2, 3, 4, 5]);
+      const tempBuffer = Buffer.from([1, 2, 3, 4, 5]);
       //It's proper to putObject one tempName
       yield storage.putObject(tempName, tempBuffer, tempBuffer.length);
       try {
@@ -3302,7 +3338,7 @@ exports.commandFromServer = function (req, res) {
       //undefined value are excluded in JSON.stringify
       const output = JSON.stringify({'key': docId, 'error': result, 'version': version});
       logger.debug('End commandFromServer: docId = %s %s', docId, output);
-      const outputBuffer = new Buffer(output, 'utf8');
+      const outputBuffer = Buffer.from(output, 'utf8');
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Length', outputBuffer.length);
       res.send(outputBuffer);

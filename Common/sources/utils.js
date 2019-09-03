@@ -32,6 +32,9 @@
 
 'use strict';
 
+//Fix EPROTO error in node 8.x at some web sites(https://github.com/nodejs/node/issues/21513)
+require("tls").DEFAULT_ECDH_CURVE = "auto";
+
 var config = require('config');
 var fs = require('fs');
 var path = require('path');
@@ -430,7 +433,7 @@ function fillXmlResponse(val) {
 }
 
 function fillResponseSimple(res, str, contentType) {
-  let body = new Buffer(str, 'utf-8');
+  let body = Buffer.from(str, 'utf-8');
   res.setHeader('Content-Type', contentType + '; charset=UTF-8');
   res.setHeader('Content-Length', body.length);
   res.send(body);
@@ -541,29 +544,6 @@ exports.compareStringByLength = function(x, y) {
   }
   return 0;
 };
-function makeCRCTable() {
-  var c;
-  var crcTable = [];
-  for (var n = 0; n < 256; n++) {
-    c = n;
-    for (var k = 0; k < 8; k++) {
-      c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
-    }
-    crcTable[n] = c;
-  }
-  return crcTable;
-}
-var crcTable;
-exports.crc32 = function(str) {
-  var crcTable = crcTable || (crcTable = makeCRCTable());
-  var crc = 0 ^ (-1);
-
-  for (var i = 0; i < str.length; i++) {
-    crc = (crc >>> 8) ^ crcTable[(crc ^ str.charCodeAt(i)) & 0xFF];
-  }
-
-  return (crc ^ (-1)) >>> 0;
-};
 exports.promiseRedis = function(client, func) {
   var newArguments = Array.prototype.slice.call(arguments, 2);
   return new Promise(function(resolve, reject) {
@@ -614,7 +594,7 @@ exports.getBaseUrlByRequest = getBaseUrlByRequest;
 function stream2Buffer(stream) {
   return new Promise(function(resolve, reject) {
     if (!stream.readable) {
-      resolve(new Buffer());
+      resolve(Buffer.alloc(0));
     }
     var bufs = [];
     stream.on('data', function(data) {

@@ -709,7 +709,7 @@ function* ExecuteTask(task) {
   return resData;
 }
 
-function receiveTask(data) {
+function receiveTask(data, ack) {
   return co(function* () {
     var res = null;
     var task = null;
@@ -734,6 +734,8 @@ function receiveTask(data) {
         }
       } catch (err) {
         logger.error(err);
+      } finally {
+        ack();
       }
     }
   });

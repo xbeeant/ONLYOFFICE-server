@@ -90,7 +90,8 @@ SCHEMA_FILES = $(SCHEMA_DIR)/**
 SCHEMA = $(OUTPUT)/$(SCHEMA_DIR)/
 
 TOOLS_DIR = tools
-TOOLS_FILES = ../core/build/bin/AllFontsGen/$(TARGET)
+TOOLS_FILES += ../core/build/bin/$(TARGET)/allfontsgen$(EXEC_EXT)
+TOOLS_FILES += ../core/build/bin/$(TARGET)/allthemesgen$(EXEC_EXT)
 TOOLS = $(OUTPUT)/$(TOOLS_DIR)
 
 LICENSE_FILES = LICENSE.txt 3rd-Party.txt license/
@@ -144,8 +145,7 @@ $(SCHEMA):
 
 $(TOOLS):
 	mkdir -p $(TOOLS) && \
-		cp -r -t $(TOOLS) $(TOOLS_FILES) && \
-		mv $(TOOLS)/$(TARGET)$(EXEC_EXT) $(TOOLS)/AllFontsGen$(EXEC_EXT)
+		cp -r -t $(TOOLS) $(TOOLS_FILES)
 
 $(LICENSE):
 	mkdir -p $(OUTPUT) && \
@@ -195,7 +195,7 @@ install:
 		-name *$(SHARED_EXT) \
 		-exec sh -c 'ln -sf {} ${DESTDIR}/lib/$$(basename {})' \;
 
-	sudo -u onlyoffice "${DESTDIR}${DOCUMENT_ROOT}/server/tools/AllFontsGen"\
+	sudo -u onlyoffice "${DESTDIR}${DOCUMENT_ROOT}/server/tools/allfontsgen"\
 		--input="${DESTDIR}${DOCUMENT_ROOT}/core-fonts"\
 		--allfonts-web="${DESTDIR}${DOCUMENT_ROOT}/sdkjs/common/AllFonts.js"\
 		--allfonts="${DESTDIR}${DOCUMENT_ROOT}/server/FileConverter/bin/AllFonts.js"\
@@ -203,6 +203,11 @@ install:
 		--selection="${DESTDIR}${DOCUMENT_ROOT}/server/FileConverter/bin/font_selection.bin"\
 		--output-web="${DESTDIR}${DOCUMENT_ROOT}/fonts"\
 		--use-system="true"
+
+	sudo -u onlyoffice "${DESTDIR}${DOCUMENT_ROOT}/server/tools/allthemesgen"\
+		--converter-dir="${DESTDIR}${DOCUMENT_ROOT}/server/FileConverter/bin"\
+		--src="${DESTDIR}${DOCUMENT_ROOT}/sdkjs/slide/themes"\
+		--output="${DESTDIR}${DOCUMENT_ROOT}/sdkjs/common/Images"
 
 uninstall:
 	userdel onlyoffice

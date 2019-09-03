@@ -2,6 +2,30 @@ ECHO OFF
 
 ECHO.
 ECHO ----------------------------------------
+ECHO check Node.js version
+ECHO ----------------------------------------
+
+node -v > tmpFile
+SET /p NODEJS_V= < tmpFile
+DEL tmpFile
+ECHO Installed Node.js version %NODEJS_V%
+SET NODEJS_V=%NODEJS_V:~1,1%
+SET NODEJS_V_MIN=8
+
+if %NODEJS_V_MIN% GTR %NODEJS_V% (
+	ECHO ERROR Node.js version! %NODEJS_V_MIN% more than %NODEJS_V%. Min version Node.js 8.x
+	goto ERROR
+)
+
+ECHO.
+ECHO ----------------------------------------
+ECHO restart RabbitMQ node to prevent "Erl.exe high CPU usage every Monday morning on Windows" https://groups.google.com/forum/#!topic/rabbitmq-users/myl74gsYyYg
+ECHO ----------------------------------------
+
+call restart-rabbit.bat
+
+ECHO.
+ECHO ----------------------------------------
 ECHO copy file to converter
 ECHO ----------------------------------------
 
@@ -22,6 +46,13 @@ call npm install -g grunt-cli
 call npm install
 call grunt --src="./configs" --level=WHITESPACE_ONLY --formatting=PRETTY_PRINT
 
+ECHO.
+ECHO ----------------------------------------
+ECHO Start build themes.js
+ECHO ----------------------------------------
+CD /D %~dp0\FileConverter\Bin
+reg Query "HKLM\Hardware\Description\System\CentralProcessor\0" | find /i "x86" > NUL && set OS=32&&set OS2=x86||set OS=64&& set OS2=x64
+"core\build\bin\win_%OS%\allthemesgen.exe" --converter-dir="%~dp0\FileConverter\Bin" --src="%~dp0\..\sdkjs\slide\themes" --output="%~dp0\..\sdkjs\common\Images"
 
 ECHO.
 ECHO ----------------------------------------
