@@ -482,10 +482,9 @@ function isDisplayedImage(strName) {
 function* commandImgurls(conn, cmd, outputData) {
   let docId = cmd.getDocId();
   var errorCode = constants.NO_ERROR;
-  let isImgUrl = 'imgurl' == cmd.getCommand();
-  let urls = isImgUrl ? [cmd.getData()] : cmd.getData();
+  let urls = cmd.getData();
   let authorization;
-  let token = cmd.getJwt();
+  let token = cmd.getTokenDownload();
   if (cfgTokenEnableBrowser && token) {
     let checkJwtRes = docsCoServer.checkJwt(docId, token, commonDefines.c_oAscSecretType.Browser);
     if (checkJwtRes.decoded) {
@@ -541,9 +540,6 @@ function* commandImgurls(conn, cmd, outputData) {
           } else {
             errorCode = constants.UPLOAD_URL;
           }
-          if (isImgUrl) {
-            break;
-          }
         }
       }
       var outputUrl = {url: 'error', path: 'error'};
@@ -555,7 +551,7 @@ function* commandImgurls(conn, cmd, outputData) {
           formatStr = formatChecker.getStringFromFormat(format);
           if (formatStr && -1 !== supportedFormats.indexOf(formatStr)) {
             isAllow = true;
-          } else if (!isImgUrl && 'svg' === formatStr && isDisplayedImage(pathModule.basename(urlParsed.pathname)) > 0) {
+          } else if ('svg' === formatStr && isDisplayedImage(pathModule.basename(urlParsed.pathname)) > 0) {
             //paste case
             //todo refactoring
             isAllow = true;
@@ -600,9 +596,6 @@ function* commandImgurls(conn, cmd, outputData) {
       }
       if (constants.NO_ERROR === errorCode && ('error' === outputUrl.url || 'error' === outputUrl.path)) {
         errorCode = constants.UPLOAD_EXTENSION;
-        if (isImgUrl) {
-          break;
-        }
       }
       outputUrls.push(outputUrl);
     }
@@ -615,11 +608,7 @@ function* commandImgurls(conn, cmd, outputData) {
     outputData.setData(errorCode);
   } else {
     outputData.setStatus('ok');
-    if (isImgUrl) {
-       outputData.setData(outputUrls);
-    } else {
-      outputData.setData({error: errorCode, urls: outputUrls});
-    }
+    outputData.setData({error: errorCode, urls: outputUrls});
   }
 }
 function* commandPathUrls(conn, cmd, outputData) {
@@ -985,7 +974,6 @@ exports.openDocument = function(conn, cmd, opt_upsertRes, opt_bIsRestore) {
         case 'reopen':
           res = yield* commandReopen(cmd);
           break;
-        case 'imgurl':
         case 'imgurls':
           yield* commandImgurls(conn, cmd, outputData);
           break;
@@ -1039,18 +1027,29 @@ exports.downloadAs = function(req, res) {
 
       if (cfgTokenEnableBrowser) {
         var isValidJwt = false;
-        var checkJwtRes = docsCoServer.checkJwt(docId, cmd.getJwt(), commonDefines.c_oAscSecretType.Session);
-        if (checkJwtRes.decoded) {
-          var doc = checkJwtRes.decoded.document;
-          if (!doc.permissions || (false !== doc.permissions.download || false !== doc.permissions.print)) {
-            isValidJwt = true;
-            docId = doc.key;
-            cmd.setDocId(doc.key);
+        if (cmd.getTokenDownload()) {
+          let checkJwtRes = docsCoServer.checkJwt(docId, cmd.getTokenDownload(), commonDefines.c_oAscSecretType.Browser);
+          if (checkJwtRes.decoded) {
+            cmd.setFormat(checkJwtRes.decoded.fileType);
+            cmd.setUrl(checkJwtRes.decoded.url);
+            cmd.setWithAuthorization(true);
           } else {
-            logger.warn('Error downloadAs jwt: docId = %s\r\n%s', docId, 'access deny');
+            logger.warn('Error downloadAs jwt: docId = %s\r\n%s', docId, checkJwtRes.description);
           }
         } else {
-          logger.warn('Error downloadAs jwt: docId = %s\r\n%s', docId, checkJwtRes.description);
+          let checkJwtRes = docsCoServer.checkJwt(docId, cmd.getTokenSession(), commonDefines.c_oAscSecretType.Session);
+          if (checkJwtRes.decoded) {
+            var doc = checkJwtRes.decoded.document;
+            if (!doc.permissions || (false !== doc.permissions.download || false !== doc.permissions.print)) {
+              isValidJwt = true;
+              docId = doc.key;
+              cmd.setDocId(doc.key);
+            } else {
+              logger.warn('Error downloadAs jwt: docId = %s\r\n%s', docId, 'access deny');
+            }
+          } else {
+            logger.warn('Error downloadAs jwt: docId = %s\r\n%s', docId, checkJwtRes.description);
+          }
         }
         if (!isValidJwt) {
           res.sendStatus(403);
@@ -1108,7 +1107,7 @@ exports.saveFile = function(req, res) {
 
       if (cfgTokenEnableBrowser) {
         let isValidJwt = false;
-        let checkJwtRes = docsCoServer.checkJwt(docId, cmd.getJwt(), commonDefines.c_oAscSecretType.Session);
+        let checkJwtRes = docsCoServer.checkJwt(docId, cmd.getTokenSession(), commonDefines.c_oAscSecretType.Session);
         if (checkJwtRes.decoded) {
           let doc = checkJwtRes.decoded.document;
           var edit = checkJwtRes.decoded.editorConfig;

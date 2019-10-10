@@ -34,12 +34,16 @@
 
 const constants = require('./constants');
 
-function InputCommand(data) {
+function InputCommand(data, copyExplicit) {
+  //must be set explicitly to prevent vulnerability(downloadAs(with url) creates request to integrator with authorization)
+  this['withAuthorization'] = undefined;//bool
   if (data) {
     this['c'] = data['c'];
     this['id'] = data['id'];
     this['userid'] = data['userid'];
-    this['jwt'] = data['jwt'];
+    this['tokenSession'] = data['tokenSession'];
+    this['tokenDownload'] = data['tokenDownload'];
+    this['tokenHistory'] = data['tokenHistory'];
     this['data'] = data['data'];
     this['editorid'] = data['editorid'];
     this['format'] = data['format'];
@@ -87,11 +91,16 @@ function InputCommand(data) {
     this['isbuilder'] = data['isbuilder'];
     this['status_info_in'] = data['status_info_in'];
     this['attempt'] = data['attempt'];
+    if (copyExplicit) {
+      this['withAuthorization'] = data['withAuthorization'];
+    }
   } else {
     this['c'] = undefined;//string command
     this['id'] = undefined;//string document id
     this['userid'] = undefined;//string
-    this['jwt'] = undefined;//string validate
+    this['tokenSession'] = undefined;//string validate
+    this['tokenDownload'] = undefined;//string validate
+    this['tokenHistory'] = undefined;//string validate
     this['data'] = undefined;//string
     //to open
     this['editorid'] = undefined;//int
@@ -152,8 +161,14 @@ InputCommand.prototype = {
   setUserId: function(data) {
     this['userid'] = data;
   },
-  getJwt: function() {
-    return this['jwt'];
+  getTokenSession: function() {
+    return this['tokenSession'];
+  },
+  getTokenDownload: function() {
+    return this['tokenDownload'];
+  },
+  getTokenHistory: function() {
+    return this['tokenHistory'];
   },
   getData: function() {
     return this['data'];
@@ -358,6 +373,12 @@ InputCommand.prototype = {
   },
   setAttempt: function(data) {
     this['attempt'] = data;
+  },
+  getWithAuthorization: function() {
+    return this['withAuthorization'];
+  },
+  setWithAuthorization: function(data) {
+    this['withAuthorization'] = data;
   }
 };
 
@@ -564,7 +585,7 @@ CMailMergeSendData.prototype.setIsJsonKey = function(v) {
 };
 function TaskQueueData(data) {
   if (data) {
-    this['cmd'] = new InputCommand(data['cmd']);
+    this['cmd'] = new InputCommand(data['cmd'], true);
     this['toFile'] = data['toFile'];
     this['fromOrigin'] = data['fromOrigin'];
     this['fromSettings'] = data['fromSettings'];

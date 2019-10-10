@@ -1436,10 +1436,11 @@ exports.install = function(server, callbackFunction) {
     var docIdNew = cmd.getDocId();
     //check jwt
     if (cfgTokenEnableBrowser) {
-      var checkJwtRes = checkJwt(docIdNew, cmd.getJwt(), commonDefines.c_oAscSecretType.Browser);
+      var checkJwtRes = checkJwt(docIdNew, cmd.getTokenHistory(), commonDefines.c_oAscSecretType.Browser);
       if (checkJwtRes.decoded) {
         fillVersionHistoryFromJwt(checkJwtRes.decoded, cmd);
         docIdNew = cmd.getDocId();
+        cmd.setWithAuthorization(true);
       } else {
         if (constants.JWT_EXPIRED_CODE == checkJwtRes.code && !cmd.getCloseOnError()) {
           sendData(conn, {type: "expiredToken"});
@@ -1975,7 +1976,11 @@ exports.install = function(server, callbackFunction) {
 
       //get user index
       const bIsRestore = null != data.sessionId;
-      const cmd = data.openCmd ? new commonDefines.InputCommand(data.openCmd) : null;
+      let cmd = null;
+      if (data.openCmd) {
+        cmd = new commonDefines.InputCommand(data.openCmd);
+        cmd.setWithAuthorization(true);
+      }
       let upsertRes = null;
       let curIndexUser;
       if (bIsRestore) {
@@ -2948,7 +2953,7 @@ exports.install = function(server, callbackFunction) {
             }
             break;
           case commonDefines.c_oPublishType.receiveTask:
-            var cmd = new commonDefines.InputCommand(data.cmd);
+            var cmd = new commonDefines.InputCommand(data.cmd, true);
             var output = new canvasService.OutputDataWrap();
             output.fromObject(data.output);
             var outputData = output.getData();

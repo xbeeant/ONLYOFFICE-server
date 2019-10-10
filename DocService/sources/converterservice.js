@@ -204,6 +204,7 @@ function convertRequest(req, res, isJson) {
         cmd.setDelimiterChar(params.delimiterChar);
       cmd.setDoctParams(parseIntParam(params.doctparams));
       cmd.setPassword(params.password);
+      cmd.setWithAuthorization(true);
       var thumbnail = params.thumbnail;
       if (thumbnail) {
         if (typeof thumbnail === 'string') {
@@ -280,6 +281,7 @@ function builderRequest(req, res) {
         let cmd = new commonDefines.InputCommand();
         cmd.setCommand('builder');
         cmd.setIsBuilder(true);
+        cmd.setWithAuthorization(true);
         cmd.setDocId(docId);
         if (!docId) {
           let task = yield* taskResult.addRandomKeyTask(undefined, 'bld_', 8);

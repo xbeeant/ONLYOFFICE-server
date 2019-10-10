@@ -197,7 +197,6 @@ exports.uploadImageFile = function(req, res) {
     let isValidJwt = true;
     try {
       docId = req.params.docid;
-      var userid = req.params.userid;
       let encrypted = false;
       logger.debug('Start uploadImageFile: docId = %s', docId);
 
@@ -205,7 +204,6 @@ exports.uploadImageFile = function(req, res) {
         var checkJwtRes = checkJwtUpload(docId, 'uploadImageFile', req.query['token']);
         if (!checkJwtRes.err) {
           docId = checkJwtRes.docId || docId;
-          userid = checkJwtRes.userid || userid;
           encrypted = checkJwtRes.encrypted;
         } else {
           isValidJwt = false;

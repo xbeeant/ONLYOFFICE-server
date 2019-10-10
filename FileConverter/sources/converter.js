@@ -247,7 +247,7 @@ function getTempDir() {
   fs.mkdirSync(resultDir);
   return {temp: newTemp, source: sourceDir, result: resultDir};
 }
-function* downloadFile(docId, uri, fileFrom) {
+function* downloadFile(docId, uri, fileFrom, withAuthorization) {
   var res = constants.CONVERT_DOWNLOAD;
   var data = null;
   var downloadAttemptCount = 0;
@@ -257,7 +257,7 @@ function* downloadFile(docId, uri, fileFrom) {
     while (constants.NO_ERROR !== res && downloadAttemptCount++ < cfgDownloadAttemptMaxCount) {
       try {
         let authorization;
-        if (cfgTokenEnableRequestOutbox) {
+        if (cfgTokenEnableRequestOutbox && withAuthorization) {
           authorization = utils.fillJwtForRequest({url: uri});
         }
         data = yield utils.downloadUrlPromise(uri, cfgDownloadTimeout, cfgDownloadMaxBytes, authorization);
@@ -586,7 +586,7 @@ function* ExecuteTask(task) {
   let authorProps = {lastModifiedBy: null, modified: null};
   if (cmd.getUrl()) {
     dataConvert.fileFrom = path.join(tempDirs.source, dataConvert.key + '.' + cmd.getFormat());
-    error = yield* downloadFile(dataConvert.key, cmd.getUrl(), dataConvert.fileFrom);
+    error = yield* downloadFile(dataConvert.key, cmd.getUrl(), dataConvert.fileFrom, cmd.getWithAuthorization());
     if(clientStatsD) {
       clientStatsD.timing('conv.downloadFile', new Date() - curDate);
       curDate = new Date();
