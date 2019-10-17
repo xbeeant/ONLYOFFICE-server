@@ -193,11 +193,11 @@ function convertRequest(req, res, isJson) {
       cmd.setEmbeddedFonts(false);//params.embeddedfonts'];
       cmd.setFormat(params.filetype);
       var outputtype = params.outputtype || '';
-      let outputExt = outputtype;
       docId = 'conv_' + params.key + '_' + outputtype;
       cmd.setDocId(docId);
-      var fileTo = constants.OUTPUT_NAME + '.' + outputtype;
       cmd.setOutputFormat(formatChecker.getFormatFromString(outputtype));
+      let outputExt = formatChecker.getStringFromFormat(cmd.getOutputFormat());
+      var fileTo = constants.OUTPUT_NAME + '.' + outputExt;
       cmd.setCodepage(commonDefines.c_oAscEncodingsMap[params.codePage] || commonDefines.c_oAscCodePageUtf8);
       cmd.setDelimiter(parseIntParam(params.delimiter) || commonDefines.c_oAscCsvDelimiter.Comma);
       if(undefined != params.delimiterChar)
