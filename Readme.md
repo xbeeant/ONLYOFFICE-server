@@ -13,19 +13,21 @@ This instruction describes document service deployment for Windows based platfor
 
 For the document service to work correctly it is necessary to install the following components for your Windows system (if not specified additionally, the latest version for 32 or 64 bit Windows can be installed with default settings):
 
-a) Node.js version 8.0.0 or later (https://nodejs.org/en/download/)
+1. [Node.js](https://nodejs.org/en/download/) version 8.0.0 or later
 
-b) Java (https://java.com/en/download/). Necessary for the sdk build.
+2. [Java](https://java.com/en/download/). Necessary for the sdk build.
 
-c) MySql Server version 5.5 or later (http://dev.mysql.com/downloads/windows/installer/).
-с) or PostgreSQL Server version 9.1 or later (https://www.postgresql.org/download/).
-When installing use the `onlyoffice` password for the `root` user.
+3. Database (MySQL or PostgreSQL). When installing use the `onlyoffice` password for the `root` user.
 
-d) Erlang (https://www.erlang.org/download.html)
+  * [MySQL Server](http://dev.mysql.com/downloads/windows/installer/) version 5.5 or later
 
-e) RabbitMQ (https://www.rabbitmq.com/releases/rabbitmq-server/v3.5.4/rabbitmq-server-3.5.4.exe)
+  * [PostgreSQL Server](https://www.postgresql.org/download/) version 9.1 or later (https://www.postgresql.org/download/).
 
-f) Redis (https://github.com/microsoftarchive/redis/releases/latest)
+d) [Erlang](https://www.erlang.org/download.html)
+
+e) [RabbitMQ](https://www.rabbitmq.com/releases/rabbitmq-server/v3.5.4/rabbitmq-server-3.5.4.exe)
+
+f) [Redis] (https://github.com/microsoftarchive/redis/releases/latest)
 
 g) Python 2.7.x (https://www.python.org/downloads/release/python-2716/)
 
