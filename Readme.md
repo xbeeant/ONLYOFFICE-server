@@ -13,20 +13,21 @@ This instruction describes document service deployment for Windows based platfor
 
 For the document service to work correctly it is necessary to install the following components for your Windows system (if not specified additionally, the latest version for 32 or 64 bit Windows can be installed with default settings):
 
-a) Node.js version 6.9.1 or later (https://nodejs.org/en/download/)
+a) Node.js version 8.0.0 or later (https://nodejs.org/en/download/)
 
 b) Java (https://java.com/en/download/). Necessary for the sdk build.
 
-c) MySql Server version 5.5 or later (http://dev.mysql.com/downloads/windows/installer/). When installing use the `onlyoffice` password for the `root` user.
+c) MySql Server version 5.5 or later (http://dev.mysql.com/downloads/windows/installer/).
 с) or PostgreSQL Server version 9.1 or later (https://www.postgresql.org/download/).
+When installing use the `onlyoffice` password for the `root` user.
 
 d) Erlang (https://www.erlang.org/download.html)
 
 e) RabbitMQ (https://www.rabbitmq.com/releases/rabbitmq-server/v3.5.4/rabbitmq-server-3.5.4.exe)
 
-f) Redis (https://github.com/MSOpenTech/redis/releases/download/win-2.8.2102/Redis-x64-2.8.2102.msi)
+f) Redis (https://github.com/microsoftarchive/redis/releases/latest)
 
-g) Python 2.7.x (https://www.python.org/download/releases/2.7.3/#download)
+g) Python 2.7.x (https://www.python.org/downloads/release/python-2716/)
 
 h) Microsoft Visual C++ Express 2010 (necessary for the spellchecker modules build)
 
