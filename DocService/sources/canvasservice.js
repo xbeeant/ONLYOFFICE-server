@@ -1030,6 +1030,7 @@ exports.downloadAs = function(req, res) {
         if (cmd.getTokenDownload()) {
           let checkJwtRes = docsCoServer.checkJwt(docId, cmd.getTokenDownload(), commonDefines.c_oAscSecretType.Browser);
           if (checkJwtRes.decoded) {
+            isValidJwt = true;
             cmd.setFormat(checkJwtRes.decoded.fileType);
             cmd.setUrl(checkJwtRes.decoded.url);
             cmd.setWithAuthorization(true);
