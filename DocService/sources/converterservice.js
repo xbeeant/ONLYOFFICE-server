@@ -203,6 +203,9 @@ function convertRequest(req, res, isJson) {
       if(undefined != params.delimiterChar)
         cmd.setDelimiterChar(params.delimiterChar);
       cmd.setDoctParams(parseIntParam(params.doctparams));
+      if (params.spreadsheetLayout) {
+        cmd.setJsonParams(JSON.stringify({'spreadsheetLayout': params.spreadsheetLayout}));
+      }
       cmd.setPassword(params.password);
       cmd.setWithAuthorization(true);
       var thumbnail = params.thumbnail;
