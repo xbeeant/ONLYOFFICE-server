@@ -41,11 +41,12 @@ var redis = require(config.get('name'));
 var cfgRedisPrefix = config.get('prefix');
 var cfgRedisHost = config.get('host');
 var cfgRedisPort = config.get('port');
+var cfgRedisOptions = config.get('options');
 
 var channelName = cfgRedisPrefix + constants.REDIS_KEY_PUBSUB;
 
 function createClientRedis() {
-  var redisClient = redis.createClient(cfgRedisPort, cfgRedisHost, {});
+  var redisClient = redis.createClient(cfgRedisPort, cfgRedisHost, cfgRedisOptions);
   redisClient.on('error', function(err) {
     logger.error('redisClient error %s', err.toString());
   });

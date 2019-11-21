@@ -119,7 +119,8 @@
 				"name": "redis",
 				"prefix": "ds:",
 				"host": "localhost",
-				"port": 6379
+				"port": 6379,
+				"options": {}
 			},
 			"pubsub": {
 				"name": "pubsubRabbitMQ",
