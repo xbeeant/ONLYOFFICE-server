@@ -73,10 +73,11 @@ echo "Font generation "
 echo "----------------------------------------"
 
 echo $BASEDIR
-cd "$BASEDIR/FileConverter/bin/core/build/bin"
+cd "$BASEDIR/FileConverter/bin/"
 CreateDir "$BASEDIR/../fonts"
-chmod -v +x $BASEDIR/FileConverter/bin/core/build/bin/mac_64/allfontsgen
-bash -cv "$BASEDIR/FileConverter/bin/core/build/bin/mac_64/allfontsgen '' '$BASEDIR/../sdkjs/Common/AllFonts.js' '$BASEDIR/../sdkjs/Common/Images' '$BASEDIR/FileConverter/bin/font_selection.bin' '$BASEDIR/../fonts'"
+chmod -v +x $BASEDIR/FileConverter/bin/allfontsgen
+bash -cv DYLD_LIBRARY_PATH=$BASEDIR/FileConverter/bin && "$BASEDIR/FileConverter/bin/allfontsgen" --input="$BASEDIR/../core-fonts" --allfonts-web="$BASEDIR/../sdkjs/common/AllFonts.js" --allfonts="$BASEDIR/FileConverter/bin/AllFonts.js" --images="$BASEDIR/../sdkjs/common/Images" --selection="$BASEDIR/FileConverter/bin/font_selection.bin" --output-web="$BASEDIR/../fonts" --use-system="true"
+
 
 
 echo "----------------------------------------"
