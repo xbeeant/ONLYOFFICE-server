@@ -1,6 +1,3 @@
-OUTPUT_DIR = build/server
-OUTPUT = $(OUTPUT_DIR)
-
 GRUNT = grunt
 GRUNT_FLAGS = --no-color -v
 
@@ -48,6 +45,8 @@ else
 endif
 
 TARGET := $(PLATFORM)_$(ARCHITECTURE)
+
+OUTPUT = ../build_tools/out/$(TARGET)/onlyoffice/documentserver/server
 
 FILE_CONVERTER = $(OUTPUT)/FileConverter/bin
 FILE_CONVERTER_FILES += ../core/build/lib/$(TARGET)/$(LIB_PREFIX)DjVuFile$(SHARED_EXT)
