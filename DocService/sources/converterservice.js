@@ -35,6 +35,7 @@
 const path = require('path');
 var config = require('config');
 var co = require('co');
+const locale = require('windows-locale');
 var taskResult = require('./taskresult');
 var logger = require('./../../Common/sources/logger');
 var utils = require('./../../Common/sources/utils');
@@ -203,6 +204,10 @@ function convertRequest(req, res, isJson) {
       if(undefined != params.delimiterChar)
         cmd.setDelimiterChar(params.delimiterChar);
       cmd.setDoctParams(parseIntParam(params.doctparams));
+      var regionalSettings = locale[params.regionalSettings];
+      if (regionalSettings) {
+        cmd.setLCID(regionalSettings.id);
+      }
       if (params.spreadsheetLayout) {
         cmd.setJsonParams(JSON.stringify({'spreadsheetLayout': params.spreadsheetLayout}));
       }

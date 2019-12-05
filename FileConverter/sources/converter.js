@@ -115,6 +115,7 @@ function TaskQueueDataConvert(task) {
   this.thumbnail = cmd.thumbnail;
   this.doctParams = cmd.getDoctParams();
   this.jsonParams = cmd.getJsonParams();
+  this.lcid = cmd.getLCID();
   this.password = cmd.getPassword();
   this.noBase64 = cmd.getNoBase64();
   this.timestamp = new Date();
@@ -145,6 +146,7 @@ TaskQueueDataConvert.prototype = {
     }
     xml += this.serializeXmlProp('m_nDoctParams', this.doctParams);
     xml += this.serializeXmlProp('m_sJsonParams', this.jsonParams);
+    xml += this.serializeXmlProp('m_nLcid', this.lcid);
     xml += this.serializeXmlProp('m_oTimestamp', this.timestamp.toISOString());
     xml += this.serializeXmlProp('m_bIsNoBase64', this.noBase64);
     xml += this.serializeLimit();

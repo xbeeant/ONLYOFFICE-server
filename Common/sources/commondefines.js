@@ -74,6 +74,7 @@ function InputCommand(data, copyExplicit) {
     this['docconnectionid'] = data['docconnectionid'];
     this['doctparams'] = data['doctparams'];
     this['jsonparams'] = data['jsonparams'];
+    this['lcid'] = data['lcid'];
     this['useractionid'] = data['useractionid'];
     if (data['forcesave']) {
       this['forcesave'] = new CForceSaveData(data['forcesave']);
@@ -128,6 +129,7 @@ function InputCommand(data, copyExplicit) {
     this['docconnectionid'] = undefined;//string internal
     this['doctparams'] = undefined;//int doctRenderer
     this['jsonparams'] = undefined;//string
+    this['lcid'] = undefined;
     this['useractionid'] = undefined;
     this['forcesave'] = undefined;
     this['userdata'] = undefined;
@@ -303,6 +305,12 @@ InputCommand.prototype = {
   },
   setJsonParams: function(data) {
     this['jsonparams'] = data;
+  },
+  getLCID: function() {
+    return this['lcid'];
+  },
+  setLCID: function(data) {
+    this['lcid'] = data;
   },
   getUserActionId: function() {
     return this['useractionid'];
