@@ -199,12 +199,16 @@ function convertRequest(req, res, isJson) {
       cmd.setOutputFormat(formatChecker.getFormatFromString(outputtype));
       let outputExt = formatChecker.getStringFromFormat(cmd.getOutputFormat());
       var fileTo = constants.OUTPUT_NAME + '.' + outputExt;
-      cmd.setCodepage(commonDefines.c_oAscEncodingsMap[params.codePage] || commonDefines.c_oAscCodePageUtf8);
-      cmd.setDelimiter(parseIntParam(params.delimiter) || commonDefines.c_oAscCsvDelimiter.Comma);
+      if (undefined != params.codePage) {
+        cmd.setCodepage(commonDefines.c_oAscEncodingsMap[params.codePage]);
+      }
+      if (undefined != params.delimiter) {
+        cmd.setCodepage(parseIntParam(params.delimiter));
+      }
       if(undefined != params.delimiterChar)
         cmd.setDelimiterChar(params.delimiterChar);
-      if (params.regionalSettings && locale[params.regionalSettings.toLowerCase()]) {
-        cmd.setLCID(locale[params.regionalSettings.toLowerCase()].id);
+      if (params.region && locale[params.region.toLowerCase()]) {
+        cmd.setLCID(locale[params.region.toLowerCase()].id);
       }
       if (params.spreadsheetLayout) {
         cmd.setJsonParams(JSON.stringify({'spreadsheetLayout': params.spreadsheetLayout}));
