@@ -1041,12 +1041,13 @@ exports.downloadAs = function(req, res) {
         } else {
           let checkJwtRes = docsCoServer.checkJwt(docId, cmd.getTokenSession(), commonDefines.c_oAscSecretType.Session);
           if (checkJwtRes.decoded) {
+            let decoded = checkJwtRes.decoded;
             var doc = checkJwtRes.decoded.document;
             if (!doc.permissions || (false !== doc.permissions.download || false !== doc.permissions.print)) {
               isValidJwt = true;
               docId = doc.key;
               cmd.setDocId(doc.key);
-              cmd.setUserIndex(doc.user && doc.user.index);
+              cmd.setUserIndex(decoded.editorConfig && decoded.editorConfig.user && decoded.editorConfig.user.index);
             } else {
               logger.warn('Error downloadAs jwt: docId = %s\r\n%s', docId, 'access deny');
             }

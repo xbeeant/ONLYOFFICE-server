@@ -187,16 +187,20 @@ function convertRequest(req, res, isJson) {
         utils.fillResponse(req, res, undefined, authRes.code, isJson);
         return;
       }
-
+      let outputtype = params.outputtype || '';
+      let outputFormat = formatChecker.getFormatFromString(outputtype);
+      if (constants.AVS_OFFICESTUDIO_FILE_UNKNOWN === outputFormat) {
+        utils.fillResponse(req, res, undefined, constants.CONVERT_PARAMS, isJson);
+        return;
+      }
       var cmd = new commonDefines.InputCommand();
       cmd.setCommand('conv');
       cmd.setUrl(params.url);
       cmd.setEmbeddedFonts(false);//params.embeddedfonts'];
       cmd.setFormat(params.filetype);
-      var outputtype = params.outputtype || '';
       docId = 'conv_' + params.key + '_' + outputtype;
       cmd.setDocId(docId);
-      cmd.setOutputFormat(formatChecker.getFormatFromString(outputtype));
+      cmd.setOutputFormat(outputFormat);
       let outputExt = formatChecker.getStringFromFormat(cmd.getOutputFormat());
       var fileTo = constants.OUTPUT_NAME + '.' + outputExt;
       if (undefined != params.codePage) {
