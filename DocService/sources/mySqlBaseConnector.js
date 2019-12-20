@@ -75,13 +75,21 @@ exports.sqlEscape = function (value) {
 function getUpsertString(task, opt_updateUserIndex) {
 	task.completeDefaults();
 	var dateNow = sqlBase.getDateTime(new Date());
-	var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.userIndex, task.changeId, task.callback, task.baseurl];
+	var cbInsert = task.callback, cbUpdate = '';
+	if (task.callback) {
+		var userCallback = new sqlBase.UserCallback();
+		userCallback.fromValues(task.userIndex, task.callback);
+		cbInsert = userCallback.toSQLInsert();
+		cbUpdate = ", callback = CONCAT(callback , " + exports.sqlEscape(userCallback.delimiter + '{"userIndex":') +
+			" , (user_index + 1) , " + exports.sqlEscape(',"callback":' + JSON.stringify(userCallback.callback) + '}') + ')';
+	}
+	var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.userIndex, task.changeId, cbInsert, task.baseurl];
 	var commandArgEsc = commandArg.map(function(curVal) {
 		return exports.sqlEscape(curVal)
 	});
 	var sql = 'INSERT INTO task_result ( id, status, status_info, last_open_date,' +
 		' user_index, change_id, callback, baseurl ) VALUES (' + commandArgEsc.join(', ') + ') ON DUPLICATE KEY UPDATE' +
-		' last_open_date = ' + exports.sqlEscape(dateNow);
+		' last_open_date = ' + exports.sqlEscape(dateNow) + cbUpdate;
 	if (opt_updateUserIndex) {
 		sql += ', user_index = LAST_INSERT_ID(user_index + 1);';
 	} else {
