@@ -87,7 +87,7 @@
 			},
 			"requestDefaults": {
 				"headers": {
-					"userAgent": "Node.js/6.13"
+					"User-Agent": "Node.js/6.13"
 				},
 				"rejectUnauthorized": true
 			},
