@@ -84,6 +84,7 @@ install_module('SpellChecker')
 
 base.set_env('NODE_ENV', 'development-' + platform)
 base.set_env('NODE_CONFIG_DIR', '../../Common/config')
+base.set_env('DYLD_LIBRARY_PATH', '../../FileConverter/bin/')
 
 run_module('DocService/sources', ['server.js'])
 run_module('DocService/sources', ['gc.js'])

@@ -1,0 +1,11 @@
+{
+"services": {
+"CoAuthoring": {
+"server": {
+"static_content": {
+"/sdkjs-comparison" : { "path": "../../../sdkjs-comparison" }
+}
+}
+}
+}
+}
