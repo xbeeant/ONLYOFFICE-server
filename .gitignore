@@ -9,5 +9,5 @@ build
 node_modules
 SpellChecker/dictionaries
 /Gruntfile.js.out
-local-development-windows.json
+local-development-*.json
 *.pyc
