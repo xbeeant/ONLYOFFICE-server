@@ -35,10 +35,13 @@
   },
   "pkg": {
     "scripts": [
-      "./pubsubRabbitMQ.js",
-      "./pubsubRedis.js",
+      "./sources/pubsubRabbitMQ.js",
+      "./sources/pubsubRedis.js",
       "../Common/sources/storage-fs.js",
       "../Common/sources/storage-s3.js"
+    ],
+    "assets": [
+      "node_modules/pg-escape/reserved.txt"
     ]
   }
 }
