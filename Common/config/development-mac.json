@@ -56,5 +56,10 @@
       "docbuilderAllFontsPath": "../../App_Data/docbuilder/AllFonts.js",
       "errorfiles": "error"
     }
+  },
+  "SpellChecker": {
+    "server": {
+      "dictDir": "../dictionaries"
+    }
   }
 }

@@ -57,5 +57,10 @@
       "docbuilderPath": "../../FileConverter/bin/docbuilder.exe",
       "docbuilderAllFontsPath": "../../App_Data/docbuilder/AllFonts.js"
     }
+  },
+  "SpellChecker": {
+    "server": {
+      "dictDir": "../dictionaries"
+    }
   }
 }
