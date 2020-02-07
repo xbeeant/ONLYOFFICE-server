@@ -3,6 +3,11 @@
   "version": "1.0.1",
   "homepage": "http://www.onlyoffice.com",
   "private": true,
+  "bin": {
+    "docservice": "sources/server.js",
+    "gc": "sources/gc.js",
+    "prepare4shutdown": "sources/shutdown.js"
+  },
   "dependencies": {
     "base64-stream": "^1.0.0",
     "body-parser": "^1.18.3",
@@ -26,5 +31,13 @@
     "sockjs": "^0.3.19",
     "underscore": "^1.9.1",
     "windows-locale": "^1.0.1"
+  },
+  "pkg": {
+    "scripts": [
+      "./pubsubRabbitMQ.js",
+      "./pubsubRedis.js",
+      "../Common/sources/storage-fs.js",
+      "../Common/sources/storage-s3.js"
+    ]
   }
 }

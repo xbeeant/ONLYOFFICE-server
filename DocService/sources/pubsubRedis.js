@@ -36,7 +36,7 @@ var events = require('events');
 var util = require('util');
 var logger = require('./../../Common/sources/logger');
 var constants = require('./../../Common/sources/constants');
-var redis = require(config.get('name'));
+var redis = require('redis');
 
 var cfgRedisPrefix = config.get('prefix');
 var cfgRedisHost = config.get('host');

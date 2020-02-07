@@ -3,7 +3,15 @@
   "version": "1.0.0",
   "homepage": "http://www.onlyoffice.com",
   "private": true,
+  "bin": "node_modules/statsd/bin/statsd",
   "dependencies": {
     "statsd": "^0.8.4"
+  },
+  "pkg": {
+    "scripts": [
+      "node_modules/statsd/backends/repeater.js",
+      "node_modules/statsd/backends/graphite.js",
+      "node_modules/statsd/backends/repeater.js"
+    ]
   }
 }
