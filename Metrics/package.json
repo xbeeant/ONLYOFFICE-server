@@ -9,7 +9,7 @@
   },
   "pkg": {
     "scripts": [
-      "node_modules/statsd/backends/repeater.js",
+      "node_modules/statsd/backends/console.js",
       "node_modules/statsd/backends/graphite.js",
       "node_modules/statsd/backends/repeater.js",
       "node_modules/statsd/servers/tcp.js",
