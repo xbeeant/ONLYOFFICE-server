@@ -39,6 +39,7 @@ const configL = config.get('license');
 const constants = require('./constants');
 const logger = require('./logger');
 const utils = require('./utils');
+const path = require('path');
 const pubsubRedis = require('./../../DocService/sources/pubsubRedis');
 const redisClient = pubsubRedis.getClientRedis();
 
@@ -80,7 +81,7 @@ exports.readLicense = function*() {
 
 		const verify = crypto.createVerify('RSA-SHA1');
 		verify.update(JSON.stringify(oLicense));
-		if (verify.verify(fs.readFileSync('./../../Common/sources/licenseKey.pem'), sign, 'hex')) {
+		if (verify.verify(fs.readFileSync(path.join(__dirname, './licenseKey.pem')), sign, 'hex')) {
 			const endDate = new Date(oLicense['end_date']);
 			res.endDate = endDate;
 			const isTrial = (true === oLicense['trial'] || 'true' === oLicense['trial']); // Someone who likes to put json string instead of bool
