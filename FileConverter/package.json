@@ -13,7 +13,9 @@
   "pkg": {
     "scripts": [
       "../Common/sources/storage-fs.js",
-      "../Common/sources/storage-s3.js"
+      "../Common/sources/storage-s3.js",
+      "../DocService/sources/editorDataMemory.js",
+      "../DocService/sources/editorDataRedis.js"
     ],
     "assets": [
       "../Common/sources/licenseKey.pem",
