@@ -103,18 +103,25 @@ var isSupportOnConflict = true;
 function getUpsertString(task) {
   task.completeDefaults();
   var dateNow = sqlBase.getDateTime(new Date());
-  var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.userIndex, task.changeId, task.callback, task.baseurl];
+  var cbInsert = task.callback, cbUpdate = '';
+  if (isSupportOnConflict && task.callback) {
+    var userCallback = new sqlBase.UserCallback();
+    userCallback.fromValues(task.userIndex, task.callback);
+    cbInsert = userCallback.toSQLInsert();
+    cbUpdate = ", callback = task_result.callback || " + exports.sqlEscape(userCallback.delimiter + '{"userIndex":') +
+      " || (task_result.user_index + 1) || " + exports.sqlEscape(',"callback":' + JSON.stringify(userCallback.callback) + '}');
+  }
+  var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.userIndex, task.changeId, cbInsert, task.baseurl];
   var commandArgEsc = commandArg.map(function(curVal) {
     return exports.sqlEscape(curVal)
   });
   if (isSupportOnConflict) {
     //http://stackoverflow.com/questions/34762732/how-to-find-out-if-an-upsert-was-an-update-with-postgresql-9-5-upsert
     return "INSERT INTO task_result (id, status, status_info, last_open_date, user_index, change_id, callback," +
-      " baseurl) SELECT " + commandArgEsc.join(', ') + " WHERE 'false' = set_config('myapp.isupdate', 'false', true) " +
-      "ON CONFLICT (id) DO UPDATE SET  last_open_date = " +
-      sqlBase.baseConnector.sqlEscape(dateNow) +
-      ", user_index = task_result.user_index + 1 WHERE 'true' = set_config('myapp.isupdate', 'true', true) RETURNING" +
-      " current_setting('myapp.isupdate') as isupdate, user_index as userindex;";
+      " baseurl) VALUES (" + commandArgEsc.join(', ') + ") " +
+      "ON CONFLICT (id) DO UPDATE SET last_open_date = " +
+      sqlBase.baseConnector.sqlEscape(dateNow) + cbUpdate +
+      ", user_index = task_result.user_index + 1 RETURNING user_index as userindex;";
   } else {
     return "SELECT * FROM merge_db(" + commandArgEsc.join(', ') + ");";
   }
@@ -136,7 +143,7 @@ exports.upsert = function(task) {
         if (result && result.rows.length > 0) {
           var first = result.rows[0];
           result = {affectedRows: 0, insertId: 0};
-          result.affectedRows = 'true' == first.isupdate ? 2 : 1;
+          result.affectedRows = task.userIndex !== first.userindex ? 2 : 1;
           result.insertId = first.userindex;
         }
         resolve(result);

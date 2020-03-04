@@ -35,6 +35,7 @@
 const path = require('path');
 var config = require('config');
 var co = require('co');
+const locale = require('windows-locale');
 var taskResult = require('./taskresult');
 var logger = require('./../../Common/sources/logger');
 var utils = require('./../../Common/sources/utils');
@@ -186,24 +187,34 @@ function convertRequest(req, res, isJson) {
         utils.fillResponse(req, res, undefined, authRes.code, isJson);
         return;
       }
-
+      let outputtype = params.outputtype || '';
+      let outputFormat = formatChecker.getFormatFromString(outputtype);
+      if (constants.AVS_OFFICESTUDIO_FILE_UNKNOWN === outputFormat) {
+        utils.fillResponse(req, res, undefined, constants.CONVERT_PARAMS, isJson);
+        return;
+      }
       var cmd = new commonDefines.InputCommand();
       cmd.setCommand('conv');
       cmd.setUrl(params.url);
       cmd.setEmbeddedFonts(false);//params.embeddedfonts'];
       cmd.setFormat(params.filetype);
-      var outputtype = params.outputtype || '';
-      let outputExt = outputtype;
       docId = 'conv_' + params.key + '_' + outputtype;
       cmd.setDocId(docId);
-      var fileTo = constants.OUTPUT_NAME + '.' + outputtype;
-      cmd.setOutputFormat(formatChecker.getFormatFromString(outputtype));
+      cmd.setOutputFormat(outputFormat);
+      let outputExt = formatChecker.getStringFromFormat(cmd.getOutputFormat());
+      var fileTo = constants.OUTPUT_NAME + '.' + outputExt;
       cmd.setCodepage(commonDefines.c_oAscEncodingsMap[params.codePage] || commonDefines.c_oAscCodePageUtf8);
       cmd.setDelimiter(parseIntParam(params.delimiter) || commonDefines.c_oAscCsvDelimiter.Comma);
       if(undefined != params.delimiterChar)
         cmd.setDelimiterChar(params.delimiterChar);
-      cmd.setDoctParams(parseIntParam(params.doctparams));
+      if (params.region && locale[params.region.toLowerCase()]) {
+        cmd.setLCID(locale[params.region.toLowerCase()].id);
+      }
+      if (params.spreadsheetLayout) {
+        cmd.setJsonParams(JSON.stringify({'spreadsheetLayout': params.spreadsheetLayout}));
+      }
       cmd.setPassword(params.password);
+      cmd.setWithAuthorization(true);
       var thumbnail = params.thumbnail;
       if (thumbnail) {
         if (typeof thumbnail === 'string') {
@@ -280,6 +291,7 @@ function builderRequest(req, res) {
         let cmd = new commonDefines.InputCommand();
         cmd.setCommand('builder');
         cmd.setIsBuilder(true);
+        cmd.setWithAuthorization(true);
         cmd.setDocId(docId);
         if (!docId) {
           let task = yield* taskResult.addRandomKeyTask(undefined, 'bld_', 8);

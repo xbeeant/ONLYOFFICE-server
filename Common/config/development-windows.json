@@ -21,9 +21,6 @@
           "/web-apps": {
             "path": "../../../web-apps"
           },
-          "/web-apps-pro": {
-            "path": "../../../web-apps-pro"
-          },
           "/sdkjs-plugins": {
             "path": "../../../sdkjs-plugins"
           }
@@ -48,7 +45,8 @@
   },
   "license": {
     "license_file": "./../../license.lic",
-    "warning_limit_percents": "70"
+    "warning_limit_percents": 70,
+    "packageType": 0
   },
   "FileConverter": {
     "converter": {
@@ -58,6 +56,11 @@
       "docbuilderPath": "../../FileConverter/Bin/docbuilder.exe",
       "docbuilderAllFontsPath": "../../App_Data/docbuilder/AllFonts.js",
       "errorfiles": "error"
+    }
+  },
+  "SpellChecker": {
+    "server": {
+      "dictDir": "../dictionaries"
     }
   }
 }

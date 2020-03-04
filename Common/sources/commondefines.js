@@ -34,12 +34,17 @@
 
 const constants = require('./constants');
 
-function InputCommand(data) {
+function InputCommand(data, copyExplicit) {
+  //must be set explicitly to prevent vulnerability(downloadAs(with url) creates request to integrator with authorization)
+  this['withAuthorization'] = undefined;//bool
   if (data) {
     this['c'] = data['c'];
     this['id'] = data['id'];
     this['userid'] = data['userid'];
-    this['jwt'] = data['jwt'];
+    this['userindex'] = data['userindex'];
+    this['tokenSession'] = data['tokenSession'];
+    this['tokenDownload'] = data['tokenDownload'];
+    this['tokenHistory'] = data['tokenHistory'];
     this['data'] = data['data'];
     this['editorid'] = data['editorid'];
     this['format'] = data['format'];
@@ -68,8 +73,10 @@ function InputCommand(data) {
     this['savekey'] = data['savekey'];
     this['userconnectionid'] = data['userconnectionid'];
     this['docconnectionid'] = data['docconnectionid'];
-    this['doctparams'] = data['doctparams'];
+    this['jsonparams'] = data['jsonparams'];
+    this['lcid'] = data['lcid'];
     this['useractionid'] = data['useractionid'];
+    this['useractionindex'] = data['useractionindex'];
     if (data['forcesave']) {
       this['forcesave'] = new CForceSaveData(data['forcesave']);
     } else {
@@ -87,11 +94,17 @@ function InputCommand(data) {
     this['isbuilder'] = data['isbuilder'];
     this['status_info_in'] = data['status_info_in'];
     this['attempt'] = data['attempt'];
+    if (copyExplicit) {
+      this['withAuthorization'] = data['withAuthorization'];
+    }
   } else {
     this['c'] = undefined;//string command
     this['id'] = undefined;//string document id
     this['userid'] = undefined;//string
-    this['jwt'] = undefined;//string validate
+    this['userindex'] = undefined;
+    this['tokenSession'] = undefined;//string validate
+    this['tokenDownload'] = undefined;//string validate
+    this['tokenHistory'] = undefined;//string validate
     this['data'] = undefined;//string
     //to open
     this['editorid'] = undefined;//int
@@ -116,8 +129,10 @@ function InputCommand(data) {
     this['savekey'] = undefined;//int document id to save
     this['userconnectionid'] = undefined;//string internal
     this['docconnectionid'] = undefined;//string internal
-    this['doctparams'] = undefined;//int doctRenderer
+    this['jsonparams'] = undefined;//string
+    this['lcid'] = undefined;
     this['useractionid'] = undefined;
+    this['useractionindex'] = undefined;
     this['forcesave'] = undefined;
     this['userdata'] = undefined;
     this['inline'] = undefined;//content disposition
@@ -134,6 +149,9 @@ function InputCommand(data) {
   }
 }
 InputCommand.prototype = {
+  fillFromConnection: function(conn) {
+    this['id'] = conn.docId;
+  },
   getCommand: function() {
     return this['c'];
   },
@@ -152,8 +170,20 @@ InputCommand.prototype = {
   setUserId: function(data) {
     this['userid'] = data;
   },
-  getJwt: function() {
-    return this['jwt'];
+  getUserIndex: function() {
+    return this['userindex'];
+  },
+  setUserIndex: function(data) {
+    this['userindex'] = data;
+  },
+  getTokenSession: function() {
+    return this['tokenSession'];
+  },
+  getTokenDownload: function() {
+    return this['tokenDownload'];
+  },
+  getTokenHistory: function() {
+    return this['tokenHistory'];
   },
   getData: function() {
     return this['data'];
@@ -275,17 +305,29 @@ InputCommand.prototype = {
   setDocConnectionId: function(data) {
     this['docconnectionid'] = data;
   },
-  getDoctParams: function() {
-    return this['doctparams'];
+  getJsonParams: function() {
+    return this['jsonparams'];
   },
-  setDoctParams: function(data) {
-    this['doctparams'] = data;
+  setJsonParams: function(data) {
+    this['jsonparams'] = data;
+  },
+  getLCID: function() {
+    return this['lcid'];
+  },
+  setLCID: function(data) {
+    this['lcid'] = data;
   },
   getUserActionId: function() {
     return this['useractionid'];
   },
   setUserActionId: function(data) {
     this['useractionid'] = data;
+  },
+  getUserActionIndex: function() {
+    return this['useractionindex'];
+  },
+  setUserActionIndex: function(data) {
+    this['useractionindex'] = data;
   },
   getForceSave: function() {
     return this['forcesave'];
@@ -358,6 +400,12 @@ InputCommand.prototype = {
   },
   setAttempt: function(data) {
     this['attempt'] = data;
+  },
+  getWithAuthorization: function() {
+    return this['withAuthorization'];
+  },
+  setWithAuthorization: function(data) {
+    this['withAuthorization'] = data;
   }
 };
 
@@ -564,7 +612,7 @@ CMailMergeSendData.prototype.setIsJsonKey = function(v) {
 };
 function TaskQueueData(data) {
   if (data) {
-    this['cmd'] = new InputCommand(data['cmd']);
+    this['cmd'] = new InputCommand(data['cmd'], true);
     this['toFile'] = data['toFile'];
     this['fromOrigin'] = data['fromOrigin'];
     this['fromSettings'] = data['fromSettings'];

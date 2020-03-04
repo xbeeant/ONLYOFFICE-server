@@ -80,8 +80,8 @@ var MAX_OPEN_FILES = 200;
 var TEMP_PREFIX = 'ASC_CONVERT';
 var queue = null;
 var clientStatsD = statsDClient.getClient();
-var exitCodesReturn = [constants.CONVERT_NEED_PARAMS, constants.CONVERT_CORRUPTED, constants.CONVERT_DRM,
-  constants.CONVERT_PASSWORD, constants.CONVERT_LIMITS];
+var exitCodesReturn = [constants.CONVERT_PARAMS, constants.CONVERT_NEED_PARAMS, constants.CONVERT_CORRUPTED,
+  constants.CONVERT_DRM, constants.CONVERT_PASSWORD, constants.CONVERT_LIMITS];
 var exitCodesMinorError = [constants.CONVERT_NEED_PARAMS, constants.CONVERT_DRM, constants.CONVERT_PASSWORD];
 var exitCodesUpload = [constants.NO_ERROR, constants.CONVERT_CORRUPTED, constants.CONVERT_NEED_PARAMS,
   constants.CONVERT_DRM];
@@ -113,7 +113,8 @@ function TaskQueueDataConvert(task) {
   this.themeDir = path.resolve(cfgPresentationThemesDir);
   this.mailMergeSend = cmd.mailmergesend;
   this.thumbnail = cmd.thumbnail;
-  this.doctParams = cmd.getDoctParams();
+  this.jsonParams = cmd.getJsonParams();
+  this.lcid = cmd.getLCID();
   this.password = cmd.getPassword();
   this.noBase64 = cmd.getNoBase64();
   this.timestamp = new Date();
@@ -142,7 +143,8 @@ TaskQueueDataConvert.prototype = {
     if (this.thumbnail) {
       xml += this.serializeThumbnail(this.thumbnail);
     }
-    xml += this.serializeXmlProp('m_nDoctParams', this.doctParams);
+    xml += this.serializeXmlProp('m_sJsonParams', this.jsonParams);
+    xml += this.serializeXmlProp('m_nLcid', this.lcid);
     xml += this.serializeXmlProp('m_oTimestamp', this.timestamp.toISOString());
     xml += this.serializeXmlProp('m_bIsNoBase64', this.noBase64);
     xml += this.serializeLimit();
@@ -247,39 +249,42 @@ function getTempDir() {
   fs.mkdirSync(resultDir);
   return {temp: newTemp, source: sourceDir, result: resultDir};
 }
-function* downloadFile(docId, uri, fileFrom) {
-  var res = false;
+function* downloadFile(docId, uri, fileFrom, withAuthorization) {
+  var res = constants.CONVERT_DOWNLOAD;
   var data = null;
   var downloadAttemptCount = 0;
   var urlParsed = url.parse(uri);
   var filterStatus = yield* utils.checkHostFilter(urlParsed.hostname);
   if (0 == filterStatus) {
-    while (!res && downloadAttemptCount++ < cfgDownloadAttemptMaxCount) {
+    while (constants.NO_ERROR !== res && downloadAttemptCount++ < cfgDownloadAttemptMaxCount) {
       try {
         let authorization;
-        if (cfgTokenEnableRequestOutbox) {
+        if (cfgTokenEnableRequestOutbox && withAuthorization) {
           authorization = utils.fillJwtForRequest({url: uri});
         }
         data = yield utils.downloadUrlPromise(uri, cfgDownloadTimeout, cfgDownloadMaxBytes, authorization);
-        res = true;
+        res = constants.NO_ERROR;
       } catch (err) {
-        res = false;
+        res = constants.CONVERT_DOWNLOAD;
         logger.error('error downloadFile:url=%s;attempt=%d;code:%s;connect:%s;(id=%s)\r\n%s', uri, downloadAttemptCount, err.code, err.connect, docId, err.stack);
         //not continue attempts if timeout
-        if (err.code === 'ETIMEDOUT' || err.code === 'ESOCKETTIMEDOUT' || err.code === 'EMSGSIZE') {
+        if (err.code === 'ETIMEDOUT' || err.code === 'ESOCKETTIMEDOUT') {
+          break;
+        } else if (err.code === 'EMSGSIZE') {
+          res = constants.CONVERT_LIMITS;
           break;
         } else {
           yield utils.sleep(cfgDownloadAttemptDelay);
         }
       }
     }
-    if (res) {
+    if (constants.NO_ERROR === res) {
       logger.debug('downloadFile complete filesize=%d (id=%s)', data.length, docId);
       fs.writeFileSync(fileFrom, data);
     }
   } else {
     logger.error('checkIpFilter error:url=%s;code:%s;(id=%s)', uri, filterStatus, docId);
-    res = false;
+    res = constants.CONVERT_DOWNLOAD;
   }
   return res;
 }
@@ -372,6 +377,7 @@ function* processChanges(tempDirs, cmd, authorProps) {
   fs.mkdirSync(changesDir);
   let indexFile = 0;
   let changesAuthor = null;
+  let changesIndex = null;
   let changesHistory = {
     serverVersion: commonDefines.buildVersion,
     changes: []
@@ -402,6 +408,7 @@ function* processChanges(tempDirs, cmd, authorProps) {
           streamObj = yield* streamCreate(cmd.getDocId(), changesDir, indexFile++);
         }
         changesAuthor = change.user_id_original;
+        changesIndex = utils.getIndexFromUserId(change.user_id, change.user_id_original);
         authorProps.lastModifiedBy = change.user_name;
         authorProps.modified = change.change_date.toISOString().slice(0, 19) + 'Z';
         let strDate = baseConnector.getDateTime(change.change_date);
@@ -425,6 +432,7 @@ function* processChanges(tempDirs, cmd, authorProps) {
     fs.unlinkSync(streamObj.filePath);
   }
   cmd.setUserId(changesAuthor);
+  cmd.setUserIndex(changesIndex);
   fs.writeFileSync(path.join(tempDirs.result, 'changesHistory.json'), JSON.stringify(changesHistory), 'utf8');
   return res;
 }
@@ -583,10 +591,7 @@ function* ExecuteTask(task) {
   let authorProps = {lastModifiedBy: null, modified: null};
   if (cmd.getUrl()) {
     dataConvert.fileFrom = path.join(tempDirs.source, dataConvert.key + '.' + cmd.getFormat());
-    var isDownload = yield* downloadFile(dataConvert.key, cmd.getUrl(), dataConvert.fileFrom);
-    if (!isDownload) {
-      error = constants.CONVERT_DOWNLOAD;
-    }
+    error = yield* downloadFile(dataConvert.key, cmd.getUrl(), dataConvert.fileFrom, cmd.getWithAuthorization());
     if(clientStatsD) {
       clientStatsD.timing('conv.downloadFile', new Date() - curDate);
       curDate = new Date();
