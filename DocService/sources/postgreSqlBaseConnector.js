@@ -109,7 +109,7 @@ function getUpsertString(task) {
     userCallback.fromValues(task.userIndex, task.callback);
     cbInsert = userCallback.toSQLInsert();
     cbUpdate = ", callback = task_result.callback || " + exports.sqlEscape(userCallback.delimiter + '{"userIndex":') +
-      " || (task_result.user_index + 1) || " + exports.sqlEscape(',"callback":' + JSON.stringify(userCallback.callback) + '}');
+      " || (task_result.user_index + 1)::text || " + exports.sqlEscape(',"callback":' + JSON.stringify(userCallback.callback) + '}');
   }
   var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.userIndex, task.changeId, cbInsert, task.baseurl];
   var commandArgEsc = commandArg.map(function(curVal) {
