@@ -48,15 +48,14 @@ var pool  = mysql.createPool({
 });
 var logger = require('./../../Common/sources/logger');
 
-exports.sqlQuery = function (sqlCommand, callbackFunction) {
+exports.sqlQuery = function (sqlCommand, callbackFunction, opt_noModifyRes, opt_noLog, opt_values) {
 	pool.getConnection(function(err, connection) {
 		if (err) {
 			logger.error('pool.getConnection error: %s', err);
 			if (callbackFunction) callbackFunction(err, null);
 			return;
 		}
-
-		connection.query(sqlCommand, function (error, result) {
+		let queryCallback = function (error, result) {
 			connection.release();
 			if (error) {
 				logger.error('________________________error_____________________');
@@ -65,48 +64,58 @@ exports.sqlQuery = function (sqlCommand, callbackFunction) {
 				logger.error('_____________________end_error_____________________');
 			}
 			if (callbackFunction) callbackFunction(error, result);
-		});
+		};
+		if(opt_values){
+			connection.query(sqlCommand, opt_values, queryCallback);
+		} else {
+			connection.query(sqlCommand, queryCallback);
+		}
 	});
 };
-exports.sqlEscape = function (value) {
-	return pool.escape(value);
+let addSqlParam = function (val, values) {
+	values.push(val);
+	return '?';
 };
-
-function getUpsertString(task, opt_updateUserIndex) {
-	task.completeDefaults();
-	var dateNow = sqlBase.getDateTime(new Date());
-	var cbInsert = task.callback, cbUpdate = '';
-	if (task.callback) {
-		var userCallback = new sqlBase.UserCallback();
-		userCallback.fromValues(task.userIndex, task.callback);
-		cbInsert = userCallback.toSQLInsert();
-		cbUpdate = ", callback = CONCAT(callback , " + exports.sqlEscape(userCallback.delimiter + '{"userIndex":') +
-			" , (user_index + 1) , " + exports.sqlEscape(',"callback":' + JSON.stringify(userCallback.callback) + '}') + ')';
-	}
-	var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.userIndex, task.changeId, cbInsert, task.baseurl];
-	var commandArgEsc = commandArg.map(function(curVal) {
-		return exports.sqlEscape(curVal)
-	});
-	var sql = 'INSERT INTO task_result ( id, status, status_info, last_open_date,' +
-		' user_index, change_id, callback, baseurl ) VALUES (' + commandArgEsc.join(', ') + ') ON DUPLICATE KEY UPDATE' +
-		' last_open_date = ' + exports.sqlEscape(dateNow) + cbUpdate;
-	if (opt_updateUserIndex) {
-		sql += ', user_index = LAST_INSERT_ID(user_index + 1);';
-	} else {
-		sql += ';';
-	}
-	return sql;
-}
+exports.addSqlParameter = addSqlParam;
 
 exports.upsert = function(task, opt_updateUserIndex) {
 	return new Promise(function(resolve, reject) {
-		var sqlCommand = getUpsertString(task, opt_updateUserIndex);
+		task.completeDefaults();
+		let dateNow = new Date();
+		let values = [];
+		let cbInsert = task.callback;
+		if (task.callback) {
+			let userCallback = new sqlBase.UserCallback();
+			userCallback.fromValues(task.userIndex, task.callback);
+			cbInsert = userCallback.toSQLInsert();
+		}
+		let p1 = addSqlParam(task.key, values);
+		let p2 = addSqlParam(task.status, values);
+		let p3 = addSqlParam(task.statusInfo, values);
+		let p4 = addSqlParam(dateNow, values);
+		let p5 = addSqlParam(task.userIndex, values);
+		let p6 = addSqlParam(task.changeId, values);
+		let p7 = addSqlParam(cbInsert, values);
+		let p8 = addSqlParam(task.baseurl, values);
+		let p9 = addSqlParam(dateNow, values);
+		var sqlCommand = 'INSERT INTO task_result (id, status, status_info, last_open_date, user_index, change_id, callback, baseurl)'+
+			` VALUES (${p1}, ${p2}, ${p3}, ${p4}, ${p5}, ${p6}, ${p7}, ${p8}) ON DUPLICATE KEY UPDATE` +
+			` last_open_date = ${p9}`;
+		if (task.callback) {
+			let p10 = addSqlParam(JSON.stringify(task.callback), values);
+			sqlCommand += `, callback = CONCAT(callback , '${sqlBase.UserCallback.prototype.delimiter}{"userIndex":' , (user_index + 1) , ',"callback":', ${p10}, '}')`;
+		}
+		if (opt_updateUserIndex) {
+			sqlCommand += ', user_index = LAST_INSERT_ID(user_index + 1)';
+		}
+		sqlCommand += ';';
+
 		exports.sqlQuery(sqlCommand, function(error, result) {
 			if (error) {
 				reject(error);
 			} else {
 				resolve(result);
 			}
-		});
+		}, undefined, undefined, values);
 	});
 };

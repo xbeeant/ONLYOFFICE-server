@@ -18,8 +18,7 @@
       "../DocService/sources/editorDataRedis.js"
     ],
     "assets": [
-      "../Common/sources/licenseKey.pem",
-      "../DocService/node_modules/pg-escape/reserved.txt"
+      "../Common/sources/licenseKey.pem"
     ]
   }
 }

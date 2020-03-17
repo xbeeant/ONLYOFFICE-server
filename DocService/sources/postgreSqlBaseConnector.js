@@ -34,7 +34,6 @@
 
 var pg = require('pg');
 var co = require('co');
-var pgEscape = require('pg-escape');
 var types = require('pg').types;
 var sqlBase = require('./baseConnector');
 var configSql = require('config').get('services.CoAuthoring.sql');
@@ -87,44 +86,54 @@ exports.sqlQuery = function(sqlCommand, callbackFunction, opt_noModifyRes, opt_n
     }
   });
 };
-exports.sqlEscape = function(value) {
-  //todo parameterized queries
-  return undefined !== value ? pgEscape.literal(value.toString()) : 'NULL';
+let addSqlParam = function (val, values) {
+  values.push(val);
+  return '$' + values.length;
 };
+exports.addSqlParameter = addSqlParam;
 var isSupportOnConflict = true;
 
-function getUpsertString(task) {
+function getUpsertString(task, values) {
   task.completeDefaults();
-  var dateNow = sqlBase.getDateTime(new Date());
-  var cbInsert = task.callback, cbUpdate = '';
+  let dateNow = new Date();
+  let cbInsert = task.callback;
   if (isSupportOnConflict && task.callback) {
-    var userCallback = new sqlBase.UserCallback();
+    let userCallback = new sqlBase.UserCallback();
     userCallback.fromValues(task.userIndex, task.callback);
     cbInsert = userCallback.toSQLInsert();
-    cbUpdate = ", callback = task_result.callback || " + exports.sqlEscape(userCallback.delimiter + '{"userIndex":') +
-      " || (task_result.user_index + 1)::text || " + exports.sqlEscape(',"callback":' + JSON.stringify(userCallback.callback) + '}');
   }
-  var commandArg = [task.key, task.status, task.statusInfo, dateNow, task.userIndex, task.changeId, cbInsert, task.baseurl];
-  var commandArgEsc = commandArg.map(function(curVal) {
-    return exports.sqlEscape(curVal)
-  });
+  let p1 = addSqlParam(task.key, values);
+  let p2 = addSqlParam(task.status, values);
+  let p3 = addSqlParam(task.statusInfo, values);
+  let p4 = addSqlParam(dateNow, values);
+  let p5 = addSqlParam(task.userIndex, values);
+  let p6 = addSqlParam(task.changeId, values);
+  let p7 = addSqlParam(cbInsert, values);
+  let p8 = addSqlParam(task.baseurl, values);
   if (isSupportOnConflict) {
+    let p9 = addSqlParam(dateNow, values);
     //http://stackoverflow.com/questions/34762732/how-to-find-out-if-an-upsert-was-an-update-with-postgresql-9-5-upsert
-    return "INSERT INTO task_result (id, status, status_info, last_open_date, user_index, change_id, callback," +
-      " baseurl) VALUES (" + commandArgEsc.join(', ') + ") " +
-      "ON CONFLICT (id) DO UPDATE SET last_open_date = " +
-      sqlBase.baseConnector.sqlEscape(dateNow) + cbUpdate +
-      ", user_index = task_result.user_index + 1 RETURNING user_index as userindex;";
+    let sqlCommand = "INSERT INTO task_result (id, status, status_info, last_open_date, user_index, change_id, callback, baseurl)";
+    sqlCommand += ` VALUES (${p1}, ${p2}, ${p3}, ${p4}, ${p5}, ${p6}, ${p7}, ${p8})`;
+    sqlCommand += ` ON CONFLICT (id) DO UPDATE SET last_open_date = ${p9}`;
+    if (task.callback) {
+      let p10 = addSqlParam(JSON.stringify(task.callback), values);
+      sqlCommand += `, callback = task_result.callback || '${sqlBase.UserCallback.prototype.delimiter}{"userIndex":' `;
+      sqlCommand += ` || (task_result.user_index + 1)::text || ',"callback":' || ${p10}::text || '}'`;
+    }
+    sqlCommand += ", user_index = task_result.user_index + 1 RETURNING user_index as userindex;";
+    return sqlCommand;
   } else {
-    return "SELECT * FROM merge_db(" + commandArgEsc.join(', ') + ");";
+    return `SELECT * FROM merge_db(${p1}, ${p2}, ${p3}, ${p4}, ${p5}, ${p6}, ${p7}, ${p8});`;
   }
 }
 exports.upsert = function(task) {
   return new Promise(function(resolve, reject) {
-    var sqlCommand = getUpsertString(task);
+    let values = [];
+    var sqlCommand = getUpsertString(task, values);
     exports.sqlQuery(sqlCommand, function(error, result) {
       if (error) {
-        if (isSupportOnConflict && '42601' == error.code) {
+        if (isSupportOnConflict && '42601' === error.code) {
           //SYNTAX ERROR
           isSupportOnConflict = false;
           logger.warn('checkIsSupportOnConflict false');
@@ -141,7 +150,7 @@ exports.upsert = function(task) {
         }
         resolve(result);
       }
-    }, true);
+    }, true, undefined, values);
   });
 };
 exports.insertChanges = function(tableChanges, startIndex, objChanges, docId, index, user, callback) {
