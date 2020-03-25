@@ -39,9 +39,6 @@
       "./sources/pubsubRabbitMQ.js",
       "../Common/sources/storage-fs.js",
       "../Common/sources/storage-s3.js"
-    ],
-    "assets": [
-      "../Common/sources/licenseKey.pem"
     ]
   }
 }
