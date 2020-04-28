@@ -49,6 +49,7 @@ var pool = new pg.Pool({
   idleTimeoutMillis: 30000
 });
 //todo datetime timezone
+pg.defaults.parseInputDatesAsUTC = true;
 types.setTypeParser(1114, function(stringValue) {
   return new Date(stringValue + '+0000');
 });

@@ -2405,6 +2405,10 @@ exports.install = function(server, callbackFunction) {
         let changesToSend = arrNewDocumentChanges;
         if(changesToSend.length > cfgPubSubMaxChanges) {
           changesToSend = null;
+        } else {
+          changesToSend.forEach((value) => {
+            value.time = value.time.getTime();
+          })
         }
         yield* publish({type: commonDefines.c_oPublishType.changes, docId: docId, userId: userId,
           changes: changesToSend, startIndex: startIndex, changesIndex: puckerIndex,
@@ -2424,6 +2428,10 @@ exports.install = function(server, callbackFunction) {
       let changesToSend = arrNewDocumentChanges;
       if(changesToSend.length > cfgPubSubMaxChanges) {
         changesToSend = null;
+      } else {
+        changesToSend.forEach((value) => {
+          value.time = value.time.getTime();
+        })
       }
       let isPublished = yield* publish({type: commonDefines.c_oPublishType.changes, docId: docId, userId: userId,
         changes: changesToSend, startIndex: startIndex, changesIndex: puckerIndex,
