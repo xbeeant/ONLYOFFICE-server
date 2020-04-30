@@ -58,41 +58,46 @@ def start_mac_services():
 def run_integration_example():
   base.cmd_in_dir('../document-server-integration/web/documentserver-example/nodejs', 'python', ['run-develop.py'])
 
-base.print_info('check Node.js version')
-if (True != check_nodejs_version()):
-  exit(0)
+try:
+  base.print_info('check Node.js version')
+  if (True != check_nodejs_version()):
+    exit(0)
 
-platform = base.host_platform()
-if ("windows" == platform):
-  restart_win_rabbit()
-elif ("mac" == platform):
-  start_mac_services()
+  platform = base.host_platform()
+  if ("windows" == platform):
+    restart_win_rabbit()
+  elif ("mac" == platform):
+    start_mac_services()
 
-base.print_info('Build modules')
-base.cmd_in_dir('../build_tools', 'python', ['configure.py', '--branch', 'develop', '--module', 'develop', '--update', '1', '--update-light', '1', '--clean', '0', '--sdkjs-addon', 'comparison', '--sdkjs-addon', 'content-controls', '--sdkjs-addon', 'pivot-tables', '--web-apps-addon', 'mobile'])
-base.cmd_in_dir('../build_tools', 'python', ['make.py'])
+  base.print_info('Build modules')
+  base.cmd_in_dir('../build_tools', 'python', ['configure.py', '--branch', 'develop', '--module', 'develop', '--update', '1', '--update-light', '1', '--clean', '0', '--sdkjs-addon', 'comparison', '--sdkjs-addon', 'content-controls', '--sdkjs-addon', 'pivot-tables', '--web-apps-addon', 'mobile'])
+  base.cmd_in_dir('../build_tools', 'python', ['make.py'])
+  
+  run_integration_example()
+  
+  base.create_dir('App_Data')
 
-run_integration_example()
+  base.create_dir('SpellChecker/dictionaries')
+  base.copy_dir_content('../dictionaries', 'SpellChecker/dictionaries', '', '.git')
 
-base.create_dir('App_Data')
+  install_module('DocService')
+  install_module('Common')
+  install_module('FileConverter')
+  install_module('SpellChecker')
 
-base.create_dir('SpellChecker/dictionaries')
-base.copy_dir_content('../dictionaries', 'SpellChecker/dictionaries', '', '.git')
+  base.set_env('NODE_ENV', 'development-' + platform)
+  base.set_env('NODE_CONFIG_DIR', '../../Common/config')
 
-install_module('DocService')
-install_module('Common')
-install_module('FileConverter')
-install_module('SpellChecker')
+  if ("mac" == platform):
+    base.set_env('DYLD_LIBRARY_PATH', '../../FileConverter/bin/')
+  elif ("linux" == platform):
+    base.set_env('LD_LIBRARY_PATH', '../../FileConverter/bin/')
 
-base.set_env('NODE_ENV', 'development-' + platform)
-base.set_env('NODE_CONFIG_DIR', '../../Common/config')
-
-if ("mac" == platform):
-  base.set_env('DYLD_LIBRARY_PATH', '../../FileConverter/bin/')
-elif ("linux" == platform):
-  base.set_env('LD_LIBRARY_PATH', '../../FileConverter/bin/')
-
-run_module('DocService/sources', ['server.js'])
-run_module('DocService/sources', ['gc.js'])
-run_module('FileConverter/sources', ['convertermaster.js'])
-run_module('SpellChecker/sources', ['server.js'])
+  run_module('DocService/sources', ['server.js'])
+  run_module('DocService/sources', ['gc.js'])
+  run_module('FileConverter/sources', ['convertermaster.js'])
+  run_module('SpellChecker/sources', ['server.js'])
+except SystemExit:
+  print("Ignoring SystemExit")
+finally:
+  input("Press Enter to continue...")
