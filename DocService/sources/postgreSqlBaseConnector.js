@@ -37,7 +37,8 @@ var co = require('co');
 var types = require('pg').types;
 var sqlBase = require('./baseConnector');
 var configSql = require('config').get('services.CoAuthoring.sql');
-var pool = new pg.Pool({
+var pgPoolExtraOptions = configSql.get('pgPoolExtraOptions');
+let connectionConfig = {
   host: configSql.get('dbHost'),
   port: configSql.get('dbPort'),
   user: configSql.get('dbUser'),
@@ -47,7 +48,9 @@ var pool = new pg.Pool({
   min: 0,
   ssl: false,
   idleTimeoutMillis: 30000
-});
+};
+Object.assign(connectionConfig, pgPoolExtraOptions);
+var pool = new pg.Pool(connectionConfig);
 //todo datetime timezone
 pg.defaults.parseInputDatesAsUTC = true;
 types.setTypeParser(1114, function(stringValue) {

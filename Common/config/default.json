@@ -114,7 +114,8 @@
 				"dbPass": "onlyoffice",
 				"charset": "utf8",
 				"connectionlimit": 10,
-				"max_allowed_packet": 1048575
+				"max_allowed_packet": 1048575,
+				"pgPoolExtraOptions": {}
 			},
 			"redis": {
 				"name": "redis",
