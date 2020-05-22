@@ -32,6 +32,8 @@
 		"secretAccessKey": "SECRET",
 		"useRequestToGetUrl": false,
 		"useSignedUrl": false,
+		"sslEnabled": false,
+		"s3ForcePathStyle": true,
 		"externalHost": ""
 	},
 	"rabbitmq": {
@@ -114,7 +116,8 @@
 				"dbPass": "onlyoffice",
 				"charset": "utf8",
 				"connectionlimit": 10,
-				"max_allowed_packet": 1048575
+				"max_allowed_packet": 1048575,
+				"pgPoolExtraOptions": {}
 			},
 			"redis": {
 				"name": "redis",
