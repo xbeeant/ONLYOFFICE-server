@@ -73,10 +73,16 @@ var cfgVisibilityTimeout = config.get('queue.visibilityTimeout');
 var cfgQueueRetentionPeriod = config.get('queue.retentionPeriod');
 var cfgRequestDefaults = config.get('services.CoAuthoring.requestDefaults');
 const cfgTokenOutboxInBody = config.get('services.CoAuthoring.token.outbox.inBody');
+const cfgTokenEnableRequestOutbox = config.get('services.CoAuthoring.token.enable.request.outbox');
+const cfgTokenOutboxUrlExclusionRegex = config.get('services.CoAuthoring.token.outbox.urlExclusionRegex');
 
 var ANDROID_SAFE_FILENAME = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ._-+,@£$€!½§~\'=()[]{}0123456789';
 
 var baseRequest = request.defaults(cfgRequestDefaults);
+let outboxUrlExclusionRegex = null;
+if ("" !== cfgTokenOutboxUrlExclusionRegex) {
+  outboxUrlExclusionRegex = new RegExp(cfgTokenOutboxUrlExclusionRegex);
+}
 
 var g_oIpFilterRules = function() {
   var res = [];
@@ -773,4 +779,16 @@ exports.getConnectionInfo = function(conn){
 };
 exports.getConnectionInfoStr = function(conn){
   return JSON.stringify(exports.getConnectionInfo(conn));
+};
+exports.canIncludeOutboxAuthorization = function (url) {
+  if (cfgTokenEnableRequestOutbox) {
+    if (!outboxUrlExclusionRegex) {
+      return true;
+    } else if (!outboxUrlExclusionRegex.test(url)) {
+      return true;
+    } else {
+      logger.debug('canIncludeOutboxAuthorization excluded by token.outbox.urlExclusionRegex url=%s', url);
+    }
+  }
+  return false;
 };

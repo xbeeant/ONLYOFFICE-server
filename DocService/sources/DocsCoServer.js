@@ -127,7 +127,6 @@ const cfgExpUpdateVersionStatus = ms(config.get('expire.updateVersionStatus'));
 const cfgSockjs = config.get('sockjs');
 const cfgTokenEnableBrowser = config.get('token.enable.browser');
 const cfgTokenEnableRequestInbox = config.get('token.enable.request.inbox');
-const cfgTokenEnableRequestOutbox = config.get('token.enable.request.outbox');
 const cfgTokenSessionAlgorithm = config.get('token.session.algorithm');
 const cfgTokenSessionExpires = ms(config.get('token.session.expires'));
 const cfgTokenInboxHeader = config.get('token.inbox.header');
@@ -558,7 +557,7 @@ function* getOriginalParticipantsId(docId) {
 function* sendServerRequest(docId, uri, dataObject, opt_checkAuthorization) {
   logger.debug('postData request: docId = %s;url = %s;data = %j', docId, uri, dataObject);
   let auth;
-  if (cfgTokenEnableRequestOutbox) {
+  if (utils.canIncludeOutboxAuthorization(uri)) {
     auth = utils.fillJwtForRequest(dataObject);
     if (cfgTokenOutboxInBody) {
       dataObject = {token: auth};

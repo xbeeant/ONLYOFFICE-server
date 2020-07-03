@@ -184,7 +184,8 @@
 					"prefix": "Bearer ",
 					"algorithm": "HS256",
 					"expires": "5m",
-					"inBody": false
+					"inBody": false,
+					"urlExclusionRegex": ""
 				},
 				"session": {
 					"algorithm": "HS256",
