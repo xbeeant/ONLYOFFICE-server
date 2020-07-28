@@ -1425,7 +1425,7 @@ exports.install = function(server, callbackFunction) {
 
 		if (unlock) {
 			var unlockRes = yield editorData.unlockAuth(docId, userId);
-			if (unlockRes) {
+			if (commonDefines.c_oAscUnlockRes.Unlocked === unlockRes) {
 				const participantsMap = yield* getParticipantMap(docId);
 				yield* publish({
 					type: commonDefines.c_oPublishType.auth,
@@ -1855,7 +1855,7 @@ exports.install = function(server, callbackFunction) {
             return;
           }
         }
-        upsertRes = yield canvasService.commandOpenStartPromise(docId, true, data.documentCallbackUrl, utils.getBaseUrlByConnection(conn));
+        upsertRes = yield canvasService.commandOpenStartPromise(docId, utils.getBaseUrlByConnection(conn), true, data.documentCallbackUrl);
 		  curIndexUser = upsertRes.affectedRows == 1 ? 1 : upsertRes.insertId;
       }
       if (constants.CONN_CLOSED === conn.readyState) {
@@ -2459,7 +2459,7 @@ exports.install = function(server, callbackFunction) {
   // Снимаем лок с сохранения
   function* unSaveLock(conn, index, time) {
     var unlockRes = yield editorData.unlockSave(conn.docId, conn.user.id);
-    if (unlockRes) {
+    if (commonDefines.c_oAscUnlockRes.Locked !== unlockRes) {
       sendData(conn, {type: 'unSaveLock', index: index, time: time});
     } else {
       logger.warn("unSaveLock failure: docId = %s; conn.user.id: %s", conn.docId, conn.user.id);
