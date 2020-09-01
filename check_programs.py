@@ -26,7 +26,7 @@ def deleteProgram(sName):
 def installNodejs():
   if is_admin():
     base.download("https://nodejs.org/dist/latest-v10.x/node-v10.22.0-x64.msi", './nodejs.msi')
-    print("Unstalling Node.js...")
+    print("Installing Node.js...")
     code = subprocess.call('msiexec.exe /i nodejs.msi /qn',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     if code == 0:
       print("Install success!")
