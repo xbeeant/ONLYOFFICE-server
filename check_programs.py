@@ -89,8 +89,7 @@ def check_java_bitness():
   return True
   
 def check_version(sCommand):
-  get_version_command = sCommand
-  popen = subprocess.Popen(get_version_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+  popen = subprocess.Popen(sCommand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
    
   try:
     stdout, stderr = popen.communicate()
