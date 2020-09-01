@@ -53,7 +53,7 @@ def installJava():
     sys.exit()
         
 def check_nodejs_version():
-  nodejs_version = chek_version('node -v')
+  nodejs_version = check_version('node -v')
     
   if nodejs_version == '':
     installNodejs()
@@ -72,7 +72,7 @@ def check_nodejs_version():
   return True
   
 def check_java_bitness():
-  java_bitness = chek_version('java -version')
+  java_bitness = check_version('java -version')
     
   if java_bitness == '':
     installJava()
@@ -88,24 +88,14 @@ def check_java_bitness():
 
   return True
   
-def chek_version(sCommand):
+def check_version(sCommand):
   get_version_command = sCommand
   popen = subprocess.Popen(get_version_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
    
   try:
     stdout, stderr = popen.communicate()
     popen.wait()
-    progVersion = ''
-    if sCommand == 'node -v':
-      progVersion = stdout.strip().decode("utf-8")
-    elif sCommand == 'java -version':
-      if stderr.find('32-Bit') != -1:
-        progVersion = 32
-      elif stderr.find('64-Bit') != -1:
-        progVersion = 64
-      else: 
-        progVersion = ''
-         
+    progVersion = stdout.strip().decode("utf-8")
   finally:
     popen.stdout.close()
     popen.stderr.close()
