@@ -3,8 +3,6 @@ sys.path.append('../build_tools/scripts')
 import os
 import base
 import check_programs
-import subprocess
-import ctypes
 
 def install_module(path):
   base.print_info('Install: ' + path)
