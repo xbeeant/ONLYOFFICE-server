@@ -79,7 +79,7 @@ def installJava(javaBitness):
   elif javaBitness == 'x64':
     print('Valid java version.')
     return True
-    
+
 try:
   if is_admin():
     base.print_info('Check Node.js version')
@@ -91,3 +91,4 @@ try:
     sys.exit()
 except SystemExit:
   input("Ignoring SystemExit. Press Enter to continue...")
+

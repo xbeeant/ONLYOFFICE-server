@@ -2,7 +2,9 @@ import sys
 sys.path.append('../build_tools/scripts')
 import os
 import base
-import install_develop
+import ctypes
+import checks_develop
+import subprocess
 
 def install_module(path):
   base.print_info('Install: ' + path)
@@ -33,11 +35,13 @@ def start_mac_services():
 
 def run_integration_example():
   base.cmd_in_dir('../document-server-integration/web/documentserver-example/nodejs', 'python', ['run-develop.py'])
-
+  
 try:
-  if (True != base.cmd_in_dir('../', 'python', ['install_develop.py'])):
-    exit(0)
-
+  if checks_develop.run_command('path').find(sys.exec_prefix) == -1:
+    os.environ['PATH'] = sys.exec_prefix + ';' + os.environ['PATH']
+    
+  base.cmd_in_dir(os.getcwd(), 'python', ['install_develop.py'])
+  
   platform = base.host_platform()
   if ("windows" == platform):
     restart_win_rabbit()
@@ -72,5 +76,8 @@ try:
   run_module('DocService/sources', ['gc.js'])
   run_module('FileConverter/sources', ['convertermaster.js'])
   run_module('SpellChecker/sources', ['server.js'])
+  
+  if bAddToPath:
+    subprocess.call('call setx /M path "%path:' + sys.exec_prefix + '=%"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
 except SystemExit:
   input("Ignoring SystemExit. Press Enter to continue...")

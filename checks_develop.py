@@ -17,7 +17,7 @@ def check_nodejs_version():
   return nodejs_cur_version
   
 def check_java_bitness():
-  java_version = run_command('Java -version')
+  java_version = run_command('java -version')
   if java_version == '':
     return java_version
   elif java_version.find('64-Bit') == -1:
@@ -33,20 +33,11 @@ def run_command(sCommand):
     popen.wait()
     if sCommand == 'node -v':
       result = stdout.strip().decode("utf-8") 
-    elif sCommand == 'java -version':
+    elif sCommand == 'java -version' or sCommand == 'path':
       result = stdout.strip().decode("utf-8") + stderr.strip().decode("utf-8")
   finally:
     popen.stdout.close()
     popen.stderr.close()
   
   return result
-  
-try:
-  if is_admin():
-    run_command('Java -version')
-    #run_command('node -v')
-  else:
-    ctypes.windll.shell32.ShellExecuteW(None, u"runas", unicode(sys.executable), unicode(''.join(sys.argv)), None, 1)
-    sys.exit()
-except SystemExit:
-  input("Ignoring SystemExit. Press Enter to continue...")
+   
