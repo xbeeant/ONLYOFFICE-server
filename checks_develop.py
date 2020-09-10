@@ -1,6 +1,7 @@
 import sys
 import subprocess
 import ctypes 
+import os 
 
 def is_admin():
   try:
@@ -27,6 +28,38 @@ def check_java_bitness():
     
 def check_rabbitmq():
   return run_command('sc query RabbitMQ')
+
+def get_erlangPath():
+  pythonV = run_command('python --version').split('Python ')[1].split('.')[0]
+  if int(pythonV) > 2:
+    import winreg
+  else:
+    import _winreg as winreg
+    
+  Path = ""
+  try:
+    keyValue = r"SOFTWARE\WOW6432Node\Ericsson\Erlang"
+    aKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, keyValue)
+    count_subkey = winreg.QueryInfoKey(aKey)[0]
+    
+    for i in range(count_subkey):
+      asubkey_name = winreg.EnumKey(aKey, i)
+      if asubkey_name.split(".")[0].isdigit():
+        asubkey = winreg.OpenKey(aKey, asubkey_name)
+        Path = winreg.QueryValueEx(asubkey, None)[0]
+      else:
+        continue
+    return Path
+  except:
+    return Path
+    
+def check_erlang():
+  erlangPath = get_erlangPath()
+  
+  if erlangPath == "":
+    return None
+  else:
+    return run_command('cd ' + erlangPath + '/bin && erl -eval "erlang:display(erlang:system_info(wordsize)), halt()."  -noshell')
   
 def run_command(sCommand):
   popen = subprocess.Popen(sCommand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True) 
@@ -43,4 +76,3 @@ def run_command(sCommand):
     popen.stderr.close()
   
   return result
-   

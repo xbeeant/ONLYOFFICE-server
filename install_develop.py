@@ -12,7 +12,7 @@ def is_admin():
   except:
     return False
 
-def installingProgram(sProgram):
+def installingProgram(sProgram, bSilent = False):
   if sProgram == 'Node.js':
     print("Installing Node.js...")
     base.download("https://nodejs.org/dist/latest-v10.x/node-v10.22.0-x64.msi", './nodejs.msi')
@@ -49,15 +49,39 @@ def installingProgram(sProgram):
       print("Error!")
       base.delete_file('./rabbitmq.exe')
       return False
+  elif sProgram == 'Erlang':
+    print("Installing Erlang...")
+    base.download("http://erlang.org/download/otp_win64_23.0.exe", './erlang.exe')
+    code = subprocess.call('erlang.exe /S',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    if code == 0:
+      print("Install success!")
+      base.delete_file('./erlang.exe')
+      return True
+    else:
+      print("Error!")
+      base.delete_file('./erlang.exe')
+      return False
 
 def deleteProgram(sName):
+  if sName == 'Erlang':
+    print("Deleting " + sName + "...")
+    code = subprocess.call('cd ' + checks_develop.get_erlangPath() + ' && Uninstall.exe /S', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    if code == 0:
+      print("Delete success!")
+      return True
+    else:
+      print("Error!")
+      return False
+      
   if is_admin():
     print("Deleting " + sName + "...")
     code = subprocess.call('wmic product where name="' + sName + '" call uninstall',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     if code == 0:
       print("Delete success!")
+      return True
     else:
       print("Error!")
+      return False
   else:
     ctypes.windll.shell32.ShellExecuteW(None, u"runas", unicode(sys.executable), unicode(''.join(sys.argv)), None, 1)
     sys.exit() 
@@ -89,7 +113,7 @@ def installJava(javaBitness):
     print('Java bitness must be x64')
     return installingProgram('Java')
   elif javaBitness == 'x64':
-    print('Valid java bitness.')
+    print('Valid Java bitness')
     return True
     
 def installRabbitMQ(result):
@@ -98,13 +122,42 @@ def installRabbitMQ(result):
   else:
     print('RabbitMQ is installed')
     return True
-    
+ 
+def installErlang(result):
+  if result == None or result == 'The system cannot find the path specified.':
+    installingProgram('Erlang')
+    installingProgram('RabbitMQ')
+    path = checks_develop.get_erlangPath()
+    code = subprocess.call('SETX /M ERLANG_HOME "' + path + '"')
+    if code == 0:
+      return True
+    else:
+      return False
+  elif result == '4':
+    print('Erlang bitness (x32) is not valid') 
+    deleteProgram('Erlang')
+    if True != installingProgram('Erlang'):
+      exit(0)
+    installingProgram('RabbitMQ')
+  elif result == '8':
+    if os.getenv("ERLANG_HOME") != checks_develop.get_erlangPath():
+      path = checks_develop.get_erlangPath()
+      code = subprocess.call('SETX /M ERLANG_HOME "' + path + '"')
+      if code == 0:
+        return True
+      else:
+        return False
+    print("Erlang is valid")
+    return True
+
 try:
   if is_admin():
     base.print_info('Check Node.js version')
     installNodejs(checks_develop.check_nodejs_version())
     base.print_info('Check Java bitness')
     installJava(checks_develop.check_java_bitness())
+    base.print_info('Check Erlang')
+    installErlang(checks_develop.check_erlang())
     base.print_info('Check RabbitMQ')
     installRabbitMQ(checks_develop.check_rabbitmq())
   else:
@@ -112,5 +165,4 @@ try:
     sys.exit()
 except SystemExit:
   input("Ignoring SystemExit. Press Enter to continue...")
-  
 
