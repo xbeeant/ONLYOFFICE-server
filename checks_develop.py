@@ -61,6 +61,14 @@ def check_erlang():
   else:
     return run_command('cd ' + erlangPath + '/bin && erl -eval "erlang:display(erlang:system_info(wordsize)), halt()."  -noshell')
   
+def check_gruntcli():
+  result = run_command('npm list -g --depth=0')
+  
+  if result.find('grunt-cli') == -1:
+    return False
+  else:
+    return True
+    
 def run_command(sCommand):
   popen = subprocess.Popen(sCommand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True) 
   result = ''

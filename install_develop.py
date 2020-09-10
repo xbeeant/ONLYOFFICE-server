@@ -61,6 +61,15 @@ def installingProgram(sProgram, bSilent = False):
       print("Error!")
       base.delete_file('./erlang.exe')
       return False
+  elif sProgram == 'GruntCli':
+    print('Installing Grunt-Cli...')
+    code = subprocess.call('npm install -g grunt-cli',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    if code == 0:
+      print("Install success!")
+      return True
+    else:
+      print("Error!")
+      return False
 
 def deleteProgram(sName):
   if sName == 'Erlang':
@@ -150,6 +159,15 @@ def installErlang(result):
     print("Erlang is valid")
     return True
 
+def installGruntCli(result):
+  if result == False:
+    print('Grunt-Cli not found')
+    return installingProgram('GruntCli')
+  else:
+    print('Grunt-Cli is installed')
+    return True
+
+
 try:
   if is_admin():
     base.print_info('Check Node.js version')
@@ -160,6 +178,8 @@ try:
     installErlang(checks_develop.check_erlang())
     base.print_info('Check RabbitMQ')
     installRabbitMQ(checks_develop.check_rabbitmq())
+    base.print_info('Check Grunt-Cli')
+    installGruntCli(checks_develop.check_gruntcli())
   else:
     ctypes.windll.shell32.ShellExecuteW(None, u"runas", unicode(sys.executable), unicode(''.join(sys.argv)), None, 1)
     sys.exit()
