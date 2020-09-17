@@ -192,7 +192,6 @@ def installGruntCli(result):
 def installMySQLServer(serversBitness, serversVersions, serversPaths, dataPaths):
   for i in range(len(serversBitness)):
     result = serversBitness[i]
-    
     if result == "":
       continue 
     elif result == 'x32':
@@ -202,7 +201,9 @@ def installMySQLServer(serversBitness, serversVersions, serversPaths, dataPaths)
     elif result == 'x64':
       connectionResult = check.run_command('cd ' + serversPaths[i] + 'bin && mysql -u root -ponlyoffice -e "SHOW GLOBAL VARIABLES LIKE ' + r"'PORT';" + '"')
       if connectionResult.find('port') != -1 and connectionResult.find('3306') != -1:
-        print('MySQL Server ' + serversVersions[i] + ' is valid')
+        if check.run_command('cd ' + serversPaths[i] + 'bin && mysql -u root -ponlyoffice -e "SHOW DATABESES;').find('onlyoffice') == -1:
+          subprocess.call('cd ' + serversPaths[i] + 'bin && mysql -u root -ponlyoffice -e "source ' + os.getcwd() + '\schema\mysql\createdb.sql"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        print('MySQL Server ' + serversVersions[i][0:-3] + ' is valid')
         return True
       else:
         print('MySQL Server configuration is not valid')
@@ -220,12 +221,15 @@ def installMySQLServer(serversBitness, serversVersions, serversPaths, dataPaths)
   
   for i in range(len(dirPaths)):
     if dirPaths[i].find('Server 8.0') != -1:
-      connectionResult = check.run_command('cd ' + dirPaths[i] + 'bin && mysql -u root -ponlyoffice -e "SHOW GLOBAL VARIABLES LIKE ' + r"'PORT';" + '"')
+      connectionResult = run_command('cd ' + dirPaths[i] + 'bin && mysql -u root -ponlyoffice -e "SHOW GLOBAL VARIABLES LIKE ' + r"'PORT';" + '"')
       if connectionResult.find('port') != -1 and connectionResult.find('3306') != -1:
-        print('MySQL Server ' + serversVersions[i] + ' is valid')
+        if run_command('cd ' + dirPaths[i] + 'bin && mysql -u root -ponlyoffice -e "SHOW DATABESES;').find('onlyoffice') == -1:
+          subprocess.call('cd ' + dirPaths[i] + 'bin && mysql -u root -ponlyoffice -e "source ' + os.getcwd() + '\schema\mysql\createdb.sql"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True) 
+        print('MySQL Server 8.0 is valid')
         return True
-      else:
-        continue
+    else:
+      continue
+      
   return False
       
         
