@@ -8,7 +8,7 @@ import checks_develop as check
 import shutil
 
 if sys.version_info[0] >= 3:
-    unicode = str
+  unicode = str
     
 def is_admin():
   try:
