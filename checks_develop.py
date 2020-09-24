@@ -4,6 +4,11 @@ import base
 import subprocess
 import os 
 
+if (sys.version_info[0] >= 3):
+  import winreg
+else:
+  import _winreg as winreg
+    
 progsToInstall = []
 progsToUninstall = []
 pathsToRemove = []
@@ -59,11 +64,6 @@ def check_rabbitmq():
   return True
 
 def get_erlangPath():
-  if (sys.version_info[0] >= 3):
-    import winreg
-  else:
-    import _winreg as winreg
-    
   Path = ""
   try:
     keyValue = r"SOFTWARE\WOW6432Node\Ericsson\Erlang"
@@ -115,11 +115,6 @@ def check_gruntcli():
     return True
     
 def get_mysqlServersPaths():
-  if (sys.version_info[0] >= 3):
-    import winreg
-  else:
-    import _winreg as winreg
-    
   paths = []
   Path = ""
   
@@ -145,11 +140,6 @@ def get_mysqlServersPaths():
     return paths
     
 def get_mysqlServersDataPaths():
-  if (sys.version_info[0] >= 3):
-    import winreg
-  else:
-    import _winreg as winreg
-  
   paths = []
   Path = ""
   
@@ -175,11 +165,6 @@ def get_mysqlServersDataPaths():
     return paths
     
 def get_mysqlServersVersions():
-  if (sys.version_info[0] >= 3):
-    import winreg
-  else:
-    import _winreg as winreg
-  
   Versions = []
   Version = ""
   
@@ -206,11 +191,6 @@ def get_mysqlServersVersions():
     
 def check_mysqlInstaller():
   global progsToInstall
-  if (sys.version_info[0] >= 3):
-    import winreg
-  else:
-    import _winreg as winreg
-  
   try:
     keyValue = r"SOFTWARE\WOW6432Node\MySQL"
     
@@ -311,7 +291,7 @@ def run_command(sCommand):
   
   return result
 
-def check_all():
+def check_dependencies():
   global progsToInstall, progsToUninstall, pathsToRemove, pathToValidMySQLServer
   check_nodejs()
   check_java()
@@ -328,5 +308,4 @@ def check_all():
   
   check_mysqlServer(mySQLServersBitness, mySQLServersVersions, mySQLServersPaths, mySQLServersDataPaths, True)
   return {'Uninstall': progsToUninstall, 'Install': progsToInstall, 'Paths': pathsToRemove, 'MySQLServer' : pathToValidMySQLServer}
-
 

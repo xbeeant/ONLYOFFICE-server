@@ -7,6 +7,9 @@ import ctypes
 import checks_develop as check
 import shutil
 
+if (sys.version_info[0] >= 3):
+  unicode = str
+
 def is_admin():
   try:
     return ctypes.windll.shell32.IsUserAnAdmin()
