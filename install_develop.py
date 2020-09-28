@@ -161,7 +161,7 @@ def installMySQLServer():
   return False
   
 try:
-  checkResults = check.check_all()
+  checkResults = check.check_dependencies()
   if (len(checkResults['Install']) > 0):
     if is_admin():
       for i in range(len(checkResults['Uninstall'])):
