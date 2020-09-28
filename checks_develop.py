@@ -146,11 +146,8 @@ def get_mysqlServersDataPaths():
   try:
     keyValue = r"SOFTWARE\WOW6432Node\MySQL AB"
     
-    try:
-      aKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, keyValue)
-    except:
-      return Versions
-      
+    aKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, keyValue)
+    
     count_subkey = winreg.QueryInfoKey(aKey)[0]
     for i in range(count_subkey):
       asubkey_name = winreg.EnumKey(aKey, i)
