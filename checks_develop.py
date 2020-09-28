@@ -9,19 +9,63 @@ if (sys.version_info[0] >= 3):
 else:
   import _winreg as winreg
     
-progsToInstall = []
-progsToUninstall = []
-pathsToRemove = []
-pathToValidMySQLServer = ''
-
+class CDependencies(object):
+  def __init__(self):
+    self.progsToInstall = []
+    self.progsToUninstall = []
+    self.pathsToRemove = []
+    self.pathToValidMySQLServer = ''
+    
+  def append(self, oCdependencies):
+    for i in range(len(oCdependencies.progsToInstall)):
+      self.progsToInstall.append(oCdependencies.progsToInstall[i])
+    for i in range(len(oCdependencies.progsToUninstall)):
+      self.progsToUninstall.append(oCdependencies.progsToUninstall[i])
+    for i in range(len(oCdependencies.pathsToRemove)):
+      self.pathsToRemove.append(oCdependencies.pathsToRemove[i])
+    self.pathToValidMySQLServer = oCdependencies.pathToValidMySQLServer   
+        
+  def print_PrgrmToInst(self):
+    print('***Progs to install:***')
+    for i in range(len(self.progsToInstall)):
+      print(self.progsToInstall[i])
+    print('____________')
+      
+  def print_PrgrmToUninst(self):
+    print('***Progs to uninstall:***')
+    for i in range(len(self.progsToUninstall)):
+      print(self.progsToUninstall[i])
+    print('____________')
+      
+  def print_PathsToRemove(self):
+    print('***Paths to remove:***')
+    for i in range(len(self.pathsToRemove)):
+      print(self.pathsToRemove[i])
+    print('____________')
+     
+  def print_PathsToValidMySQL(self):
+    print('***Paths to valid MySQL Server:***')
+    for i in range(len(self.pathToValidMySQLServer)):
+      print(self.pathToValidMySQLServer[i])
+    print('____________')
+ 
+def check_pythonPath():
+  dependence = CDependencies()
+  
+  if base.get_env('PATH').find(sys.exec_prefix) == -1:
+    dependence.progsToInstall.append('PythonPath')
+  
+  return dependence
+  
 def check_nodejs():
-  global progsToInstall, progsToUninstall
+  dependence = CDependencies()
+  
   base.print_info('Check installed Node.js version')
   nodejs_version = run_command('node -v')['stdout']
   if (nodejs_version == ''):
     print('Node.js not found')
-    progsToInstall.append('Node.js')
-    return False
+    dependence.progsToInstall.append('Node.js')
+    return dependence
   
   nodejs_cur_version = int(nodejs_version.split('.')[0][1:])
   print('Installed Node.js version: ' + str(nodejs_cur_version))
@@ -29,39 +73,41 @@ def check_nodejs():
   nodejs_max_version = 10
   if (nodejs_min_version > nodejs_cur_version or nodejs_cur_version > nodejs_max_version):
     print('Installed Node.js version must be 8.x to 10.x')
-    progsToUninstall.append('Node.js')
-    progsToInstall.append('Node.js')
-    return False
+    dependence.progsToUninstall.append('Node.js')
+    dependence.progsToInstall.append('Node.js')
+    return dependence
   
   print('Installed Node.js version is valid')
-  return True
+  return dependence
   
 def check_java():
-  global progsToInstall
+  dependence = CDependencies()
+  
   base.print_info('Check installed Java')
   java_version = run_command('java -version')['stderr']
   
   if (java_version.find('64-Bit') != -1):
     print('Installed java is valid')
-    return True
+    return dependence
   
   if (java_version.find('32-Bit') != -1):
     print('Installed java must be x64')
   else:
     print('Java not found')
   
-  progsToInstall.append('Java')
-  return False
+  dependence.progsToInstall.append('Java')
+  return dependence
     
 def check_rabbitmq():
-  global progsToInstall
+  dependence = CDependencies()
+  
   base.print_info('Check installed RabbitMQ')
   result = run_command('sc query RabbitMQ')['stdout']
   if (result.find('RabbitMQ') == -1):
-    progsToInstall.append('RabbitMQ')
-    return False
+    dependence.progsToInstall.append('RabbitMQ')
+    return dependence
   print('Installed RabbitMQ is valid')
-  return True
+  return dependence
 
 def get_erlangPath():
   Path = ""
@@ -82,7 +128,8 @@ def get_erlangPath():
     return Path
     
 def check_erlang():
-  global progsToInstall, progsToUninstall
+  dependence = CDependencies()
+  
   base.print_info('Check installed Erlang')
   erlangPath = get_erlangPath()
   
@@ -92,27 +139,28 @@ def check_erlang():
       if (os.getenv("ERLANG_HOME") != get_erlangPath()):
         progsToInstall.append('ERLANG_HOME')
       print("Installed Erlang bitness is valid")
-      return True
+      return dependence
     print('Installed Erlang must be x64') 
-    progsToUninstall.append('Erlang')
+    dependence.progsToUninstall.append('Erlang')
   
   print('Erlang not found')
-  progsToInstall.append('Erlang')
-  progsToInstall.append('RabbitMQ')
-  return False
+  dependence.progsToInstall.append('Erlang')
+  dependence.progsToInstall.append('RabbitMQ')
+  return dependence
 
 def check_gruntcli():
-  global progsToInstall
+  dependence = CDependencies()
+  
   base.print_info('Check installed Grunt-Cli')
   result = run_command('npm list -g --depth=0')['stdout']
   
   if (result.find('grunt-cli') == -1):
     print('Grunt-Cli not found')
     progsToInstall.append('GruntCli')
-    return False
+    return dependence
   
   print('Grunt-Cli is installed')
-  return True
+  return dependence
     
 def get_mysqlServersPaths():
   paths = []
@@ -121,11 +169,8 @@ def get_mysqlServersPaths():
   try:
     keyValue = r"SOFTWARE\WOW6432Node\MySQL AB"
     
-    try:
-      aKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, keyValue)
-    except:
-      return Versions
-      
+    aKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, keyValue)
+    
     count_subkey = winreg.QueryInfoKey(aKey)[0]
     for i in range(count_subkey):
       asubkey_name = winreg.EnumKey(aKey, i)
@@ -168,11 +213,8 @@ def get_mysqlServersVersions():
   try:
     keyValue = r"SOFTWARE\WOW6432Node\MySQL AB"
     
-    try:
-      aKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, keyValue)
-    except:
-      return Versions
-      
+    aKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, keyValue)
+    
     count_subkey = winreg.QueryInfoKey(aKey)[0]
     for i in range(count_subkey):
       asubkey_name = winreg.EnumKey(aKey, i)
@@ -187,26 +229,24 @@ def get_mysqlServersVersions():
     return Versions
     
 def check_mysqlInstaller():
-  global progsToInstall
+  dependence = CDependencies()
+  
   try:
     keyValue = r"SOFTWARE\WOW6432Node\MySQL"
     
-    try:
-      aKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, keyValue)
-    except:
-      progsToInstall.append('MySQLInstaller')
-      return False
-      
+    aKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, keyValue)
+    
     count_subkey = winreg.QueryInfoKey(aKey)[0]
     for i in range(count_subkey):
       asubkey_name = winreg.EnumKey(aKey, i)
       if (asubkey_name.find('MySQL Installer') != - 1):
-        return True
+        return dependence
     
-    progsToInstall.append('MySQLInstaller')
-    return False
+    dependence.progsToInstall.append('MySQLInstaller')
+    return dependence
   except:
-    return False
+    dependence.progsToInstall.append('MySQLInstaller')
+    return dependence
 
 def check_mysqlServersBitness(MySQLPaths):
   serversBitness = []
@@ -226,16 +266,17 @@ def check_mysqlServersBitness(MySQLPaths):
         serversBitness.append('')
   return serversBitness
   
-def check_mysqlServer(serversBitness, serversVersions, serversPaths, dataPaths, bAddToArrayToInstall):
-  global progsToInstall, progsToUninstall, pathsToRemove, pathToValidMySQLServer
+def check_mysqlServer(serversBitness, serversVersions, serversPaths, dataPaths):
+  dependence = CDependencies()
+  
   base.print_info('Check MySQL Server')
   for i in range(len(serversBitness)):
     if serversBitness[i] != '':
       break
     if (i == len(serversBitness) - 1): 
       print('MySQL Server not found')
-      progsToInstall.append('MySQLServer')
-      return False
+      dependence.progsToInstall.append('MySQLServer')
+      return dependence
     
   for i in range(len(serversBitness)):
     result = serversBitness[i]
@@ -243,7 +284,7 @@ def check_mysqlServer(serversBitness, serversVersions, serversPaths, dataPaths, 
       continue 
     elif (result == 'x32'):
       print('MySQL Server ' + serversVersions[i][0:3] + ' bitness is x32, is not valid')
-      progsToUninstall.append('MySQL Server ' + serversVersions[i][0:3])
+      dependence.progsToUninstall.append('MySQL Server ' + serversVersions[i][0:3])
       continue
     elif (result == 'x64'):
       print('MySQL Server bitness is valid')
@@ -251,28 +292,30 @@ def check_mysqlServer(serversBitness, serversVersions, serversPaths, dataPaths, 
       if (connectionResult.find('port') != -1 and connectionResult.find('3306') != -1):
         if (run_command('cd ' + serversPaths[i] + 'bin && mysql -u root -ponlyoffice -e "SHOW DATABASES;"')['stdout'].find('onlyoffice') == -1):
           print('Database onlyoffice not found')
-          progsToInstall.append('MySQLDatabase')
+          dependence.progsToInstall.append('MySQLDatabase')
         if (run_command('cd ' + serversPaths[i] + 'bin && mysql -u root -ponlyoffice -e "SELECT plugin from mysql.user where User=' + "'root';")['stdout'].find('mysql_native_password') == -1):
           print('Password encryption is not valid')
-          progsToInstall.append('MySQLEncrypt') 
-        pathToValidMySQLServer = serversPaths[i]
-        return True
+          dependence.progsToInstall.append('MySQLEncrypt') 
+        dependence.pathToValidMySQLServer = serversPaths[i]
+        return dependence
       else:
         print('MySQL Server configuration is not valid')
-        progsToUninstall.append('MySQL Server ' + serversVersions[i][0:3])
-        pathsToRemove.append(serversPaths[i])
-        progsToInstall.append('MySQLServer')
+        dependence.progsToUninstall.append('MySQL Server ' + serversVersions[i][0:3])
+        dependence.pathsToRemove.append(serversPaths[i])
+        dependence.progsToInstall.append('MySQLServer')
         continue
+  return dependence
   
 def check_buildTools():
-  global progsToInstall
+  dependence = CDependencies()
+  
   base.print_info('Check installed Build Tools')
   result = run_command(os.path.split(os.getcwd())[0] + r'\build_tools\tools\win\vswhere\vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property DisplayName')['stdout']
   if (result == ''):
-    progsToInstall.append('BuildTools')
-    return False
+    dependence.progsToInstall.append('BuildTools')
+    return dependence
   
-  return True
+  return dependence
   
 def run_command(sCommand):
   popen = subprocess.Popen(sCommand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True) 
@@ -289,20 +332,23 @@ def run_command(sCommand):
   return result
 
 def check_dependencies():
-  global progsToInstall, progsToUninstall, pathsToRemove, pathToValidMySQLServer
-  check_nodejs()
-  check_java()
-  check_erlang()
-  check_rabbitmq()
-  check_gruntcli()
-  check_buildTools()
-  check_mysqlInstaller()
+  final_dependence = CDependencies()
+  
+  final_dependence.append(check_pythonPath())
+  final_dependence.append(check_nodejs())
+  final_dependence.append(check_java())
+  final_dependence.append(check_erlang())
+  final_dependence.append(check_rabbitmq())
+  final_dependence.append(check_gruntcli())
+  final_dependence.append(check_buildTools())
+  final_dependence.append(check_mysqlInstaller())
   
   mySQLServersPaths     = get_mysqlServersPaths()
   mySQLServersBitness   = check_mysqlServersBitness(mySQLServersPaths)
   mySQLServersVersions  = get_mysqlServersVersions()
   mySQLServersDataPaths = get_mysqlServersDataPaths()
   
-  check_mysqlServer(mySQLServersBitness, mySQLServersVersions, mySQLServersPaths, mySQLServersDataPaths, True)
-  return {'Uninstall': progsToUninstall, 'Install': progsToInstall, 'Paths': pathsToRemove, 'MySQLServer' : pathToValidMySQLServer}
+  final_dependence.append(check_mysqlServer(mySQLServersBitness, mySQLServersVersions, mySQLServersPaths, mySQLServersDataPaths))
+  
+ return final_dependence
 
