@@ -266,13 +266,13 @@ def check_mysqlServer(serversBitness, serversVersions, serversPaths, dataPaths, 
   
 def check_buildTools():
   global progsToInstall
-  base.print_info('Check Build Tools')
+  base.print_info('Check installed Build Tools')
   result = run_command(os.path.split(os.getcwd())[0] + r'\build_tools\tools\win\vswhere\vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property DisplayName')['stdout']
   if (result == ''):
     progsToInstall.append('BuildTools')
     return False
-  else:
-    return True
+  
+  return True
   
 def run_command(sCommand):
   popen = subprocess.Popen(sCommand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True) 
