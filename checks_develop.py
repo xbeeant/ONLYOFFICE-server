@@ -23,8 +23,9 @@ class CDependencies:
     self.pathToValidMySQLServer = oCdependencies.pathToValidMySQLServer   
 
 def check_pythonPath():
-  if base.get_env('PATH').find(sys.exec_prefix) == -1:
-    base.set_env('PATH', sys.exec_prefix + os.pathsep + base.get_env('PATH'))
+  path = base.get_env('PATH')
+  if (path.find(sys.exec_prefix) == -1):
+    base.set_env('PATH', sys.exec_prefix + os.pathsep + path)
 
 def check_nodejs():
   dependence = CDependencies()
