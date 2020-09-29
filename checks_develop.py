@@ -10,49 +10,22 @@ else:
   import _winreg as winreg
     
 class CDependencies:
-  progsToInstall = []
-  progsToUninstall = []
-  pathsToRemove = []
-  pathToValidMySQLServer = ''
-    
+  def __init__(self):
+    self.progsToInstall = []
+    self.progsToUninstall = []
+    self.pathsToRemove = []
+    self.pathToValidMySQLServer = ''
+  
   def append(self, oCdependencies):
-    self.progsToInstall   + oCdependencies.progsToInstall
-    self.progsToUninstall + oCdependencies.progsToUninstall
-    self.pathsToRemove    + oCdependencies.pathsToRemove
+    self.progsToInstall   += oCdependencies.progsToInstall
+    self.progsToUninstall += oCdependencies.progsToUninstall
+    self.pathsToRemove    += oCdependencies.pathsToRemove
     self.pathToValidMySQLServer = oCdependencies.pathToValidMySQLServer   
-        
-  def print_PrgrmToInst(self):
-    print('***Progs to install:***')
-    for i in range(len(self.progsToInstall)):
-      print(self.progsToInstall[i])
-    print('____________')
-      
-  def print_PrgrmToUninst(self):
-    print('***Progs to uninstall:***')
-    for i in range(len(self.progsToUninstall)):
-      print(self.progsToUninstall[i])
-    print('____________')
-      
-  def print_PathsToRemove(self):
-    print('***Paths to remove:***')
-    for i in range(len(self.pathsToRemove)):
-      print(self.pathsToRemove[i])
-    print('____________')
-     
-  def print_PathsToValidMySQL(self):
-    print('***Paths to valid MySQL Server:***')
-    for i in range(len(self.pathToValidMySQLServer)):
-      print(self.pathToValidMySQLServer[i])
-    print('____________')
- 
+
 def check_pythonPath():
-  dependence = CDependencies()
-  
   if base.get_env('PATH').find(sys.exec_prefix) == -1:
-    dependence.progsToInstall.append('PythonPath')
-  
-  return dependence
-  
+    base.set_env('PATH', sys.exec_prefix + os.pathsep + base.get_env('PATH'))
+
 def check_nodejs():
   dependence = CDependencies()
   
@@ -152,7 +125,7 @@ def check_gruntcli():
   
   if (result.find('grunt-cli') == -1):
     print('Grunt-Cli not found')
-    progsToInstall.append('GruntCli')
+    dependence.progsToInstall.append('GruntCli')
     return dependence
   
   print('Grunt-Cli is installed')
@@ -330,7 +303,6 @@ def run_command(sCommand):
 def check_dependencies():
   final_dependence = CDependencies()
   
-  final_dependence.append(check_pythonPath())
   final_dependence.append(check_nodejs())
   final_dependence.append(check_java())
   final_dependence.append(check_erlang())
@@ -347,3 +319,4 @@ def check_dependencies():
   final_dependence.append(check_mysqlServer(mySQLServersBitness, mySQLServersVersions, mySQLServersPaths, mySQLServersDataPaths))
   
   return final_dependence
+

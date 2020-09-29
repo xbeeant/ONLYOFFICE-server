@@ -17,9 +17,7 @@ def is_admin():
     return False
 
 def installingProgram(sProgram, sParam = ''):
-  if (sProgram == 'PythonPath'):
-    base.set_env('PATH', sys.exec_prefix + os.pathsep + base.get_env('PATH'))
-  elif (sProgram == 'Node.js'):
+  if (sProgram == 'Node.js'):
     print("Installing Node.js...")
     base.download("https://nodejs.org/dist/latest-v10.x/node-v10.22.1-x64.msi", './nodejs.msi')
     code = subprocess.call('msiexec.exe /i nodejs.msi /qn',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)

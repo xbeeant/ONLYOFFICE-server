@@ -3,7 +3,7 @@ sys.path.append('../build_tools/scripts')
 import os
 import base
 import ctypes
-import checks_develop
+import checks_develop as checks
 import subprocess
 
 def install_module(path):
@@ -37,6 +37,7 @@ def run_integration_example():
   base.cmd_in_dir('../document-server-integration/web/documentserver-example/nodejs', 'python', ['run-develop.py'])
   
 try:
+  checks.check_pythonPath()
   base.cmd_in_dir('./', 'python', ['install_develop.py'])
   
   platform = base.host_platform()
