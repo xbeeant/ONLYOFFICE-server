@@ -9,20 +9,16 @@ if (sys.version_info[0] >= 3):
 else:
   import _winreg as winreg
     
-class CDependencies(object):
-  def __init__(self):
-    self.progsToInstall = []
-    self.progsToUninstall = []
-    self.pathsToRemove = []
-    self.pathToValidMySQLServer = ''
+class CDependencies:
+  progsToInstall = []
+  progsToUninstall = []
+  pathsToRemove = []
+  pathToValidMySQLServer = ''
     
   def append(self, oCdependencies):
-    for i in range(len(oCdependencies.progsToInstall)):
-      self.progsToInstall.append(oCdependencies.progsToInstall[i])
-    for i in range(len(oCdependencies.progsToUninstall)):
-      self.progsToUninstall.append(oCdependencies.progsToUninstall[i])
-    for i in range(len(oCdependencies.pathsToRemove)):
-      self.pathsToRemove.append(oCdependencies.pathsToRemove[i])
+    self.progsToInstall   + oCdependencies.progsToInstall
+    self.progsToUninstall + oCdependencies.progsToUninstall
+    self.pathsToRemove    + oCdependencies.pathsToRemove
     self.pathToValidMySQLServer = oCdependencies.pathToValidMySQLServer   
         
   def print_PrgrmToInst(self):
@@ -350,5 +346,4 @@ def check_dependencies():
   
   final_dependence.append(check_mysqlServer(mySQLServersBitness, mySQLServersVersions, mySQLServersPaths, mySQLServersDataPaths))
   
- return final_dependence
-
+  return final_dependence
