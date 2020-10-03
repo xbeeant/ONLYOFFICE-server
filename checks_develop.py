@@ -30,7 +30,7 @@ def check_pythonPath():
 def check_nodejs():
   dependence = CDependencies()
   
-  base.print_info('Check installed Node.js version')
+  base.print_info('Check installed Node.js')
   nodejs_version = run_command('node -v')['stdout']
   if (nodejs_version == ''):
     print('Node.js not found')
@@ -47,7 +47,7 @@ def check_nodejs():
     dependence.progsToInstall.append('Node.js')
     return dependence
   
-  print('Installed Node.js version is valid')
+  print('Installed Node.js is valid')
   return dependence
   
 def check_java():
@@ -57,11 +57,11 @@ def check_java():
   java_version = run_command('java -version')['stderr']
   
   if (java_version.find('64-Bit') != -1):
-    print('Installed java is valid')
+    print('Installed Java is valid')
     return dependence
   
   if (java_version.find('32-Bit') != -1):
-    print('Installed java must be x64')
+    print('Installed Java must be x64')
   else:
     print('Java not found')
   
@@ -87,15 +87,14 @@ def get_erlangPath():
     count_subkey = winreg.QueryInfoKey(aKey)[0]
     
     for i in range(count_subkey):
-      asubkey_name = winreg.EnumKey(aKey, i)
-      if (asubkey_name.split(".")[0].isdigit()):
-        asubkey = winreg.OpenKey(aKey, asubkey_name)
+      keyValue = winreg.EnumKey(aKey, i)
+      if (keyValue.split(".")[0].isdigit()):
+        asubkey = winreg.OpenKey(aKey, keyValue)
         Path = winreg.QueryValueEx(asubkey, None)[0]
-      else:
-        continue
-    return Path
+        break
   except:
-    return Path
+    pass
+  return Path
     
 def check_erlang():
   dependence = CDependencies()
@@ -107,13 +106,17 @@ def check_erlang():
     erlangBitness = run_command('cd ' + erlangPath + '/bin && erl -eval "erlang:display(erlang:system_info(wordsize)), halt()." -noshell')['stdout']
     if (erlangBitness == '8'):
       if (os.getenv("ERLANG_HOME") != get_erlangPath()):
+        print("ERLANG_HOME not valid")
         dependence.progsToInstall.append('ERLANG_HOME')
-      print("Installed Erlang bitness is valid")
+      else:
+         print("ERLANG_HOME is valid")
+      print("Installed Erlang is valid")
       return dependence
-    print('Installed Erlang must be x64') 
+    print('Installed Erlang must be x64')
     dependence.progsToUninstall.append('Erlang')
+  else:
+    print('Erlang not found')
   
-  print('Erlang not found')
   dependence.progsToInstall.append('Erlang')
   dependence.progsToInstall.append('RabbitMQ')
   return dependence
@@ -129,50 +132,43 @@ def check_gruntcli():
     dependence.progsToInstall.append('GruntCli')
     return dependence
   
-  print('Grunt-Cli is installed')
+  print('Installed Grunt-Cli is valid')
   return dependence
     
 def get_mysqlServersInfo(sParam):
   arrInfo = []
-  Path = ""
   
   try:
     keyValue = r"SOFTWARE\WOW6432Node\MySQL AB"
-    
     aKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, keyValue)
     
     count_subkey = winreg.QueryInfoKey(aKey)[0]
     for i in range(count_subkey):
-      asubkey_name = winreg.EnumKey(aKey, i)
-      if (asubkey_name.find('MySQL Server') != - 1):
-        asubkey = winreg.OpenKey(aKey, asubkey_name)
-        Path = winreg.QueryValueEx(asubkey, sParam)[0]
-        arrInfo.append(Path)
-      else:
-        continue
-    return arrInfo
+      keyValue = winreg.EnumKey(aKey, i)
+      if (keyValue.find('MySQL Server') != - 1):
+        asubkey = winreg.OpenKey(aKey, keyValue)
+        arrInfo.append(winreg.QueryValueEx(asubkey, sParam)[0])
   except:
-    return arrInfo
+    pass
+  return arrInfo
     
 def check_mysqlInstaller():
   dependence = CDependencies()
   
   try:
-    keyValue = r"SOFTWARE\WOW6432Node\MySQL"
-    
+    keyValue = r"SOFTWARE\WOW6432Node\MySQL"    
     aKey = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, keyValue)
     
     count_subkey = winreg.QueryInfoKey(aKey)[0]
     for i in range(count_subkey):
-      asubkey_name = winreg.EnumKey(aKey, i)
-      if (asubkey_name.find('MySQL Installer') != - 1):
+      keyValue = winreg.EnumKey(aKey, i)
+      if (keyValue.find('MySQL Installer') != - 1):
         return dependence
     
-    dependence.progsToInstall.append('MySQLInstaller')
-    return dependence
   except:
-    dependence.progsToInstall.append('MySQLInstaller')
-    return dependence
+    pass
+  dependence.progsToInstall.append('MySQLInstaller')
+  return dependence
 
 def check_mysqlServersBitness(MySQLPaths):
   serversBitness = []
@@ -238,8 +234,10 @@ def check_buildTools():
   base.print_info('Check installed Build Tools')
   result = run_command(os.path.split(os.getcwd())[0] + r'\build_tools\tools\win\vswhere\vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property DisplayName')['stdout']
   if (result == ''):
+    print('Build Tools not found')
     dependence.progsToInstall.append('BuildTools')
-    return dependence
+  else:
+    print('Installed Build Tools is valid')
   
   return dependence
   
