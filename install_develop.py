@@ -116,11 +116,11 @@ def installingProgram(sProgram, sParam = ''):
     code = os.system('vs_BuildTools.exe --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet --wait')
     if (code == 0):
       print("Install success!")
-      base.delete_file('./vs_buildtools.exe')
+      base.delete_file('./vs_BuildTools.exe')
       return True
     else:
       print("Error!")
-      base.delete_file('./vs_buildtools.exe')
+      base.delete_file('./vs_BuildTools.exe')
       return False
 
 def deleteProgram(sName):
