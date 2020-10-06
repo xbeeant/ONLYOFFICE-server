@@ -26,7 +26,7 @@ def check_nodejs():
   dependence = CDependencies()
   
   base.print_info('Check installed Node.js')
-  nodejs_version = run_command('node -v')['stdout']
+  nodejs_version = base.run_command('node -v')['stdout']
   if (nodejs_version == ''):
     print('Node.js not found')
     dependence.progsToInstall.append('Node.js')
@@ -49,7 +49,7 @@ def check_java():
   dependence = CDependencies()
   
   base.print_info('Check installed Java')
-  java_version = run_command('java -version')['stderr']
+  java_version = base.run_command('java -version')['stderr']
   
   if (java_version.find('64-Bit') != -1):
     print('Installed Java is valid')
@@ -67,7 +67,7 @@ def check_rabbitmq():
   dependence = CDependencies()
   
   base.print_info('Check installed RabbitMQ')
-  result = run_command('sc query RabbitMQ')['stdout']
+  result = base.run_command('sc query RabbitMQ')['stdout']
   if (result.find('RabbitMQ') == -1):
     print('RabbitMQ not found')
     dependence.progsToInstall.append('RabbitMQ')
@@ -99,7 +99,7 @@ def check_erlang():
   erlangPath = get_erlangPath()
   
   if (erlangPath != ""):
-    erlangBitness = run_command('cd ' + erlangPath + '/bin && erl -eval "erlang:display(erlang:system_info(wordsize)), halt()." -noshell')['stdout']
+    erlangBitness = base.run_command('cd ' + erlangPath + '/bin && erl -eval "erlang:display(erlang:system_info(wordsize)), halt()." -noshell')['stdout']
     if (erlangBitness == '8'):
       if (os.getenv("ERLANG_HOME") != get_erlangPath()):
         print("ERLANG_HOME not valid")
@@ -121,7 +121,7 @@ def check_gruntcli():
   dependence = CDependencies()
   
   base.print_info('Check installed Grunt-Cli')
-  result = run_command('npm list -g --depth=0')['stdout']
+  result = base.run_command('npm list -g --depth=0')['stdout']
   
   if (result.find('grunt-cli') == -1):
     print('Grunt-Cli not found')
@@ -175,7 +175,7 @@ def check_mysqlServersBitness(MySQLPaths):
     if (mysqlServerPath == ""):
       serversBitness.append("")
     else:
-      result = run_command('cd ' + mysqlServerPath + 'bin && mysql --version')['stdout']
+      result = base.run_command('cd ' + mysqlServerPath + 'bin && mysql --version')['stdout']
       if (result.find('for Win32') != -1):
         serversBitness.append('x32')
       elif (result.find('for Win64') != -1):
@@ -206,12 +206,12 @@ def check_mysqlServer(serversBitness, serversVersions, serversPaths, dataPaths):
       continue
     elif (result == 'x64'):
       print('MySQL Server bitness is valid')
-      connectionResult = run_command('cd ' + serversPaths[i] + 'bin && mysql -u root -ponlyoffice -e "SHOW GLOBAL VARIABLES LIKE ' + r"'PORT';" + '"')['stdout']
+      connectionResult = base.run_command('cd ' + serversPaths[i] + 'bin && mysql -u root -ponlyoffice -e "SHOW GLOBAL VARIABLES LIKE ' + r"'PORT';" + '"')['stdout']
       if (connectionResult.find('port') != -1 and connectionResult.find('3306') != -1):
-        if (run_command('cd ' + serversPaths[i] + 'bin && mysql -u root -ponlyoffice -e "SHOW DATABASES;"')['stdout'].find('onlyoffice') == -1):
+        if (base.run_command('cd ' + serversPaths[i] + 'bin && mysql -u root -ponlyoffice -e "SHOW DATABASES;"')['stdout'].find('onlyoffice') == -1):
           print('Database onlyoffice not found')
           dependence.progsToInstall.append('MySQLDatabase')
-        if (run_command('cd ' + serversPaths[i] + 'bin && mysql -u root -ponlyoffice -e "SELECT plugin from mysql.user where User=' + "'root';")['stdout'].find('mysql_native_password') == -1):
+        if (base.run_command('cd ' + serversPaths[i] + 'bin && mysql -u root -ponlyoffice -e "SELECT plugin from mysql.user where User=' + "'root';")['stdout'].find('mysql_native_password') == -1):
           print('Password encryption is not valid')
           dependence.progsToInstall.append('MySQLEncrypt') 
         dependence.pathToValidMySQLServer = serversPaths[i]
@@ -228,7 +228,7 @@ def check_buildTools():
   dependence = CDependencies()
   
   base.print_info('Check installed Build Tools')
-  result = run_command(os.path.split(os.getcwd())[0] + r'\build_tools\tools\win\vswhere\vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property DisplayName')['stdout']
+  result = base.run_command(os.path.split(os.getcwd())[0] + r'\build_tools\tools\win\vswhere\vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property DisplayName')['stdout']
   if (result == ''):
     print('Build Tools not found')
     dependence.progsToInstall.append('BuildTools')
@@ -236,20 +236,6 @@ def check_buildTools():
     print('Installed Build Tools is valid')
   
   return dependence
-  
-def run_command(sCommand):
-  popen = subprocess.Popen(sCommand, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True) 
-  result = {'stdout' : '', 'stderr' : ''}
-  try:
-    stdout, stderr = popen.communicate()
-    popen.wait()
-    result['stdout'] = stdout.strip().decode("utf-8") 
-    result['stderr'] = stderr.strip().decode("utf-8")
-  finally:
-    popen.stdout.close()
-    popen.stderr.close()
-  
-  return result
 
 def check_dependencies():
   final_dependence = CDependencies()
