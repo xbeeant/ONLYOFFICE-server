@@ -256,6 +256,42 @@ def run_command(sCommand):
   
   return result
 
+def get_programDelInfoByFlag(sName, flag):
+  info = []
+  aReg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
+  aKey= winreg.OpenKey(aReg, r"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall", 0, winreg.KEY_READ | flag)
+  count_subkey = winreg.QueryInfoKey(aKey)[0]
+
+  for i in range(count_subkey):
+    try:
+      asubkey_name = winreg.EnumKey(aKey, i)
+      asubkey = winreg.OpenKey(aKey, asubkey_name)
+      progName = winreg.QueryValueEx(asubkey, 'DisplayName')[0]
+    except:
+      continue
+
+    if (progName.find(sName) != -1):
+      try:
+        uninstallString = winreg.QueryValueEx(asubkey, 'UninstallString')[0]
+        if (base.is_file(uninstallString) == False):
+          uninstallString = uninstallString.replace('/I', '/x')
+          uninstallString = uninstallString.replace('/i', '/x')
+        info.append(uninstallString)
+      except:
+        continue
+      
+  return info 
+  
+def get_programDelInfo(sName):
+  delInfo = []
+  
+  flag1 = winreg.KEY_WOW64_32KEY
+  flag2 = winreg.KEY_WOW64_64KEY
+  
+  delInfo += get_programDelInfoByFlag(sName, flag1) + get_programDelInfoByFlag(sName, flag2)
+  
+  return delInfo
+
 def check_dependencies():
   final_dependence = CDependencies()
   
@@ -275,4 +311,5 @@ def check_dependencies():
   final_dependence.append(check_mysqlServer(mySQLServersBitness, mySQLServersVersions, mySQLServersPaths, mySQLServersDataPaths))
   
   return final_dependence
+  
 

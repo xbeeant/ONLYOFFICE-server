@@ -125,13 +125,20 @@ def installingProgram(sProgram, sParam = ''):
 
 def deleteProgram(sName):
   print("Deleting " + sName + "...")
-  code = subprocess.call('wmic product where name="' + sName + '" call uninstall',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-  if (code == 0):
-    print("Delete success!")
-    return True
-  else:
-    print("Error!")
-    return False
+  delInfo = check.get_programDelInfo(sName)
+  
+  for info in delInfo:
+    if (base.is_file(info) == False):
+      code = os.system(info)
+    else:
+      print('"' + info + '" /S')
+      code = os.system('"' + info + '" /S')
+      
+    if (code == 0):
+      print("Delete success!")
+    else:
+      print("Error!")
+      
   
 def installMySQLServer():
   installingProgram('MySQLServer')
@@ -151,19 +158,19 @@ try:
   checkResults = check.check_dependencies()
   if (len(checkResults.progsToInstall) > 0):
     if is_admin():
-      for i in range(len(checkResults.progsToUninstall)):
-        deleteProgram(checkResults.progsToUninstall[i])
+      for program in checkResults.progsToUninstall:
+        deleteProgram(program)
         
-      for i in range(len(checkResults.pathsToRemove)):
-        shutil.rmtree(checkResults.pathsToRemove[i])
+      for path in checkResults.pathsToRemove:
+        shutil.rmtree(path)
         
-      for i in range(len(checkResults.progsToInstall)):
-        if (checkResults.progsToInstall[i] == 'MySQLDatabase' or checkResults.progsToInstall[i] == 'MySQLEncrypt'):
-          installingProgram(checkResults.progsToInstall[i], checkResults.pathToValidMySQLServer)
-        elif (checkResults.progsToInstall[i] == 'MySQLServer'):
+      for program in checkResults.progsToInstall:
+        if (program == 'MySQLDatabase' or program == 'MySQLEncrypt'):
+          installingProgram(program, checkResults.pathToValidMySQLServer)
+        elif (program == 'MySQLServer'):
           installMySQLServer()
         else:
-          installingProgram(checkResults.progsToInstall[i])
+          installingProgram(program)
       print('All installations completed!')
     else:
       ctypes.windll.shell32.ShellExecuteW(None, unicode("runas"), unicode(sys.executable), unicode(''.join(sys.argv)), None, 1)
