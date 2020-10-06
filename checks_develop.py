@@ -269,8 +269,7 @@ def get_programDelInfoByFlag(sName, flag):
       progName = winreg.QueryValueEx(asubkey, 'DisplayName')[0]
     
       if (progName.find(sName) != -1):
-        uninstallString = winreg.QueryValueEx(asubkey, 'UninstallString')[0]
-        info.append(uninstallString)
+        info.append(winreg.QueryValueEx(asubkey, 'UninstallString')[0])
       
     except:
       pass
