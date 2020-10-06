@@ -130,14 +130,13 @@ def deleteProgram(sName):
   for info in delInfo:
     if (base.is_file(info) == False):
       info = info.replace('/I', '/x').replace('/i', '/x')
-      code = os.system(info)
     else:
-      print('"' + info + '" /S')
-      code = os.system('"' + info + '" /S')
+      info = '"' + info + '" /S'
       
-    if (code == 0):
-      print("Delete success!")
-    else:
+    print(info)  
+    code = os.system(info)
+      
+    if (code == 1):
       print("Error!")
       return False
       
