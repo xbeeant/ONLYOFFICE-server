@@ -38,6 +38,7 @@ def run_integration_example():
   base.cmd_in_dir('../document-server-integration/web/documentserver-example/nodejs', 'python', ['run-develop.py'])
   
 try:
+  base.configure_common_apps()
   dependence.check_pythonPath()
   base.cmd_in_dir('./', 'python', ['install_develop.py'])
   

@@ -133,6 +133,7 @@ def installMySQLServer():
   return False
 
 try:
+  base.configure_common_apps()
   checkResults = check.check_dependencies()
   if (len(checkResults.progsToInstall) > 0):
     if is_admin():
