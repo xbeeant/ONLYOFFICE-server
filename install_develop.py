@@ -2,6 +2,7 @@ import sys
 sys.path.append('../build_tools/scripts')
 import os
 import base
+import dependence
 import subprocess
 import ctypes
 import checks_develop as check
@@ -125,7 +126,7 @@ def installingProgram(sProgram, sParam = ''):
 
 def deleteProgram(sName):
   print("Deleting " + sName + "...")
-  delInfo = check.get_programDelInfo(sName)
+  delInfo = dependence.get_programUninstalls(sName)
   
   for info in delInfo:
     if (base.is_file(info) == False):

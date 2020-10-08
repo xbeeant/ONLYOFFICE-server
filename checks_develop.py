@@ -219,29 +219,6 @@ def check_buildTools():
   
   return dependence
 
-def get_programDelInfoByFlag(sName, flag):
-  info = []
-  aReg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
-  aKey= winreg.OpenKey(aReg, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall", 0, winreg.KEY_READ | flag)
-  count_subkey = winreg.QueryInfoKey(aKey)[0]
-
-  for i in range(count_subkey):
-    try:
-      asubkey_name = winreg.EnumKey(aKey, i)
-      asubkey = winreg.OpenKey(aKey, asubkey_name)
-      progName = winreg.QueryValueEx(asubkey, 'DisplayName')[0]
-    
-      if (progName.find(sName) != -1):
-        info.append(winreg.QueryValueEx(asubkey, 'UninstallString')[0])
-      
-    except:
-      pass
-      
-  return info 
-  
-def get_programDelInfo(sName):
-  return get_programDelInfoByFlag(sName, winreg.KEY_WOW64_32KEY) + get_programDelInfoByFlag(sName, winreg.KEY_WOW64_64KEY)
-
 def check_dependencies():
   final_dependence = CDependencies()
   
