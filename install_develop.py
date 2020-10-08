@@ -124,24 +124,6 @@ def installingProgram(sProgram, sParam = ''):
       base.delete_file('./vs_BuildTools.exe')
       return False
 
-def deleteProgram(sName):
-  print("Deleting " + sName + "...")
-  delInfo = dependence.get_programUninstalls(sName)
-  
-  for info in delInfo:
-    if (base.is_file(info) == False):
-      info = info.replace('/I', '/x').replace('/i', '/x')
-    else:
-      info = '"' + info + '" /S'
-      
-    print(info)  
-    if (os.system(info) != 0):
-      print("Deleting was failed!")
-      return False
-      
-  return True
-      
-  
 def installMySQLServer():
   installingProgram('MySQLServer')
   mysqlPaths    = check.get_mysqlServersInfo('Location')
@@ -155,13 +137,13 @@ def installMySQLServer():
       print('MySQL Server ' + mysqlVersions[i][0:3] + ' is valid')
       return True
   return False
-  
+
 try:
   checkResults = check.check_dependencies()
   if (len(checkResults.progsToInstall) > 0):
     if is_admin():
       for program in checkResults.progsToUninstall:
-        deleteProgram(program)
+        dependence.uninstallProgram(program)
         
       for path in checkResults.pathsToRemove:
         shutil.rmtree(path)
