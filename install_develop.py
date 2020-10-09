@@ -52,17 +52,8 @@ def installingProgram(sProgram, sParam = ''):
     subprocess.call('"' + sParam + 'bin\\mysql" -u root -ponlyoffice -e "' + "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'onlyoffice';" + '"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     return True   
   elif (sProgram == "BuildTools"):
-    print('Installing Build Tools...')
-    base.download("https://download.visualstudio.microsoft.com/download/pr/11503713/e64d79b40219aea618ce2fe10ebd5f0d/vs_BuildTools.exe", './vs_BuildTools.exe')
-    code = os.system('vs_BuildTools.exe --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet --wait')
-    if (code == 0):
-      print("Install success!")
-      base.delete_file('./vs_BuildTools.exe')
-      return True
-    else:
-      print("Error!")
-      base.delete_file('./vs_BuildTools.exe')
-      return False
+    dependence.installProgram(sProgram)
+    return True
 
 def installMySQLServer():
   installingProgram('MySQLServer')
