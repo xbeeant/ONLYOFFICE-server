@@ -35,7 +35,7 @@ def installingProgram(sProgram, sParam = ''):
     return True
   elif (sProgram == 'MySQLServer'):
     print('Installing MySQL Server...')
-    code = subprocess.call('"' + os.path.abspath(os.sep) + 'Program Files (x86)\\MySQL\\MySQL Installer for Windows\\MySQLInstallerConsole" community install server;8.0.21;x64:*:type=config;openfirewall=true;generallog=true;binlog=true;serverid=3306;enable_tcpip=true;port=3306;rootpasswd=onlyoffice -silent',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    code = subprocess.call('"' + os.environ['ProgramFiles(x86)'] + '\\MySQL\\MySQL Installer for Windows\\MySQLInstallerConsole" community install server;8.0.21;x64:*:type=config;openfirewall=true;generallog=true;binlog=true;serverid=3306;enable_tcpip=true;port=3306;rootpasswd=onlyoffice -silent',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     print(code)
     if (code == 0):
       print("Install success!")
@@ -83,7 +83,8 @@ configOptions = vars(options)
 for item in configOptions["uninstall"]:
   dependence.uninstallProgram(item)
 for item in configOptions["remove-path"]:
-  shutil.rmtree(item)
+  if (base.is_dir(item) == True):
+    shutil.rmtree(item)
 for item in configOptions["install"]:
   if (item == 'MySQLDatabase' or item == 'MySQLEncrypt'):
     installingProgram(item, configOptions["mysql-path"])
