@@ -57,15 +57,14 @@ def installingProgram(sProgram, sParam = ''):
 
 def installMySQLServer():
   installingProgram('MySQLServer')
-  mysqlPaths    = check.get_mysqlServersInfo('Location')
-  mysqlVersions = check.get_mysqlServersInfo('Version')
-
-  for i in range(len(mysqlVersions)):
-    if (mysqlVersions[i] == '8.0.21'):
+  mysqlInfo = check.get_mysqlServersInfo()
+  
+  for info in mysqlInfo:
+    if (info['Version'] == '8.0.21'):
       print('Setting MySQL database...')
-      subprocess.call('"' + mysqlPaths[i] + 'bin\\mysql" -u root -ponlyoffice -e "source ' + os.getcwd() + '\\schema\\mysql\\createdb.sql"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-      subprocess.call('"' + mysqlPaths[i] + 'bin\\mysql" -u root -ponlyoffice -e "' + "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'onlyoffice';" + '"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-      print('MySQL Server ' + mysqlVersions[i][0:3] + ' is valid')
+      subprocess.call('"' + info['Location'] + 'bin\\mysql" -u root -ponlyoffice -e "source ' + os.getcwd() + '\\schema\\mysql\\createdb.sql"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+      subprocess.call('"' + info['Location'] + 'bin\\mysql" -u root -ponlyoffice -e "' + "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'onlyoffice';" + '"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+      print('MySQL Server ' + info['Version'] + ' is valid')
       return True
   return False
 
