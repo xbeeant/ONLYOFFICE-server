@@ -10,53 +10,17 @@ import optparse
         
 def installingProgram(sProgram, sParam = ''):
   if (sProgram == 'Node.js'):
-    print("Installing Node.js...")
-    base.download("https://nodejs.org/dist/latest-v10.x/node-v10.22.1-x64.msi", './nodejs.msi')
-    code = subprocess.call('msiexec.exe /i nodejs.msi /qn',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    if (code == 0):
-      print("Install success!")
-      base.delete_file('./nodejs.msi')
-      return True
-    else:
-      print("Error!")
-      base.delete_file('./nodejs.msi')
-      return False
+    dependence.installProgram(sProgram)
+    return True
   elif (sProgram == 'Java'):
-    print("Installing Java...")
-    base.download("https://javadl.oracle.com/webapps/download/AutoDL?BundleId=242990_a4634525489241b9a9e1aa73d9e118e6", './java.exe')
-    code = subprocess.call('java.exe /s',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    if (code == 0):
-      print("Install success!")
-      base.delete_file('./java.exe')
-      return True
-    else:
-      print("Error!")
-      base.delete_file('./java.exe')
-      return False
+    dependence.installProgram(sProgram)
+    return True
   elif (sProgram == 'RabbitMQ'):
-    print("Installing RabbitMQ...")
-    base.download("https://github.com/rabbitmq/rabbitmq-server/releases/download/v3.8.8/rabbitmq-server-3.8.8.exe", './rabbitmq.exe')
-    code = subprocess.call('rabbitmq.exe /S',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    if (code == 0):
-      print("Install success!")
-      base.delete_file('./rabbitmq.exe')
-      return True
-    else:
-      print("Error!")
-      base.delete_file('./rabbitmq.exe')
-      return False
+    dependence.installProgram(sProgram)
+    return True
   elif (sProgram == 'Erlang'):
-    print("Installing Erlang...")
-    base.download("http://erlang.org/download/otp_win64_23.0.exe", './erlang.exe')
-    code = subprocess.call('erlang.exe /S',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    if (code == 0):
-      print("Install success!")
-      base.delete_file('./erlang.exe')
-      return True
-    else:
-      print("Error!")
-      base.delete_file('./erlang.exe')
-      return False
+    dependence.installProgram(sProgram)
+    return True
   elif (sProgram == 'GruntCli'):
     print('Installing Grunt-Cli...')
     code = subprocess.call('npm install -g grunt-cli',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
@@ -67,17 +31,8 @@ def installingProgram(sProgram, sParam = ''):
       print("Error!")
       return False
   elif (sProgram == 'MySQLInstaller'):
-    print('Installing MySQL Installer...')
-    base.download("https://dev.mysql.com/get/Downloads/MySQLInstaller/mysql-installer-web-community-8.0.21.0.msi", './mysqlinstaller.msi')
-    code = subprocess.call('msiexec.exe /i mysqlinstaller.msi /qn',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    if (code == 0):
-      print("Install success!")
-      base.delete_file('./mysqlinstaller.msi')
-      return True
-    else:
-      print("Error!")
-      base.delete_file('./mysqlinstaller.msi')
-      return False
+    dependence.installProgram(sProgram)
+    return True
   elif (sProgram == 'MySQLServer'):
     print('Installing MySQL Server...')
     code = subprocess.call('"' + os.path.abspath(os.sep) + 'Program Files (x86)\\MySQL\\MySQL Installer for Windows\\MySQLInstallerConsole" community install server;8.0.21;x64:*:type=config;openfirewall=true;generallog=true;binlog=true;serverid=3306;enable_tcpip=true;port=3306;rootpasswd=onlyoffice -silent',  stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
