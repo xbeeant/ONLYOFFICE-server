@@ -1070,6 +1070,12 @@ function getRequestParams(docId, req, opt_isNotInBody, opt_tokenAssign) {
   return res;
 }
 
+function getLicenseNowUtc() {
+  const now = new Date();
+  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(),
+                  now.getUTCMinutes(), now.getUTCSeconds()) / 1000;
+}
+
 exports.c_oAscServerStatus = c_oAscServerStatus;
 exports.editorData = editorData;
 exports.sendData = sendData;
@@ -2675,9 +2681,7 @@ exports.install = function(server, callbackFunction) {
 		let licenseType = licenseInfo.type;
 		if (licenseInfo.usersCount) {
 			if (c_LR.Success === licenseType) {
-				const now = new Date();
-				const nowUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(),
-					now.getUTCMinutes(), now.getUTCSeconds()) / 1000;
+				const nowUTC = getLicenseNowUtc();
 				let execRes = yield editorData.getPresenceUniqueUser(nowUTC);
 				if (licenseInfo.usersCount > execRes.length) {
 					licenseType = c_LR.Success;
@@ -3070,6 +3074,8 @@ exports.licenseInfo = function(req, res) {
     let output = {
 		connectionsStat: {}, licenseInfo: {}, serverInfo: {
 			buildVersion: commonDefines.buildVersion, buildNumber: commonDefines.buildNumber,
+		}, usersInfo: {
+			uniqueUserCount: 0
 		}
 	};
     Object.assign(output.licenseInfo, licenseInfo);
@@ -3124,6 +3130,9 @@ exports.licenseInfo = function(req, res) {
           precisionOut.view.max = precision.view.max;
         }
       }
+      const nowUTC = getLicenseNowUtc();
+      let execRes = yield editorData.getPresenceUniqueUser(nowUTC);
+      output.usersInfo.uniqueUserCount = execRes.length;
       logger.debug('licenseInfo end');
     } catch (err) {
       isError = true;
