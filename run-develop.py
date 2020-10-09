@@ -56,6 +56,12 @@ try:
     install_args += ['--mysql-path', unicode(checksResult.mysqlPath)]
     code = libwindows.sudo(unicode(sys.executable), install_args)
 
+  checMySQL = check.check_MySQLConfig()
+  if ('MySQLDatabase' in checMySQL.install):
+    check.execMySQLScript(checMySQL.mysqlPath, os.getcwd() + '\\schema\\mysql\\createdb.sql')  
+  if ('MySQLEncrypt' in checMySQL.install):
+    check.set_MySQLEncrypt(checMySQL.mysqlPath, 'mysql_native_password')
+    
   platform = base.host_platform()
   if ("windows" == platform):
     restart_win_rabbit()
