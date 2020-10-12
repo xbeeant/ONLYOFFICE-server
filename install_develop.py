@@ -65,4 +65,4 @@ for item in configOptions["remove-path"]:
   if (base.is_dir(item) == True):
     shutil.rmtree(item)
 for item in configOptions["install"]:
-  installingProgram(item)
+  dependence.installProgram(item)
