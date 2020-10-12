@@ -56,7 +56,8 @@ try:
     install_args += ['--mysql-path', unicode(checksResult.mysqlPath)]
     code = libwindows.sudo(unicode(sys.executable), install_args)
 
-  checMySQL = check.check_MySQLConfig(checksResult.mysqlPath)
+  if not check.check_MySQLConfig(checksResult.mysqlPath):
+    sys.exit()
   
   platform = base.host_platform()
   if ("windows" == platform):
