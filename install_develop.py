@@ -44,31 +44,9 @@ def installingProgram(sProgram, sParam = ''):
     else:
       print("Error!")
       return False
-  elif (sProgram == 'MySQLDatabase'):
-    print('Setting database...')
-    subprocess.call('"' + sParam + 'bin\\mysql" -u root -ponlyoffice -e "source ' + os.getcwd() + '\\schema\\mysql\\createdb.sql"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    return True
-  elif (sProgram == 'MySQLEncrypt'):
-    print('Setting MySQL password encrypting...')
-    subprocess.call('"' + sParam + 'bin\\mysql" -u root -ponlyoffice -e "' + "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'onlyoffice';" + '"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    return True   
   elif (sProgram == "BuildTools"):
     dependence.installProgram(sProgram)
     return True
-
-def installMySQLServer():
-  installingProgram('MySQLServer')
-  mysqlPaths    = check.get_mysqlServersInfo('Location')
-  mysqlVersions = check.get_mysqlServersInfo('Version')
-
-  for i in range(len(mysqlVersions)):
-    if (mysqlVersions[i] == '8.0.21'):
-      print('Setting MySQL database...')
-      subprocess.call('"' + mysqlPaths[i] + 'bin\\mysql" -u root -ponlyoffice -e "source ' + os.getcwd() + '\\schema\\mysql\\createdb.sql"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-      subprocess.call('"' + mysqlPaths[i] + 'bin\\mysql" -u root -ponlyoffice -e "' + "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'onlyoffice';" + '"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-      print('MySQL Server ' + mysqlVersions[i][0:3] + ' is valid')
-      return True
-  return False
 
 arguments = sys.argv[1:]
 
@@ -87,9 +65,4 @@ for item in configOptions["remove-path"]:
   if (base.is_dir(item) == True):
     shutil.rmtree(item)
 for item in configOptions["install"]:
-  if (item == 'MySQLDatabase' or item == 'MySQLEncrypt'):
-    installingProgram(item, configOptions["mysql-path"])
-  elif (item == 'MySQLServer'):
-    installMySQLServer()
-  else:
-    installingProgram(item)
+  installingProgram(item)

@@ -2,6 +2,9 @@ import sys
 sys.path.append('../build_tools/scripts')
 import base
 import dependence as _dependence
+import shutil
+import os
+import subprocess
 
 if (sys.version_info[0] >= 3):
   import winreg
@@ -11,10 +14,10 @@ else:
 def get_mysqlServersInfo():
   arrInfo = []
   
-  aReg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
-  aKey = winreg.OpenKey(aReg, "SOFTWARE\\", 0, winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
-  
   try:
+    aReg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
+    aKey = winreg.OpenKey(aReg, "SOFTWARE\\", 0, winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
+  
     asubkey = winreg.OpenKey(aKey, 'MySQL AB')
     count_subkey = winreg.QueryInfoKey(asubkey)[0]
     
@@ -48,27 +51,60 @@ def check_mysqlServer():
       connectionResult = base.run_command('"' + info['Location'] + 'bin\\mysql" -u root -ponlyoffice -e "SHOW GLOBAL VARIABLES LIKE ' + r"'PORT';" + '"')['stdout']
       if (connectionResult.find('port') != -1 and connectionResult.find('3306') != -1):
         print('MySQL Server ' + info['Version'] + ' configuration is valid')
-        if (base.run_command('"' + info['Location'] + 'bin\\mysql" -u root -ponlyoffice -e "SHOW DATABASES;"')['stdout'].find('onlyoffice') == -1):
-          print('Database onlyoffice not found')
-          dependence.append_install('MySQLDatabase')
-        if (base.run_command('"' + info['Location'] + 'bin\\mysql" -u root -ponlyoffice -e "SELECT plugin from mysql.user where User=' + "'root';")['stdout'].find('mysql_native_password') == -1):
-          print('Password encryption is not valid')
-          dependence.append_install('MySQLEncrypt') 
-        dependence.pathToValidMySQLServer = info['Location']
+        dependence.mysqlPath = info['Location']
         return dependence
       print('MySQL Server ' + info['Version'] + ' configuration is not valid')
-    else: 
+    else:
       print('MySQL Server ' + info['Version'] + ' bitness is not valid')
       
   print('Valid MySQL Server not found')
   
-  for info in arrInfo:
-    dependence.append_uninstall('MySQL Server')
-    dependence.append_removepath(info['DataLocation'])
-    
+  dependence.append_uninstall('MySQL Server')
   dependence.append_install('MySQLServer')
   
+  MySQLData = os.environ['ProgramData'] + '\\MySQL\\'
+  dir = os.listdir(MySQLData)
+  for path in dir:
+    if (path.find('MySQL Server') != -1) and (base.is_file(MySQLData + path) == False):
+      dependence.append_removepath(MySQLData + path)
+  
   return dependence
+
+def check_MySQLConfig(mysqlPath = ''):
+  dependence = _dependence.CDependencies()
+  
+  if (mysqlPath == ''):
+    mysqlInfo = get_mysqlServersInfo()
+    for info in mysqlInfo:
+      if (info['Version'] == '8.0.21'):
+        mysqlPath = info['Location']
+        
+  if (base.run_command('"' + mysqlPath + 'bin\\mysql" -u root -ponlyoffice -e "SHOW DATABASES;"')['stdout'].find('onlyoffice') == -1):
+    print('Database onlyoffice not found')
+    dependence.append_install('MySQLDatabase')
+  if (base.run_command('"' + mysqlPath + 'bin\\mysql" -u root -ponlyoffice -e "SELECT plugin from mysql.user where User=' + "'root';")['stdout'].find('mysql_native_password') == -1):
+    print('Password encryption is not valid')
+    dependence.append_install('MySQLEncrypt') 
+    
+  dependence.mysqlPath = mysqlPath
+  
+  return dependence     
+
+def execMySQLScript(mysqlPath, scriptPath):
+   print('Execution ' + scriptPath)
+   code = subprocess.call('"' + mysqlPath + 'bin\\mysql" -u root -ponlyoffice -e "source ' + scriptPath + '"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+   if (code != 0):
+    print('Execution was failed!')
+    return False
+   print('Completed!')
+
+def set_MySQLEncrypt(mysqlPath, sEncrypt):
+  print('Setting MySQL password encrypting...')
+  code = subprocess.call('"' + mysqlPath + 'bin\\mysql" -u root -ponlyoffice -e "' + "ALTER USER 'root'@'localhost' IDENTIFIED WITH " + sEncrypt + " BY 'onlyoffice';" + '"', stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+  if (code != 0):
+    print('Setting password encryption was failed!')
+    return False
+  print('Completed!')
 
 def check_npmPath():
   path = base.get_env('PATH')
