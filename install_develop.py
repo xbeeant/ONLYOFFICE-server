@@ -77,9 +77,7 @@ for item in configOptions["remove-path"]:
   if (base.is_dir(item) == True):
     shutil.rmtree(item)
 for item in configOptions["install"]:
-  if (item == 'MySQLDatabase' or item == 'MySQLEncrypt'):
-    installingProgram(item, configOptions["mysql-path"])
-  elif (item == 'MySQLServer'):
+  if (item == 'MySQLServer'):
     installMySQLServer()
   else:
     installingProgram(item)

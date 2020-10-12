@@ -120,30 +120,3 @@ def check_dependencies():
   
   return final_dependence
   
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
