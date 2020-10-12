@@ -49,7 +49,7 @@ try:
   checksResult = check.check_dependencies()
   
   if (len(checksResult.install) > 0):
-    install_args = ['install_develop.py']
+    install_args = ['../build_tools/scripts/install.py']
     install_args += checksResult.get_uninstall()
     install_args += checksResult.get_removepath()
     install_args += checksResult.get_install()
