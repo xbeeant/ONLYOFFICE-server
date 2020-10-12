@@ -14,10 +14,10 @@ else:
 def get_mysqlServersInfo():
   arrInfo = []
   
-  aReg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
-  aKey= winreg.OpenKey(aReg, "SOFTWARE\\", 0, winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
-  
   try:
+    aReg = winreg.ConnectRegistry(None, winreg.HKEY_LOCAL_MACHINE)
+    aKey = winreg.OpenKey(aReg, "SOFTWARE\\", 0, winreg.KEY_READ | winreg.KEY_WOW64_32KEY)
+  
     asubkey = winreg.OpenKey(aKey, 'MySQL AB')
     count_subkey = winreg.QueryInfoKey(asubkey)[0]
     
