@@ -5,7 +5,6 @@ import os
 import base
 import libwindows
 import dependence
-import checks_develop as check
 import traceback
 
 if (sys.version_info[0] >= 3):
@@ -40,12 +39,18 @@ def start_mac_services():
 
 def run_integration_example():
   base.cmd_in_dir('../document-server-integration/web/documentserver-example/nodejs', 'python', ['run-develop.py'])
+
+def check_dependencies():
+  checksResult = _dependence.CDependencies()
   
-try:
-  base.configure_common_apps()
-  dependence.check_pythonPath()
-  
-  checksResult = check.check_dependencies()
+  checksResult.append(dependence.check_nodejs())
+  checksResult.append(dependence.check_java())
+  checksResult.append(dependence.check_erlang())
+  checksResult.append(dependence.check_rabbitmq())
+  checksResult.append(dependence.check_gruntcli())
+  checksResult.append(dependence.check_buildTools())
+  checksResult.append(dependence.check_mysqlInstaller())
+  checksResult.append(dependence.check_mysqlServer())
   
   if (len(checksResult.install) > 0):
     install_args = ['../build_tools/scripts/install.py']
@@ -54,6 +59,12 @@ try:
     install_args += checksResult.get_install()
     install_args += ['--mysql-path', unicode(checksResult.mysqlPath)]
     code = libwindows.sudo(unicode(sys.executable), install_args)
+  
+try:
+  base.configure_common_apps()
+  dependence.check_pythonPath()
+  
+  check_dependencies()
 
   if not dependence.check_MySQLConfig(checksResult.mysqlPath):
     sys.exit()
