@@ -60,13 +60,13 @@ def check_dependencies():
     install_args += ['--mysql-path', unicode(checksResult.mysqlPath)]
     code = libwindows.sudo(unicode(sys.executable), install_args)
   
+  return dependence.check_MySQLConfig(checksResult.mysqlPath)
+  
 try:
   base.configure_common_apps()
   dependence.check_pythonPath()
   
-  check_dependencies()
-
-  if not dependence.check_MySQLConfig(checksResult.mysqlPath):
+  if not check_dependencies():
     sys.exit()
   
   platform = base.host_platform()
