@@ -49,7 +49,6 @@ def check_dependencies():
   checksResult.append(dependence.check_rabbitmq())
   checksResult.append(dependence.check_gruntcli())
   checksResult.append(dependence.check_buildTools())
-  checksResult.append(dependence.check_mysqlInstaller())
   checksResult.append(dependence.check_mysqlServer())
   
   if (len(checksResult.install) > 0):
