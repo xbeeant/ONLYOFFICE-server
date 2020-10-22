@@ -675,7 +675,7 @@ function* setForceSave(docId, forceSave, cmd, success) {
                    }, cmd.getUserConnectionId());
   }
 }
-function* startForceSave(docId, type, opt_userdata, opt_userConnectionId, opt_baseUrl, opt_queue, opt_pubsub) {
+function* startForceSave(docId, type, opt_userdata, opt_userId, opt_userConnectionId, opt_baseUrl, opt_queue, opt_pubsub) {
   logger.debug('startForceSave start:docId = %s', docId);
   let res = {code: commonDefines.c_oAscServerCommandErrors.NoError, time: null};
   let startedForceSave;
@@ -694,6 +694,7 @@ function* startForceSave(docId, type, opt_userdata, opt_userConnectionId, opt_ba
     let baseUrl = opt_baseUrl || startedForceSave.baseUrl;
     let forceSave = new commonDefines.CForceSaveData(startedForceSave);
     forceSave.setType(type);
+    forceSave.setAuthorUserId(opt_userId);
 
     if (commonDefines.c_oAscForceSaveTypes.Timeout === type) {
       yield* publish({
@@ -1202,7 +1203,7 @@ exports.install = function(server, callbackFunction) {
           case 'forceSaveStart' :
             var forceSaveRes;
             if (conn.user) {
-              forceSaveRes = yield* startForceSave(docId, commonDefines.c_oAscForceSaveTypes.Button, undefined, conn.user.id);
+              forceSaveRes = yield* startForceSave(docId, commonDefines.c_oAscForceSaveTypes.Button, undefined, conn.user.idOriginal, conn.user.id);
             } else {
               forceSaveRes = {code: commonDefines.c_oAscServerCommandErrors.UnknownError, time: null};
             }
@@ -3198,7 +3199,7 @@ exports.commandFromServer = function (req, res) {
             }
             break;
           case 'forcesave':
-            let forceSaveRes = yield* startForceSave(docId, commonDefines.c_oAscForceSaveTypes.Command, params.userdata, utils.getBaseUrlByRequest(req));
+            let forceSaveRes = yield* startForceSave(docId, commonDefines.c_oAscForceSaveTypes.Command, params.userdata, undefined, undefined, utils.getBaseUrlByRequest(req));
             result = forceSaveRes.code;
             break;
           case 'meta':

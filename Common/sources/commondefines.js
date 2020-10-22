@@ -414,10 +414,12 @@ function CForceSaveData(obj) {
     this['type'] = obj['type'];
     this['time'] = obj['time'];
     this['index'] = obj['index'];
+    this['authoruserid'] = obj['authoruserid'];
   } else {
     this['type'] = null;
     this['time'] = null;
     this['index'] = null;
+    this['authoruserid'] = null;
   }
 }
 CForceSaveData.prototype.getType = function() {
@@ -437,6 +439,12 @@ CForceSaveData.prototype.getIndex = function() {
 };
 CForceSaveData.prototype.setIndex = function(v) {
   this['index'] = v;
+};
+CForceSaveData.prototype.getAuthorUserId = function() {
+  return this['authoruserid'];
+};
+CForceSaveData.prototype.setAuthorUserId = function(v) {
+  this['authoruserid'] = v;
 };
 
 function CThumbnailData(obj) {
