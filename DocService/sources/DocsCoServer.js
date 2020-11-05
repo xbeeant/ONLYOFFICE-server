@@ -2699,37 +2699,6 @@ exports.install = function(server, callbackFunction) {
 				licenseType = (connectionsCount > editConnectionsCount) ? licenseType : c_LR.Connections;
 				licenseWarningLimit = connectionsCount * cfgWarningLimitPercents <= editConnectionsCount;
 			}
-			/*if (constants.PACKAGE_TYPE_OS === licenseInfo.packageType && c_LR.Error === licenseType) {
-			licenseType = c_LR.SuccessLimit;
-
-			const count = constants.LICENSE_CONNECTIONS;
-			let cursor = '0', sum = 0, scanRes, tmp, length, i, users;
-			while (true) {
-			  scanRes = yield utils.promiseRedis(redisClient, redisClient.scan, cursor, 'MATCH', redisKeyPresenceHash + '*');
-			  tmp = scanRes[1];
-			  sum += (length = tmp.length);
-
-			  for (i = 0; i < length; ++i) {
-				if (sum >= count) {
-				  licenseType = c_LR.Connections;
-				  break;
-				}
-
-				users = yield utils.promiseRedis(redisClient, redisClient.hlen, tmp[i]);
-				sum += users - (0 !== users ? 1 : 0);
-			  }
-
-			  if (sum >= count) {
-				licenseType = c_LR.Connections;
-				break;
-			  }
-
-			  cursor = scanRes[0];
-			  if ('0' === cursor) {
-				break;
-			  }
-			}
-		  }*/
 		}
 
 		if (c_LR.UsersCount === licenseType) {
