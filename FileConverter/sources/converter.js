@@ -387,11 +387,9 @@ function* processChanges(tempDirs, cmd, authorProps) {
   let forceSave = cmd.getForceSave();
   let forceSaveTime;
   let forceSaveIndex = Number.MAX_VALUE;
-  let forceSaveAuthor;
   if (forceSave) {
     forceSaveTime = forceSave.getTime();
     forceSaveIndex = forceSave.getIndex();
-    forceSaveAuthor = forceSave.getAuthorUserId();
   }
   let streamObj = yield* streamCreate(cmd.getDocId(), changesDir, indexFile++, {highWaterMark: cfgStreamWriterBufferSize});
   let curIndexStart = 0;
@@ -435,7 +433,7 @@ function* processChanges(tempDirs, cmd, authorProps) {
   if (streamObj.isNoChangesInFile) {
     fs.unlinkSync(streamObj.filePath);
   }
-  cmd.setUserId(forceSaveAuthor || changesAuthor);
+  cmd.setUserId(changesAuthor);
   cmd.setUserIndex(changesIndex);
   fs.writeFileSync(path.join(tempDirs.result, 'changesHistory.json'), JSON.stringify(changesHistory), 'utf8');
   return res;
