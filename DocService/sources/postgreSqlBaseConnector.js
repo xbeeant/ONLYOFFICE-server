@@ -36,7 +36,8 @@ var pg = require('pg');
 var co = require('co');
 var types = require('pg').types;
 var sqlBase = require('./baseConnector');
-var configSql = require('config').get('services.CoAuthoring.sql');
+const config = require('config');
+var configSql = config.get('services.CoAuthoring.sql');
 var pgPoolExtraOptions = configSql.get('pgPoolExtraOptions');
 let connectionConfig = {
   host: configSql.get('dbHost'),
@@ -49,7 +50,8 @@ let connectionConfig = {
   ssl: false,
   idleTimeoutMillis: 30000
 };
-Object.assign(connectionConfig, pgPoolExtraOptions);
+//clone pgPoolExtraOptions to resolve 'TypeError: Cannot redefine property: key' in pg-pool
+config.util.extendDeep(connectionConfig, pgPoolExtraOptions);
 var pool = new pg.Pool(connectionConfig);
 //todo datetime timezone
 pg.defaults.parseInputDatesAsUTC = true;
