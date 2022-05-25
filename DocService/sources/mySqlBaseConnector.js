@@ -32,7 +32,7 @@
 
 'use strict';
 
-var mysql = require('mysql');
+var mysql = require('mysql2');
 var sqlBase = require('./baseConnector');
 var configSql = require('config').get('services.CoAuthoring.sql');
 var pool  = mysql.createPool({
@@ -43,7 +43,7 @@ var pool  = mysql.createPool({
 	database	: configSql.get('dbName'),
 	charset		: configSql.get('charset'),
 	connectionLimit	: configSql.get('connectionlimit'),
-	timezone	: '+0000',
+	timezone	: 'Z',
 	flags : '-FOUND_ROWS'
 });
 var logger = require('./../../Common/sources/logger');
