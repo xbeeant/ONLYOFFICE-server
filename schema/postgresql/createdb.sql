@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS "public"."doc_changes2" (
 "user_id" varchar(255) COLLATE "default" NOT NULL,
 "user_id_original" varchar(255) COLLATE "default" NOT NULL,
 "user_name" varchar(255) COLLATE "default" NOT NULL,
-"change_data" bytea COLLATE "default" NOT NULL,
+"change_data" bytea NOT NULL,
 "change_date" timestamp without time zone NOT NULL,
 PRIMARY KEY ("tenant", "id", "change_id")
 )
