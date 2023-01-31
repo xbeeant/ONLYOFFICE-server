@@ -38,7 +38,10 @@ var types = require('pg').types;
 var sqlBase = require('./baseConnector');
 const config = require('config');
 var configSql = config.get('services.CoAuthoring.sql');
+const cfgTableResult = config.get('services.CoAuthoring.sql.tableResult');
 var pgPoolExtraOptions = configSql.get('pgPoolExtraOptions');
+const cfgEditor = config.get('services.CoAuthoring.editor');
+
 let connectionConfig = {
   host: configSql.get('dbHost'),
   port: configSql.get('dbPort'),
@@ -122,19 +125,19 @@ function getUpsertString(task, values) {
   if (isSupportOnConflict) {
     let p9 = addSqlParam(dateNow, values);
     //http://stackoverflow.com/questions/34762732/how-to-find-out-if-an-upsert-was-an-update-with-postgresql-9-5-upsert
-    let sqlCommand = "INSERT INTO task_result (tenant, id, status, status_info, last_open_date, user_index, change_id, callback, baseurl)";
+    let sqlCommand = `INSERT INTO ${cfgTableResult} (tenant, id, status, status_info, last_open_date, user_index, change_id, callback, baseurl)`;
     sqlCommand += ` VALUES (${p0}, ${p1}, ${p2}, ${p3}, ${p4}, ${p5}, ${p6}, ${p7}, ${p8})`;
     sqlCommand += ` ON CONFLICT (tenant, id) DO UPDATE SET last_open_date = ${p9}`;
     if (task.callback) {
       let p10 = addSqlParam(JSON.stringify(task.callback), values);
-      sqlCommand += `, callback = task_result.callback || '${sqlBase.UserCallback.prototype.delimiter}{"userIndex":' `;
-      sqlCommand += ` || (task_result.user_index + 1)::text || ',"callback":' || ${p10}::text || '}'`;
+      sqlCommand += `, callback = ${cfgTableResult}.callback || '${sqlBase.UserCallback.prototype.delimiter}{"userIndex":' `;
+      sqlCommand += ` || (${cfgTableResult}.user_index + 1)::text || ',"callback":' || ${p10}::text || '}'`;
     }
     if (task.baseurl) {
       let p11 = addSqlParam(task.baseurl, values);
       sqlCommand += `, baseurl = ${p11}`;
     }
-    sqlCommand += ", user_index = task_result.user_index + 1 RETURNING user_index as userindex;";
+    sqlCommand += `, user_index = ${cfgTableResult}.user_index + 1 RETURNING user_index as userindex;`;
     return sqlCommand;
   } else {
     return `SELECT * FROM merge_db(${p0}, ${p1}, ${p2}, ${p3}, ${p4}, ${p5}, ${p6}, ${p7}, ${p8});`;
@@ -182,7 +185,8 @@ exports.insertChanges = function(ctx, tableChanges, startIndex, objChanges, docI
   let time = [];
   //Postgres 9.4 multi-argument unnest
   let sqlCommand = `INSERT INTO ${tableChanges} (tenant, id, change_id, user_id, user_id_original, user_name, change_data, change_date) `;
-  sqlCommand += "SELECT * FROM UNNEST ($1::text[], $2::text[], $3::int[], $4::text[], $5::text[], $6::text[], $7::text[], $8::timestamp[]);";
+  let changesType = cfgEditor['binaryChanges'] ? 'bytea' : 'text';
+  sqlCommand += `SELECT * FROM UNNEST ($1::text[], $2::text[], $3::int[], $4::text[], $5::text[], $6::text[], $7::${changesType}[], $8::timestamp[]);`;
   let values = [tenant, id, changeId, userId, userIdOriginal, username, change, time];
   let curLength = sqlCommand.length;
   for (; i < objChanges.length; ++i) {
