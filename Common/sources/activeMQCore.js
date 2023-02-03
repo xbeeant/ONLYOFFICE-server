@@ -75,19 +75,13 @@ function connetPromise(reconnectOnConnectionError, closeCallback) {
     startConnect();
   });
 }
-function openSenderPromise(conn, name) {
+function openSenderPromise(conn, options) {
   return new Promise(function(resolve, reject) {
-    let options = {target: name};
     resolve(conn.open_sender(options));
   });
 }
-function openReceiverPromise(conn, name, autoaccept) {
+function openReceiverPromise(conn, options) {
   return new Promise(function(resolve, reject) {
-    let options = {source: name};
-    if (!autoaccept) {
-      options.credit_window = 0;
-      options.autoaccept = false;
-    }
     resolve(conn.open_receiver(options));
   });
 }
