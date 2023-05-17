@@ -40,9 +40,17 @@ const cfgRabbitSocketOptions = config.get('activemq.connectOptions');
 
 var RECONNECT_TIMEOUT = 1000;
 
-function connetPromise(reconnectOnConnectionError, closeCallback) {
+function connetPromise(closeCallback) {
   return new Promise(function(resolve, reject) {
+    //todo use built-in reconnect logic
     function startConnect() {
+      let onDisconnected = function() {
+        if (isConnected) {
+          closeCallback();
+        } else {
+          setTimeout(startConnect, RECONNECT_TIMEOUT);
+        }
+      }
       let conn = container.create_container().connect(cfgRabbitSocketOptions);
       let isConnected = false;
       conn.on('connection_open', function(context) {
@@ -51,23 +59,20 @@ function connetPromise(reconnectOnConnectionError, closeCallback) {
         resolve(conn);
       });
       conn.on('connection_error', function(context) {
-        //todo
-        operationContext.global.logger.debug('[AMQP] connection_error %s', context.error);
+        operationContext.global.logger.debug('[AMQP] connection_error %s', context.error && context.error);
       });
-      conn.on('connection_close', function() {
-        //todo
+      conn.on('connection_close', function(context) {
         operationContext.global.logger.debug('[AMQP] conn close');
+        if (onDisconnected) {
+          onDisconnected();
+          onDisconnected = null;
+        }
       });
       conn.on('disconnected', function(context) {
         operationContext.global.logger.error('[AMQP] disconnected %s', context.error && context.error.stack);
-        if (isConnected) {
-          closeCallback();
-        } else {
-          if (reconnectOnConnectionError) {
-            setTimeout(startConnect, RECONNECT_TIMEOUT);
-          } else {
-            reject(context.error);
-          }
+        if (onDisconnected) {
+          onDisconnected();
+          onDisconnected = null;
         }
       });
     }
@@ -96,3 +101,4 @@ module.exports.connetPromise = connetPromise;
 module.exports.openSenderPromise = openSenderPromise;
 module.exports.openReceiverPromise = openReceiverPromise;
 module.exports.closePromise = closePromise;
+module.exports.RECONNECT_TIMEOUT = RECONNECT_TIMEOUT;
