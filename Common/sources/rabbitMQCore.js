@@ -41,17 +41,13 @@ var cfgRabbitSocketOptions = config.get('rabbitmq.socketOptions');
 
 var RECONNECT_TIMEOUT = 1000;
 
-function connetPromise(reconnectOnConnectionError, closeCallback) {
+function connetPromise(closeCallback) {
   return new Promise(function(resolve, reject) {
     function startConnect() {
       amqp.connect(cfgRabbitUrl, cfgRabbitSocketOptions, function(err, conn) {
         if (null != err) {
           operationContext.global.logger.error('[AMQP] %s', err.stack);
-          if (reconnectOnConnectionError) {
-            setTimeout(startConnect, RECONNECT_TIMEOUT);
-          } else {
-            reject(err);
-          }
+          setTimeout(startConnect, RECONNECT_TIMEOUT);
         } else {
           conn.on('error', function(err) {
             operationContext.global.logger.error('[AMQP] conn error', err.stack);
@@ -145,3 +141,4 @@ module.exports.assertExchangePromise = assertExchangePromise;
 module.exports.assertQueuePromise = assertQueuePromise;
 module.exports.consumePromise = consumePromise;
 module.exports.closePromise = closePromise;
+module.exports.RECONNECT_TIMEOUT = RECONNECT_TIMEOUT;
