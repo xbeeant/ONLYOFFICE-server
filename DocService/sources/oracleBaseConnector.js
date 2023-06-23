@@ -40,15 +40,18 @@ const configSql = config.get('services.CoAuthoring.sql');
 const cfgTableResult = config.get('services.CoAuthoring.sql.tableResult');
 
 const connectionConfiguration = {
-  user: 'pdbadmin', // configSql.get('dbUser')
-  password: 'admin', // configSql.get('dbPass')
-  connectString: '192.168.5.7:1521/xepdb1', // `${configSql.get('dbHost')}:${configSql.get('dbPort')}/${configSql.get('dbName')}`
+  user: configSql.get('dbUser'),
+  password: configSql.get('dbPass'),
+  connectString: `${configSql.get('dbHost')}:${configSql.get('dbPort')}/${configSql.get('dbName')}`,
   poolMin: 0,
-  poolMax: 10  // configSql.get('connectionlimit')
+  poolMax: configSql.get('connectionlimit')
 };
 let pool = null;
 
 async function sqlQuery(ctx, sqlCommand, callbackFunction, opt_noModifyRes, opt_noLog, opt_values) {
+  // Query must not have any ';' in oracle connector.
+  const correctedSql = sqlCommand.replace(/;/g, '');
+
   try {
     if (!pool) {
       pool = await oracledb.createPool(connectionConfiguration);
@@ -59,9 +62,10 @@ async function sqlQuery(ctx, sqlCommand, callbackFunction, opt_noModifyRes, opt_
     const handler = (error, result) => {
       if (error) {
         if (!opt_noLog) {
-          ctx.logger.error('sqlQuery error sqlCommand: %s: %s', sqlCommand.slice(0, 50), error.stack);
+          ctx.logger.error('sqlQuery error sqlCommand: %s: %s', correctedSql.slice(0, 50), error.stack);
         }
 
+        connection.close();
         callbackFunction?.(error);
 
         return;
@@ -80,15 +84,27 @@ async function sqlQuery(ctx, sqlCommand, callbackFunction, opt_noModifyRes, opt_
         }
       }
 
-      connection.close();
       callbackFunction?.(error, output);
     };
 
     if (opt_values) {
-      connection.execute(sqlCommand, opt_values, handler);
+      connection.execute(correctedSql, opt_values, handler);
     } else {
-      connection.execute(sqlCommand, handler);
+      connection.execute(correctedSql, handler);
     }
+
+    // Transaction must be committed otherwise connector roll it back.
+    connection.execute('COMMIT', (error, result) => {
+      if (error) {
+        if (!opt_noLog) {
+          ctx.logger.error('sqlQuery error sqlCommand: %s: %s', correctedSql.slice(0, 50), error.stack);
+        }
+
+        callbackFunction?.(error);
+      }
+
+      connection.close();
+    });
   } catch (error) {
     if (!opt_noLog) {
       ctx.logger.error('sqlQuery error while pool manipulation: %s', error.stack);
@@ -152,9 +168,9 @@ function upsert(ctx, task, opt_updateUserIndex) {
     const updateQuery = `last_open_date = ${addSqlParameter(dateNow, values)}${callback}${baseUrl}${userIndex}`
     const condition = `tenant = ${valuesPlaceholder[0]} AND id = ${valuesPlaceholder[1]}`
 
-    let mergeSqlCommand = `MERGE INTO ${cfgTableResult} USING DUAL searching_alias ON (${condition})`
+    let mergeSqlCommand = `MERGE INTO ${cfgTableResult} USING DUAL ON (${condition})`
       + ` WHEN MATCHED THEN UPDATE SET ${updateQuery}`
-      + ` WHEN NOT MATCHED THEN INSERT (tenant, id, status, status_info, last_open_date, user_index, change_id, callback, baseurl) VALUES (${valuesPlaceholder.join(', ')});`;
+      + ` WHEN NOT MATCHED THEN INSERT (tenant, id, status, status_info, last_open_date, user_index, change_id, callback, baseurl) VALUES (${valuesPlaceholder.join(', ')})`;
 
     exports.sqlQuery(ctx, mergeSqlCommand, function(error, result) {
       if (error) {
