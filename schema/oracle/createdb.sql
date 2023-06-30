@@ -1,6 +1,6 @@
 -- You must be logged in as SYS(sysdba) user.
 -- Here, "onlyoffice" is a PBD(service) name.
-alter session set container = onlyoffice;
+alter session set container = onlyoffice; --test name: xepdb1;
 
 -- In tables creation section "onlyoffice" is a user name.
 -- ----------------------------
