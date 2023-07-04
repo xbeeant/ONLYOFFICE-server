@@ -1,6 +1,6 @@
 -- You must be logged in as SYS(sysdba) user.
 -- Here, "onlyoffice" is a PBD(service) name.
-alter session set container = onlyoffice; --test name: xepdb1;
+alter session set container = onlyoffice;
 
 -- In tables creation section "onlyoffice" is a user name.
 -- ----------------------------
@@ -28,12 +28,12 @@ CREATE TABLE onlyoffice.task_result (
     id NVARCHAR2(255) NOT NULL,
     status NUMBER NOT NULL,
     status_info NUMBER NOT NULL,
-    created_at TIMESTAMP DEFAULT SYSDATE, -- check format
+    created_at TIMESTAMP DEFAULT SYSDATE NOT NULL,
     last_open_date TIMESTAMP NOT NULL,
     user_index NUMBER DEFAULT 1 NOT NULL,
     change_id NUMBER DEFAULT 0 NOT NULL,
-    callback NCLOB NOT NULL,
-    baseurl NCLOB NOT NULL,
+    callback NCLOB,  -- codebase uses '' as default values here, but Oracle treat '' as NULL, so NULL permitted for this value.
+    baseurl NCLOB,  -- codebase uses '' as default values here, but Oracle treat '' as NULL, so NULL permitted for this value.
     password NCLOB NULL,
     additional NCLOB NULL,
     CONSTRAINT task_result_unsigned_int CHECK (user_index BETWEEN 0 AND 4294967295 AND change_id BETWEEN 0 AND 4294967295)

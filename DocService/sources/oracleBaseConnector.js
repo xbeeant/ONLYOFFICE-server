@@ -37,7 +37,8 @@ const config = require('config');
 const connectorUtilities = require("./connectorUtilities");
 
 const configSql = config.get('services.CoAuthoring.sql');
-const cfgTableResult = config.get('services.CoAuthoring.sql.tableResult');
+const cfgTableResult = configSql.get('tableResult');
+const cfgMaxPacketSize = configSql.get('max_allowed_packet');
 
 const connectionConfiguration = {
   user: configSql.get('dbUser'),
@@ -48,7 +49,7 @@ const connectionConfiguration = {
 };
 let pool = null;
 
-oracledb.fetchAsString = [ oracledb.NCLOB ];
+oracledb.fetchAsString = [ oracledb.NCLOB, oracledb.CLOB ];
 oracledb.autoCommit = true;
 
 function columnsToLowercase(rows) {
@@ -65,19 +66,6 @@ function columnsToLowercase(rows) {
   }
 
   return formattedRows;
-}
-
-function reconfigureParametersBinding(parameters) {
-  if (!parameters) {
-    return {};
-  }
-
-  const objectConfiguration = {};
-  for (const index in parameters) {
-    objectConfiguration[`:${index}`] = parameters[index];
-  }
-
-  return objectConfiguration;
 }
 
 async function sqlQuery(ctx, sqlCommand, callbackFunction, opt_noModifyRes, opt_noLog, opt_values) {
@@ -97,29 +85,32 @@ async function sqlQuery(ctx, sqlCommand, callbackFunction, opt_noModifyRes, opt_
           ctx.logger.error('sqlQuery error sqlCommand: %s: %s', correctedSql, error.stack);
         }
 
-        connection.close();
         callbackFunction?.(error);
 
         return;
       }
 
-      let output = { rows: [], affectedRows: 0 };
-      if (result?.rowsAffected) {
-        output = { affectedRows: result.rowsAffected };
-      }
+      connection.close();
 
-      if (result?.rows) {
-        output = !opt_noModifyRes ? columnsToLowercase(result.rows) : result.rows;
+      let output = { rows: [], affectedRows: 0 };
+      if (!opt_noModifyRes) {
+        if (result?.rowsAffected) {
+          output = { affectedRows: result.rowsAffected };
+        }
+
+        if (result?.rows) {
+          output = columnsToLowercase(result.rows);
+        }
+      } else {
+        output = result;
       }
 
       callbackFunction?.(error, output);
     };
 
-    const bondedValues = reconfigureParametersBinding(opt_values);
+    const bondedValues = opt_values ?? [];
     const outputFormat = { outFormat: !opt_noModifyRes ? oracledb.OUT_FORMAT_OBJECT : oracledb.OUT_FORMAT_ARRAY };
     connection.execute(correctedSql, bondedValues, outputFormat, handler);
-
-    connection.close();
   } catch (error) {
     if (!opt_noLog) {
       ctx.logger.error('sqlQuery error while pool manipulation: %s', error.stack);
@@ -162,18 +153,11 @@ function upsert(ctx, task, opt_updateUserIndex) {
     }
 
     const dateNow = new Date();
+
     const values = [];
-    const valuesPlaceholder = [
-      addSqlParameter(task.tenant, values),
-      addSqlParameter(task.key, values),
-      addSqlParameter(task.status, values),
-      addSqlParameter(task.statusInfo, values),
-      addSqlParameter(dateNow, values),
-      addSqlParameter(task.userIndex, values),
-      addSqlParameter(task.changeId, values),
-      addSqlParameter(cbInsert, values),
-      addSqlParameter(task.baseurl, values)
-    ];
+    const tenant = addSqlParameter(task.tenant, values);
+    const id = addSqlParameter(task.key, values);
+    const lastOpenDate = addSqlParameter(dateNow, values);
 
     let callback = '';
     if (task.callback) {
@@ -192,12 +176,25 @@ function upsert(ctx, task, opt_updateUserIndex) {
       userIndex = ', user_index = user_index + 1';
     }
 
-    const updateQuery = `last_open_date = ${addSqlParameter(dateNow, values)}${callback}${baseUrl}${userIndex}`
-    const condition = `tenant = ${valuesPlaceholder[0]} AND id = ${valuesPlaceholder[1]}`
+    const updateQuery = `last_open_date = ${lastOpenDate}${callback}${baseUrl}${userIndex}`
+    const condition = `tenant = ${tenant} AND id = ${id}`
 
     let mergeSqlCommand = `MERGE INTO ${cfgTableResult} USING DUAL ON (${condition})`
-      + ` WHEN MATCHED THEN UPDATE SET ${updateQuery}`
-      + ` WHEN NOT MATCHED THEN INSERT (tenant, id, status, status_info, last_open_date, user_index, change_id, callback, baseurl) VALUES (${valuesPlaceholder.join(', ')})`;
+      + ` WHEN MATCHED THEN UPDATE SET ${updateQuery}`;
+
+    const valuesPlaceholder = [
+      addSqlParameter(task.tenant, values),
+      addSqlParameter(task.key, values),
+      addSqlParameter(task.status, values),
+      addSqlParameter(task.statusInfo, values),
+      addSqlParameter(dateNow, values),
+      addSqlParameter(task.userIndex, values),
+      addSqlParameter(task.changeId, values),
+      addSqlParameter(cbInsert, values),
+      addSqlParameter(task.baseurl, values)
+    ];
+
+    mergeSqlCommand += ` WHEN NOT MATCHED THEN INSERT (tenant, id, status, status_info, last_open_date, user_index, change_id, callback, baseurl) VALUES (${valuesPlaceholder.join(', ')})`;
 
     sqlQuery(ctx, mergeSqlCommand, function(error, result) {
       if (error) {
@@ -209,10 +206,66 @@ function upsert(ctx, task, opt_updateUserIndex) {
   });
 }
 
+async function insertChanges(ctx, tableChanges, startIndex, objChanges, docId, index, user, callback) {
+  if (startIndex === objChanges.length) {
+    return;
+  }
+
+  let packetCapacityReached = false;
+  let currentIndex = startIndex;
+  let lengthUtf8Current = 'INSERT ALL  SELECT 1 FROM DUAL'.length;
+  let insertAllSqlCommand = 'INSERT ALL ';
+  const values = [];
+
+  const maxInsertionClauseLength = `INTO ${tableChanges} VALUES(:9991,:9992,:9993,:9994,:9995,:9996,:9997,:9998) `.length;
+  const indexBytes = 4;
+  const timeBytes = 8;
+  for (; currentIndex < objChanges.length; ++currentIndex, ++index) {
+    // 4 bytes is maximum for utf8 symbol.
+    const lengthUtf8Row = maxInsertionClauseLength + indexBytes + timeBytes
+      + 4 * (ctx.tenant.length + docId.length + user.id.length + user.idOriginal.length + user.username.length + objChanges[currentIndex].change.length);
+
+    if (lengthUtf8Row + lengthUtf8Current >= cfgMaxPacketSize && currentIndex > startIndex) {
+      packetCapacityReached = true;
+      break;
+    }
+
+    const valuesPlaceholder= [
+      addSqlParameter(ctx.tenant, values),
+      addSqlParameter(docId, values),
+      addSqlParameter(index, values),
+      addSqlParameter(user.id, values),
+      addSqlParameter(user.idOriginal, values),
+      addSqlParameter(user.username, values),
+      addSqlParameter(objChanges[currentIndex].change, values),
+      addSqlParameter(objChanges[currentIndex].time, values)
+    ];
+
+    insertAllSqlCommand += `INTO ${tableChanges} VALUES(${valuesPlaceholder.join(',')}) `;
+  }
+
+  insertAllSqlCommand += 'SELECT 1 FROM DUAL';
+
+  await sqlQuery(ctx, insertAllSqlCommand, function (error, result) {
+    if (error) {
+      callback(error, null, true);
+
+      return;
+    }
+
+    if (packetCapacityReached) {
+      insertChanges(ctx, tableChanges, currentIndex, objChanges, docId, index, user, callback);
+    } else {
+      callback(error, result, true);
+    }
+  }, false, false, values);
+}
+
 module.exports = {
   sqlQuery,
   addSqlParameter,
   concatParams,
   getTableColumns,
-  upsert
+  upsert,
+  insertChanges
 }
