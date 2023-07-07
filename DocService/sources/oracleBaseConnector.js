@@ -48,6 +48,7 @@ const connectionConfiguration = {
   poolMax: configSql.get('connectionlimit')
 };
 let pool = null;
+let affectedRowsTotal = 0;
 
 oracledb.fetchAsString = [ oracledb.NCLOB, oracledb.CLOB ];
 oracledb.autoCommit = true;
@@ -195,13 +196,25 @@ function upsert(ctx, task, opt_updateUserIndex) {
     ];
 
     mergeSqlCommand += ` WHEN NOT MATCHED THEN INSERT (tenant, id, status, status_info, last_open_date, user_index, change_id, callback, baseurl) VALUES (${valuesPlaceholder.join(', ')})`;
-
+    
     sqlQuery(ctx, mergeSqlCommand, function(error, result) {
       if (error) {
         reject(error);
-      } else {
-        resolve(result);
+
+        return;
       }
+
+      sqlQuery(ctx, `SELECT user_index FROM ${cfgTableResult} WHERE tenant = :0 AND id = :1`, function (selectError, selectResult) {
+        if (selectError) {
+          reject(selectError);
+
+          return;
+        }
+
+        const row = selectResult.pop();
+        result.insertId = row?.['user_index'] ?? 0;
+        resolve(result);
+      }, false, false, [task.tenant, task.key]);
     }, false, false, values);
   });
 }
@@ -246,16 +259,19 @@ async function insertChanges(ctx, tableChanges, startIndex, objChanges, docId, i
 
   insertAllSqlCommand += 'SELECT 1 FROM DUAL';
 
-  await sqlQuery(ctx, insertAllSqlCommand, function (error, result) {
+  sqlQuery(ctx, insertAllSqlCommand, function (error, result) {
     if (error) {
       callback(error, null, true);
 
       return;
     }
 
+    affectedRowsTotal += result.affectedRows;
     if (packetCapacityReached) {
       insertChanges(ctx, tableChanges, currentIndex, objChanges, docId, index, user, callback);
     } else {
+      result.affectedRows = affectedRowsTotal;
+      affectedRowsTotal = 0;
       callback(error, result, true);
     }
   }, false, false, values);
