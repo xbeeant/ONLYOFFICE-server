@@ -155,6 +155,35 @@ function upsert(ctx, task, opt_updateUserIndex) {
 
     const dateNow = new Date();
 
+    // const values = [];
+    //
+    // const lastOpenDate = addSqlParameter(dateNow, values);
+    //
+    // let callback = '';
+    // if (task.callback) {
+    //   const parameter = addSqlParameter(JSON.stringify(task.callback), values);
+    //   callback = `, callback = callback || '${connectorUtilities.UserCallback.prototype.delimiter}{"userIndex":' || (user_index + 1) || ',"callback":' || ${parameter} || '}'`;
+    // }
+    //
+    // let baseUrl = '';
+    // if (task.baseurl) {
+    //   const parameter = addSqlParameter(task.baseurl, values);
+    //   baseUrl = `, baseurl = ${parameter}`;
+    // }
+    //
+    // let userIndex = '';
+    // if (opt_updateUserIndex) {
+    //   userIndex = ', user_index = user_index + 1';
+    // }
+    //
+    // const updateQuery = `last_open_date = ${lastOpenDate}${callback}${baseUrl}${userIndex}`
+    // const tenant = addSqlParameter(task.tenant, values);
+    // const id = addSqlParameter(task.key, values);
+    // const condition = `tenant = ${tenant} AND id = ${id}`
+    //
+    // const returning = addSqlParameter({ type: oracledb.NUMBER, dir: oracledb.BIND_OUT }, values);
+    // let mergeSqlCommand = `UPDATE ${cfgTableResult} SET ${updateQuery} WHERE ${condition} RETURNING user_index INTO ${returning}`;
+
     const values = [];
     const tenant = addSqlParameter(task.tenant, values);
     const id = addSqlParameter(task.key, values);
