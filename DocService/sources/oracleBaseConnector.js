@@ -34,7 +34,7 @@
 
 const oracledb = require('oracledb');
 const config = require('config');
-const connectorUtilities = require("./connectorUtilities");
+const connectorUtilities = require('./connectorUtilities');
 
 const configSql = config.get('services.CoAuthoring.sql');
 const cfgTableResult = configSql.get('tableResult');
@@ -48,7 +48,6 @@ const connectionConfiguration = {
   poolMax: configSql.get('connectionlimit')
 };
 let pool = null;
-let affectedRowsTotal = 0;
 
 oracledb.fetchAsString = [ oracledb.NCLOB, oracledb.CLOB ];
 oracledb.autoCommit = true;
@@ -73,12 +72,13 @@ async function sqlQuery(ctx, sqlCommand, callbackFunction, opt_noModifyRes, opt_
   // Query must not have any ';' in oracle connector.
   const correctedSql = sqlCommand.replace(/;/g, '');
 
+  let connection = null;
   try {
     if (!pool) {
       pool = await oracledb.createPool(connectionConfiguration);
     }
 
-    const connection = await pool.getConnection();
+    connection = await pool.getConnection();
 
     const handler = (error, result) => {
       if (error) {
@@ -90,8 +90,6 @@ async function sqlQuery(ctx, sqlCommand, callbackFunction, opt_noModifyRes, opt_
 
         return;
       }
-
-      connection.close();
 
       let output = { rows: [], affectedRows: 0 };
       if (!opt_noModifyRes) {
@@ -111,13 +109,17 @@ async function sqlQuery(ctx, sqlCommand, callbackFunction, opt_noModifyRes, opt_
 
     const bondedValues = opt_values ?? [];
     const outputFormat = { outFormat: !opt_noModifyRes ? oracledb.OUT_FORMAT_OBJECT : oracledb.OUT_FORMAT_ARRAY };
-    connection.execute(correctedSql, bondedValues, outputFormat, handler);
+    await connection.execute(correctedSql, bondedValues, outputFormat, handler);
   } catch (error) {
     if (!opt_noLog) {
       ctx.logger.error('sqlQuery error while pool manipulation: %s', error.stack);
     }
 
     callbackFunction?.(error);
+  } finally {
+    if (connection) {
+      connection.close();
+    }
   }
 }
 
@@ -142,6 +144,40 @@ function getTableColumns(ctx, tableName) {
   });
 }
 
+function makeUpdateSql(dateNow, task, values, opt_updateUserIndex) {
+  const lastOpenDate = addSqlParameter(dateNow, values);
+
+  let callback = '';
+  if (task.callback) {
+    const parameter = addSqlParameter(JSON.stringify(task.callback), values);
+    callback = `, callback = callback || '${connectorUtilities.UserCallback.prototype.delimiter}{"userIndex":' || (user_index + 1) || ',"callback":' || ${parameter} || '}'`;
+  }
+
+  let baseUrl = '';
+  if (task.baseurl) {
+    const parameter = addSqlParameter(task.baseurl, values);
+    baseUrl = `, baseurl = ${parameter}`;
+  }
+
+  let userIndex = '';
+  if (opt_updateUserIndex) {
+    userIndex = ', user_index = user_index + 1';
+  }
+
+  const updateQuery = `last_open_date = ${lastOpenDate}${callback}${baseUrl}${userIndex}`
+  const tenant = addSqlParameter(task.tenant, values);
+  const id = addSqlParameter(task.key, values);
+  const condition = `tenant = ${tenant} AND id = ${id}`
+
+  const returning = addSqlParameter({ type: oracledb.NUMBER, dir: oracledb.BIND_OUT }, values);
+
+  return `UPDATE ${cfgTableResult} SET ${updateQuery} WHERE ${condition} RETURNING user_index INTO ${returning}`;
+}
+
+function getReturnedValue(returned) {
+  return returned?.outBinds?.pop()?.pop();
+}
+
 function upsert(ctx, task, opt_updateUserIndex) {
   return new Promise((resolve, reject) => {
     task.completeDefaults();
@@ -155,100 +191,61 @@ function upsert(ctx, task, opt_updateUserIndex) {
 
     const dateNow = new Date();
 
-    // const values = [];
-    //
-    // const lastOpenDate = addSqlParameter(dateNow, values);
-    //
-    // let callback = '';
-    // if (task.callback) {
-    //   const parameter = addSqlParameter(JSON.stringify(task.callback), values);
-    //   callback = `, callback = callback || '${connectorUtilities.UserCallback.prototype.delimiter}{"userIndex":' || (user_index + 1) || ',"callback":' || ${parameter} || '}'`;
-    // }
-    //
-    // let baseUrl = '';
-    // if (task.baseurl) {
-    //   const parameter = addSqlParameter(task.baseurl, values);
-    //   baseUrl = `, baseurl = ${parameter}`;
-    // }
-    //
-    // let userIndex = '';
-    // if (opt_updateUserIndex) {
-    //   userIndex = ', user_index = user_index + 1';
-    // }
-    //
-    // const updateQuery = `last_open_date = ${lastOpenDate}${callback}${baseUrl}${userIndex}`
-    // const tenant = addSqlParameter(task.tenant, values);
-    // const id = addSqlParameter(task.key, values);
-    // const condition = `tenant = ${tenant} AND id = ${id}`
-    //
-    // const returning = addSqlParameter({ type: oracledb.NUMBER, dir: oracledb.BIND_OUT }, values);
-    // let mergeSqlCommand = `UPDATE ${cfgTableResult} SET ${updateQuery} WHERE ${condition} RETURNING user_index INTO ${returning}`;
-
-    const values = [];
-    const tenant = addSqlParameter(task.tenant, values);
-    const id = addSqlParameter(task.key, values);
-    const lastOpenDate = addSqlParameter(dateNow, values);
-
-    let callback = '';
-    if (task.callback) {
-      const parameter = addSqlParameter(JSON.stringify(task.callback), values);
-      callback = `, callback = callback || '${connectorUtilities.UserCallback.prototype.delimiter}{"userIndex":' || (user_index + 1) || ',"callback":' || ${parameter} || '}'`;
-    }
-
-    let baseUrl = '';
-    if (task.baseurl) {
-      const parameter = addSqlParameter(task.baseurl, values);
-      baseUrl = `, baseurl = ${parameter}`;
-    }
-
-    let userIndex = '';
-    if (opt_updateUserIndex) {
-      userIndex = ', user_index = user_index + 1';
-    }
-
-    const updateQuery = `last_open_date = ${lastOpenDate}${callback}${baseUrl}${userIndex}`
-    const condition = `tenant = ${tenant} AND id = ${id}`
-
-    let mergeSqlCommand = `MERGE INTO ${cfgTableResult} USING DUAL ON (${condition})`
-      + ` WHEN MATCHED THEN UPDATE SET ${updateQuery}`;
-
-    const valuesPlaceholder = [
-      addSqlParameter(task.tenant, values),
-      addSqlParameter(task.key, values),
-      addSqlParameter(task.status, values),
-      addSqlParameter(task.statusInfo, values),
-      addSqlParameter(dateNow, values),
-      addSqlParameter(task.userIndex, values),
-      addSqlParameter(task.changeId, values),
-      addSqlParameter(cbInsert, values),
-      addSqlParameter(task.baseurl, values)
+    const insertValues = [];
+    const insertValuesPlaceholder = [
+      addSqlParameter(task.tenant, insertValues),
+      addSqlParameter(task.key, insertValues),
+      addSqlParameter(task.status, insertValues),
+      addSqlParameter(task.statusInfo, insertValues),
+      addSqlParameter(dateNow, insertValues),
+      addSqlParameter(task.userIndex, insertValues),
+      addSqlParameter(task.changeId, insertValues),
+      addSqlParameter(cbInsert, insertValues),
+      addSqlParameter(task.baseurl, insertValues)
     ];
 
-    mergeSqlCommand += ` WHEN NOT MATCHED THEN INSERT (tenant, id, status, status_info, last_open_date, user_index, change_id, callback, baseurl) VALUES (${valuesPlaceholder.join(', ')})`;
-    
-    sqlQuery(ctx, mergeSqlCommand, function(error, result) {
-      if (error) {
-        reject(error);
+    const returned = addSqlParameter({ type: oracledb.NUMBER, dir: oracledb.BIND_OUT }, insertValues);
+    let sqlInsertTry = `INSERT INTO ${cfgTableResult} (tenant, id, status, status_info, last_open_date, user_index, change_id, callback, baseurl) `
+      + `VALUES(${insertValuesPlaceholder.join(', ')}) RETURNING user_index INTO ${returned}`;
+
+    sqlQuery(ctx, sqlInsertTry, function (insertError, insertResult) {
+      if (insertResult) {
+        const insertId = getReturnedValue(insertResult);
+        resolve({ affectedRows: insertResult.affectedRows, insertId });
 
         return;
       }
 
-      sqlQuery(ctx, `SELECT user_index FROM ${cfgTableResult} WHERE tenant = :0 AND id = :1`, function (selectError, selectResult) {
-        if (selectError) {
-          reject(selectError);
+      if (insertError) {
+        if (insertError.code !== 'ORA-00001') {
+          reject(insertError);
 
           return;
         }
 
-        const row = selectResult.pop();
-        result.insertId = row?.['user_index'] ?? 0;
-        resolve(result);
-      }, false, false, [task.tenant, task.key]);
-    }, false, false, values);
+        const values = [];
+        sqlQuery(ctx, makeUpdateSql(dateNow, task, values, opt_updateUserIndex), function (updateError, updateResult) {
+          if (updateError) {
+            reject(updateError);
+
+            return;
+          }
+
+          const insertId = getReturnedValue(updateResult);
+          resolve({ affectedRows: updateResult.affectedRows, insertId });
+        }, true, false, values);
+      }
+    }, true, true, insertValues);
   });
 }
 
-async function insertChanges(ctx, tableChanges, startIndex, objChanges, docId, index, user, callback) {
+function insertChanges(ctx, tableChanges, startIndex, objChanges, docId, index, user, callback) {
+  let affectedRowsTotal = 0;
+
+  return insertChangesClosure.apply({ affectedRowsTotal }, arguments);
+}
+
+async function insertChangesClosure(ctx, tableChanges, startIndex, objChanges, docId, index, user, callback) {
   if (startIndex === objChanges.length) {
     return;
   }
@@ -284,23 +281,24 @@ async function insertChanges(ctx, tableChanges, startIndex, objChanges, docId, i
     ];
 
     insertAllSqlCommand += `INTO ${tableChanges} VALUES(${valuesPlaceholder.join(',')}) `;
+    lengthUtf8Current += lengthUtf8Row;
   }
 
   insertAllSqlCommand += 'SELECT 1 FROM DUAL';
 
-  sqlQuery(ctx, insertAllSqlCommand, function (error, result) {
+  sqlQuery(ctx, insertAllSqlCommand, (error, result) => {
     if (error) {
       callback(error, null, true);
 
       return;
     }
 
-    affectedRowsTotal += result.affectedRows;
+    this.affectedRowsTotal += result.affectedRows;
     if (packetCapacityReached) {
-      insertChanges(ctx, tableChanges, currentIndex, objChanges, docId, index, user, callback);
+      insertChanges.apply(this, [ctx, tableChanges, currentIndex, objChanges, docId, index, user, callback]);
     } else {
-      result.affectedRows = affectedRowsTotal;
-      affectedRowsTotal = 0;
+      result.affectedRows = this.affectedRowsTotal;
+      this.affectedRowsTotal = 0;
       callback(error, result, true);
     }
   }, false, false, values);

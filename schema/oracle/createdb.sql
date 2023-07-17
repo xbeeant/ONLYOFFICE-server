@@ -16,6 +16,7 @@ CREATE TABLE onlyoffice.doc_changes (
     user_name NVARCHAR2(255) NOT NULL,
     change_data NCLOB NOT NULL,
     change_date TIMESTAMP NOT NULL,
+    CONSTRAINT doc_changes_unique UNIQUE (tenant, id, change_id),
     CONSTRAINT doc_changes_unsigned_int CHECK (change_id between 0 and 4294967295)
 );
 
@@ -36,5 +37,6 @@ CREATE TABLE onlyoffice.task_result (
     baseurl NCLOB,  -- codebase uses '' as default values here, but Oracle treat '' as NULL, so NULL permitted for this value.
     password NCLOB NULL,
     additional NCLOB NULL,
+    CONSTRAINT task_result_unique UNIQUE (tenant, id),
     CONSTRAINT task_result_unsigned_int CHECK (user_index BETWEEN 0 AND 4294967295 AND change_id BETWEEN 0 AND 4294967295)
 );
