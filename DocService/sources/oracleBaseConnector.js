@@ -211,7 +211,7 @@ function upsert(ctx, task, opt_updateUserIndex) {
     sqlQuery(ctx, sqlInsertTry, function (insertError, insertResult) {
       if (insertResult) {
         const insertId = getReturnedValue(insertResult);
-        resolve({ affectedRows: insertResult.affectedRows, insertId });
+        resolve({ affectedRows: 1, insertId });
 
         return;
       }
@@ -232,7 +232,7 @@ function upsert(ctx, task, opt_updateUserIndex) {
           }
 
           const insertId = getReturnedValue(updateResult);
-          resolve({ affectedRows: updateResult.affectedRows, insertId });
+          resolve({ affectedRows: 2, insertId });
         }, true, false, values);
       }
     }, true, true, insertValues);
