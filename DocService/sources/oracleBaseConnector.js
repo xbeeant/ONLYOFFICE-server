@@ -68,7 +68,14 @@ function columnsToLowercase(rows) {
   return formattedRows;
 }
 
-async function sqlQuery(ctx, sqlCommand, callbackFunction, opt_noModifyRes, opt_noLog, opt_values) {
+function sqlQuery(ctx, sqlCommand, callbackFunction, opt_noModifyRes = false, opt_noLog = false, opt_values = []) {
+  return executeQuery(ctx, sqlCommand, opt_values, opt_noModifyRes, opt_noLog).then(
+    result => callbackFunction?.(null, result),
+    error => callbackFunction?.(error)
+  );
+}
+
+async function executeQuery(ctx, sqlCommand, values = [], noModifyRes = false, noLog = false) {
   // Query must not have any ';' in oracle connector.
   const correctedSql = sqlCommand.replace(/;/g, '');
 
@@ -80,42 +87,57 @@ async function sqlQuery(ctx, sqlCommand, callbackFunction, opt_noModifyRes, opt_
 
     connection = await pool.getConnection();
 
-    const handler = (error, result) => {
-      if (error) {
-        if (!opt_noLog) {
-          ctx.logger.error('sqlQuery error sqlCommand: %s: %s', correctedSql, error.stack);
-        }
+    const bondedValues = values ?? [];
+    const outputFormat = { outFormat: !noModifyRes ? oracledb.OUT_FORMAT_OBJECT : oracledb.OUT_FORMAT_ARRAY };
+    const result = await connection.execute(correctedSql, bondedValues, outputFormat);
 
-        callbackFunction?.(error);
-
-        return;
+    let output = { rows: [], affectedRows: 0 };
+    if (!noModifyRes) {
+      if (result?.rowsAffected) {
+        output = { affectedRows: result.rowsAffected };
       }
 
-      let output = { rows: [], affectedRows: 0 };
-      if (!opt_noModifyRes) {
-        if (result?.rowsAffected) {
-          output = { affectedRows: result.rowsAffected };
-        }
-
-        if (result?.rows) {
-          output = columnsToLowercase(result.rows);
-        }
-      } else {
-        output = result;
+      if (result?.rows) {
+        output = columnsToLowercase(result.rows);
       }
-
-      callbackFunction?.(error, output);
-    };
-
-    const bondedValues = opt_values ?? [];
-    const outputFormat = { outFormat: !opt_noModifyRes ? oracledb.OUT_FORMAT_OBJECT : oracledb.OUT_FORMAT_ARRAY };
-    await connection.execute(correctedSql, bondedValues, outputFormat, handler);
-  } catch (error) {
-    if (!opt_noLog) {
-      ctx.logger.error('sqlQuery error while pool manipulation: %s', error.stack);
+    } else {
+      output = result;
     }
 
-    callbackFunction?.(error);
+    return output;
+  } catch (error) {
+    if (!noLog) {
+      ctx.logger.error('sqlQuery error sqlCommand: %s: %s', correctedSql, error.stack);
+      // ctx.logger.error('sqlQuery error while pool manipulation: %s', error.stack);
+
+      throw error;
+    }
+  } finally {
+    if (connection) {
+      connection.close();
+    }
+  }
+}
+
+async function executeBunch(ctx, sqlCommand, values = [], noLog = false) {
+  let connection = null;
+  try {
+    if (!pool) {
+      pool = await oracledb.createPool(connectionConfiguration);
+    }
+
+    connection = await pool.getConnection();
+    
+    const result = await connection.executeMany(sqlCommand, values);
+
+    return { affectedRows: result?.rowsAffected ?? 0 };
+  } catch (error) {
+    if (!noLog) {
+      ctx.logger.error('sqlQuery error sqlCommand: %s: %s', sqlCommand, error.stack);
+      // ctx.logger.error('sqlQuery error while pool manipulation: %s', error.stack);
+
+      throw error;
+    }
   } finally {
     if (connection) {
       connection.close();
@@ -133,15 +155,7 @@ function concatParams(firstParameter, secondParameter) {
 }
 
 function getTableColumns(ctx, tableName) {
-  return new Promise((resolve, reject) => {
-    sqlQuery(ctx, `SELECT LOWER(column_name) AS column_name FROM user_tab_columns WHERE table_name = '${tableName.toUpperCase()}'`, function (error, result) {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(result);
-      }
-    });
-  });
+  return executeQuery(ctx, `SELECT LOWER(column_name) AS column_name FROM user_tab_columns WHERE table_name = '${tableName.toUpperCase()}'`);
 }
 
 function makeUpdateSql(dateNow, task, values, opt_updateUserIndex) {
@@ -178,90 +192,79 @@ function getReturnedValue(returned) {
   return returned?.outBinds?.pop()?.pop();
 }
 
-function upsert(ctx, task, opt_updateUserIndex) {
-  return new Promise((resolve, reject) => {
-    task.completeDefaults();
+async function upsert(ctx, task, opt_updateUserIndex) {
+  task.completeDefaults();
 
-    let cbInsert = task.callback;
-    if (task.callback) {
-      const userCallback = new connectorUtilities.UserCallback();
-      userCallback.fromValues(task.userIndex, task.callback);
-      cbInsert = userCallback.toSQLInsert();
+  let cbInsert = task.callback;
+  if (task.callback) {
+    const userCallback = new connectorUtilities.UserCallback();
+    userCallback.fromValues(task.userIndex, task.callback);
+    cbInsert = userCallback.toSQLInsert();
+  }
+
+  const dateNow = new Date();
+
+  const insertValues = [];
+  const insertValuesPlaceholder = [
+    addSqlParameter(task.tenant, insertValues),
+    addSqlParameter(task.key, insertValues),
+    addSqlParameter(task.status, insertValues),
+    addSqlParameter(task.statusInfo, insertValues),
+    addSqlParameter(dateNow, insertValues),
+    addSqlParameter(task.userIndex, insertValues),
+    addSqlParameter(task.changeId, insertValues),
+    addSqlParameter(cbInsert, insertValues),
+    addSqlParameter(task.baseurl, insertValues)
+  ];
+
+  const returned = addSqlParameter({ type: oracledb.NUMBER, dir: oracledb.BIND_OUT }, insertValues);
+  let sqlInsertTry = `INSERT INTO ${cfgTableResult} (tenant, id, status, status_info, last_open_date, user_index, change_id, callback, baseurl) `
+    + `VALUES(${insertValuesPlaceholder.join(', ')}) RETURNING user_index INTO ${returned}`;
+
+  try {
+    const insertResult = await executeQuery(ctx, sqlInsertTry, insertValues, true, true);
+    const insertId = getReturnedValue(insertResult);
+
+    return { affectedRows: 1, insertId };
+  } catch (insertError) {
+    if (insertError.code !== 'ORA-00001') {
+      throw insertError;
     }
 
-    const dateNow = new Date();
+    const values = [];
+    const updateResult = await executeQuery(ctx, makeUpdateSql(dateNow, task, values, opt_updateUserIndex), values, true);
+    const insertId = getReturnedValue(updateResult);
 
-    const insertValues = [];
-    const insertValuesPlaceholder = [
-      addSqlParameter(task.tenant, insertValues),
-      addSqlParameter(task.key, insertValues),
-      addSqlParameter(task.status, insertValues),
-      addSqlParameter(task.statusInfo, insertValues),
-      addSqlParameter(dateNow, insertValues),
-      addSqlParameter(task.userIndex, insertValues),
-      addSqlParameter(task.changeId, insertValues),
-      addSqlParameter(cbInsert, insertValues),
-      addSqlParameter(task.baseurl, insertValues)
-    ];
-
-    const returned = addSqlParameter({ type: oracledb.NUMBER, dir: oracledb.BIND_OUT }, insertValues);
-    let sqlInsertTry = `INSERT INTO ${cfgTableResult} (tenant, id, status, status_info, last_open_date, user_index, change_id, callback, baseurl) `
-      + `VALUES(${insertValuesPlaceholder.join(', ')}) RETURNING user_index INTO ${returned}`;
-
-    sqlQuery(ctx, sqlInsertTry, function (insertError, insertResult) {
-      if (insertResult) {
-        const insertId = getReturnedValue(insertResult);
-        resolve({ affectedRows: 1, insertId });
-
-        return;
-      }
-
-      if (insertError) {
-        if (insertError.code !== 'ORA-00001') {
-          reject(insertError);
-
-          return;
-        }
-
-        const values = [];
-        sqlQuery(ctx, makeUpdateSql(dateNow, task, values, opt_updateUserIndex), function (updateError, updateResult) {
-          if (updateError) {
-            reject(updateError);
-
-            return;
-          }
-
-          const insertId = getReturnedValue(updateResult);
-          resolve({ affectedRows: 2, insertId });
-        }, true, false, values);
-      }
-    }, true, true, insertValues);
-  });
+    return { affectedRows: 2, insertId };
+  }
 }
 
 function insertChanges(ctx, tableChanges, startIndex, objChanges, docId, index, user, callback) {
-  let affectedRowsTotal = 0;
-
-  return insertChangesClosure.apply({ affectedRowsTotal }, arguments);
+  insertChangesAsync(ctx, tableChanges, startIndex, objChanges, docId, index, user).then(
+    result => { ctx.logger.debug('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!TOTAL:', result.affectedRows); callback(null, result, true) },
+    error => callback(error, null, true)
+  );
 }
 
-async function insertChangesClosure(ctx, tableChanges, startIndex, objChanges, docId, index, user, callback) {
+async function insertChangesAsync(ctx, tableChanges, startIndex, objChanges, docId, index, user) {
   if (startIndex === objChanges.length) {
-    return;
+    return { affectedRows: 0 };
   }
 
+  const parametersCount = 8;
+  const placeholderLength = ':9'.length;
+  // (parametersCount - 1) - separator symbols length.
+  const maxInsertStatementLength = `INSERT /*+ APPEND_VALUES*/INTO ${tableChanges} VALUES()`.length + placeholderLength * parametersCount + (parametersCount - 1);
   let packetCapacityReached = false;
-  let currentIndex = startIndex;
-  let lengthUtf8Current = 'INSERT ALL  SELECT 1 FROM DUAL'.length;
-  let insertAllSqlCommand = 'INSERT ALL ';
-  const values = [];
 
-  const maxInsertionClauseLength = `INTO ${tableChanges} VALUES(:9991,:9992,:9993,:9994,:9995,:9996,:9997,:9998) `.length;
+  const values = [];
   const indexBytes = 4;
   const timeBytes = 8;
+  let lengthUtf8Current = 0;
+  let currentIndex = startIndex;
   for (; currentIndex < objChanges.length; ++currentIndex, ++index) {
     // 4 bytes is maximum for utf8 symbol.
-    const lengthUtf8Row = maxInsertionClauseLength + indexBytes + timeBytes
+    const lengthUtf8Row = maxInsertStatementLength + indexBytes + timeBytes
       + 4 * (ctx.tenant.length + docId.length + user.id.length + user.idOriginal.length + user.username.length + objChanges[currentIndex].change.length);
 
     if (lengthUtf8Row + lengthUtf8Current >= cfgMaxPacketSize && currentIndex > startIndex) {
@@ -269,39 +272,35 @@ async function insertChangesClosure(ctx, tableChanges, startIndex, objChanges, d
       break;
     }
 
-    const valuesPlaceholder= [
-      addSqlParameter(ctx.tenant, values),
-      addSqlParameter(docId, values),
-      addSqlParameter(index, values),
-      addSqlParameter(user.id, values),
-      addSqlParameter(user.idOriginal, values),
-      addSqlParameter(user.username, values),
-      addSqlParameter(objChanges[currentIndex].change, values),
-      addSqlParameter(objChanges[currentIndex].time, values)
-    ];
+    const rowValues = {
+      '0': ctx.tenant,
+      '1': docId,
+      '2': index,
+      '3': user.id,
+      '4': user.idOriginal,
+      '5': user.username,
+      '6': objChanges[currentIndex].change,
+      '7': objChanges[currentIndex].time
+    };
 
-    insertAllSqlCommand += `INTO ${tableChanges} VALUES(${valuesPlaceholder.join(',')}) `;
+    values.push(rowValues);
     lengthUtf8Current += lengthUtf8Row;
   }
 
-  insertAllSqlCommand += 'SELECT 1 FROM DUAL';
+  const placeholder = [];
+  for (let i = 0; i < parametersCount; i++) {
+    placeholder.push(`:${i}`);
+  }
 
-  sqlQuery(ctx, insertAllSqlCommand, (error, result) => {
-    if (error) {
-      callback(error, null, true);
+  const sqlInsert = `INSERT /*+ APPEND_VALUES*/INTO ${tableChanges} VALUES(${placeholder.join(',')})`
+  const result = await executeBunch(ctx, sqlInsert, values);
 
-      return;
-    }
+  if (packetCapacityReached) {
+    const recursiveValue = await insertChangesAsync(ctx, tableChanges, currentIndex, objChanges, docId, index, user);
+    result.affectedRows += recursiveValue.affectedRows;
+  }
 
-    this.affectedRowsTotal += result.affectedRows;
-    if (packetCapacityReached) {
-      insertChanges.apply(this, [ctx, tableChanges, currentIndex, objChanges, docId, index, user, callback]);
-    } else {
-      result.affectedRows = this.affectedRowsTotal;
-      this.affectedRowsTotal = 0;
-      callback(error, result, true);
-    }
-  }, false, false, values);
+  return result;
 }
 
 module.exports = {
