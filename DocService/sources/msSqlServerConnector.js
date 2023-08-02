@@ -38,7 +38,7 @@ const connectorUtilities = require('./connectorUtilities');
 
 const configSql = config.get('services.CoAuthoring.sql');
 const cfgTableResult = configSql.get('tableResult');
-const cfgMaxPacketSize = configSql.get('max_allowed_packet');
+const cfgSafetyOptions = configSql.get('msSqlExtraOptions');
 
 const poolConfig = {
   user: configSql.get('dbUser'),
@@ -51,22 +51,10 @@ const poolConfig = {
     idleTimeoutMillis: 30000
   },
   options: {
-    encrypt: false,
-    trustServerCertificate: true
+    encrypt: cfgSafetyOptions.get('encrypt'),
+    trustServerCertificate: cfgSafetyOptions.get('trustServerCertificate')
   }
 };
-
-const connectionErrorCodes = [
-  'ELOGIN',
-  'ETIMEOUT',
-  'EDRIVER',
-  'EALREADYCONNECTED',
-  'EALREADYCONNECTING',
-  'ENOTOPEN',
-  'EINSTLOOKUP',
-  'ESOCKET',
-  'ECONNCLOSED'
-];
 
 const placeholderPrefix = 'ph_';
 
@@ -157,11 +145,7 @@ async function executeSql(ctx, sqlCommand, values = {}, noModifyRes = false, noL
     return output;
   } catch (error) {
     if (!noLog) {
-      if (connectionErrorCodes.includes(error.code)) {
-        errorHandle('sqlQuery error while pool manipulation', error, ctx);
-      } else {
-        errorHandle(`sqlQuery error while executing query: ${sqlCommand} `, error, ctx);
-      }
+      errorHandle(`sqlQuery() error while executing query: ${sqlCommand}`, error, ctx);
     }
 
     throw error;
@@ -187,7 +171,7 @@ function getTableColumns(ctx, tableName) {
   return executeSql(ctx, sqlCommand);
 }
 
-function upsert(ctx, task, opt_updateUserIndex) {
+async function upsert(ctx, task, opt_updateUserIndex) {
   task.completeDefaults();
 
   let cbInsert = task.callback;
@@ -248,19 +232,23 @@ function upsert(ctx, task, opt_updateUserIndex) {
     + `WHEN NOT MATCHED THEN INSERT(${sourceColumns}) VALUES(${sourceValues}) `
     + `OUTPUT $ACTION as action, INSERTED.user_index as insertId;`;
 
-  return executeSql(ctx, sqlMerge, values, true).then(
-    result => {
-      const insertId = result.recordset[0].insertId;
-      const affectedRows = result.recordset[0].action === 'UPDATE' ? 2 : 1;
+  const result = await executeSql(ctx, sqlMerge, values, true);
+  const insertId = result.recordset[0].insertId;
+  const affectedRows = result.recordset[0].action === 'UPDATE' ? 2 : 1;
 
-      return { affectedRows, insertId };
-    }
-  );
+  return { affectedRows, insertId };
 }
 
 function insertChanges(ctx, tableChanges, startIndex, objChanges, docId, index, user, callback) {
+  insertChangesAsync(ctx, tableChanges, startIndex, objChanges, docId, index, user).then(
+    result => callback(null, result, true),
+    error => callback(error, null, true)
+  );
+}
+
+async function insertChangesAsync(ctx, tableChanges, startIndex, objChanges, docId, index, user) {
   if (startIndex === objChanges.length) {
-    return;
+    return { affectedRows: 0 };
   }
 
   let sqlInsert = `INSERT INTO ${tableChanges} VALUES`;
@@ -270,7 +258,7 @@ function insertChanges(ctx, tableChanges, startIndex, objChanges, docId, index, 
   const msSqlParametersCapacity = 1000;
   const parametersInQuery = 8;
   const rowsLimit = Math.trunc(msSqlParametersCapacity / parametersInQuery);
-
+  
   let rowCounts = 1;
   let currentIndex = startIndex;
   for (; currentIndex < objChanges.length && rowCounts <= rowsLimit; ++currentIndex, ++index) {
@@ -296,17 +284,13 @@ function insertChanges(ctx, tableChanges, startIndex, objChanges, docId, index, 
 
   sqlInsert += ';';
 
-  executeSql(ctx,sqlInsert, values).then(
-    result => {
-      if (currentIndex < objChanges.length) {
-        insertChanges(ctx, tableChanges, currentIndex, objChanges, docId, index, user, callback);
-      } else {
-        // TODO: Not actual result, only last inserts.
-        callback(null, result, true);
-      }
-    },
-    error => callback(error, null, true)
-  );
+  const result = await executeSql(ctx,sqlInsert, values);
+  if (currentIndex < objChanges.length) {
+    const recursiveValue = await insertChangesAsync(ctx, tableChanges, currentIndex, objChanges, docId, index, user);
+    result.affectedRows += recursiveValue.affectedRows;
+  }
+
+  return result;
 }
 
 module.exports = {
