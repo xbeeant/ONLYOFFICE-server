@@ -107,11 +107,10 @@ async function executeQuery(ctx, sqlCommand, values = [], noModifyRes = false, n
     return output;
   } catch (error) {
     if (!noLog) {
-      ctx.logger.error('sqlQuery error sqlCommand: %s: %s', correctedSql, error.stack);
-      // ctx.logger.error('sqlQuery error while pool manipulation: %s', error.stack);
-
-      throw error;
+      ctx.logger.error(`sqlQuery() error while executing query: ${sqlCommand}\n${error.stack}`);
     }
+
+    throw error;
   } finally {
     if (connection) {
       connection.close();
@@ -133,11 +132,10 @@ async function executeBunch(ctx, sqlCommand, values = [], noLog = false) {
     return { affectedRows: result?.rowsAffected ?? 0 };
   } catch (error) {
     if (!noLog) {
-      ctx.logger.error('sqlQuery error sqlCommand: %s: %s', sqlCommand, error.stack);
-      // ctx.logger.error('sqlQuery error while pool manipulation: %s', error.stack);
-
-      throw error;
+      ctx.logger.error(`sqlQuery() error while executing query: ${sqlCommand}\n${error.stack}`);
     }
+
+    throw error;
   } finally {
     if (connection) {
       connection.close();
@@ -241,7 +239,7 @@ async function upsert(ctx, task, opt_updateUserIndex) {
 
 function insertChanges(ctx, tableChanges, startIndex, objChanges, docId, index, user, callback) {
   insertChangesAsync(ctx, tableChanges, startIndex, objChanges, docId, index, user).then(
-    result => { ctx.logger.debug('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!TOTAL:', result.affectedRows); callback(null, result, true) },
+    result => callback(null, result, true),
     error => callback(error, null, true)
   );
 }
@@ -252,9 +250,9 @@ async function insertChangesAsync(ctx, tableChanges, startIndex, objChanges, doc
   }
 
   const parametersCount = 8;
-  const placeholderLength = ':9'.length;
+  const maxPlaceholderLength = ':99'.length;
   // (parametersCount - 1) - separator symbols length.
-  const maxInsertStatementLength = `INSERT /*+ APPEND_VALUES*/INTO ${tableChanges} VALUES()`.length + placeholderLength * parametersCount + (parametersCount - 1);
+  const maxInsertStatementLength = `INSERT /*+ APPEND_VALUES*/INTO ${tableChanges} VALUES()`.length + maxPlaceholderLength * parametersCount + (parametersCount - 1);
   let packetCapacityReached = false;
 
   const values = [];
@@ -272,16 +270,18 @@ async function insertChangesAsync(ctx, tableChanges, startIndex, objChanges, doc
       break;
     }
 
-    const rowValues = {
-      '0': ctx.tenant,
-      '1': docId,
-      '2': index,
-      '3': user.id,
-      '4': user.idOriginal,
-      '5': user.username,
-      '6': objChanges[currentIndex].change,
-      '7': objChanges[currentIndex].time
-    };
+    const parameters = [
+      ctx.tenant,
+      docId,
+      index,
+      user.id,
+      user.idOriginal,
+      user.username,
+      objChanges[currentIndex].change,
+      objChanges[currentIndex].time
+    ];
+
+    const rowValues = { ...parameters };
 
     values.push(rowValues);
     lengthUtf8Current += lengthUtf8Row;
