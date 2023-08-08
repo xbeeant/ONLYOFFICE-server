@@ -38,9 +38,8 @@ const connectorUtilities = require('./connectorUtilities');
 
 const configSql = config.get('services.CoAuthoring.sql');
 const cfgTableResult = configSql.get('tableResult');
-const cfgSafetyOptions = configSql.get('msSqlExtraOptions');
 
-const poolConfig = {
+const connectionConfiguration = {
   user: configSql.get('dbUser'),
   password: configSql.get('dbPass'),
   server: configSql.get('dbHost'),
@@ -49,12 +48,10 @@ const poolConfig = {
     max: configSql.get('connectionlimit'),
     min: 0,
     idleTimeoutMillis: 30000
-  },
-  options: {
-    encrypt: cfgSafetyOptions.get('encrypt'),
-    trustServerCertificate: cfgSafetyOptions.get('trustServerCertificate')
   }
 };
+const additionalOptions = configSql.get('msSqlExtraOptions');
+const configuration = Object.assign({}, connectionConfiguration, additionalOptions);
 
 const placeholderPrefix = 'ph_';
 
@@ -119,7 +116,7 @@ function sqlQuery(ctx, sqlCommand, callbackFunction, opt_noModifyRes = false, op
 
 async function executeSql(ctx, sqlCommand, values = {}, noModifyRes = false, noLog = false) {
   try {
-    await sql.connect(poolConfig);
+    await sql.connect(configuration);
 
     const statement = new sql.PreparedStatement();
     const placeholders = convertPlaceholdersValues(values);
@@ -258,7 +255,7 @@ async function insertChangesAsync(ctx, tableChanges, startIndex, objChanges, doc
   const msSqlParametersCapacity = 1000;
   const parametersInQuery = 8;
   const rowsLimit = Math.trunc(msSqlParametersCapacity / parametersInQuery);
-  
+
   let rowCounts = 1;
   let currentIndex = startIndex;
   for (; currentIndex < objChanges.length && rowCounts <= rowsLimit; ++currentIndex, ++index) {
