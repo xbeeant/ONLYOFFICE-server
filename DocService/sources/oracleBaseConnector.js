@@ -47,6 +47,8 @@ const connectionConfiguration = {
   poolMin: 0,
   poolMax: configSql.get('connectionlimit')
 };
+const additionalOptions = configSql.get('oracleExtraOptions');
+const configuration = Object.assign({}, connectionConfiguration, additionalOptions);
 let pool = null;
 
 oracledb.fetchAsString = [ oracledb.NCLOB, oracledb.CLOB ];
@@ -82,7 +84,7 @@ async function executeQuery(ctx, sqlCommand, values = [], noModifyRes = false, n
   let connection = null;
   try {
     if (!pool) {
-      pool = await oracledb.createPool(connectionConfiguration);
+      pool = await oracledb.createPool(configuration);
     }
 
     connection = await pool.getConnection();
@@ -112,9 +114,7 @@ async function executeQuery(ctx, sqlCommand, values = [], noModifyRes = false, n
 
     throw error;
   } finally {
-    if (connection) {
-      connection.close();
-    }
+      connection?.close();
   }
 }
 
@@ -122,7 +122,7 @@ async function executeBunch(ctx, sqlCommand, values = [], noLog = false) {
   let connection = null;
   try {
     if (!pool) {
-      pool = await oracledb.createPool(connectionConfiguration);
+      pool = await oracledb.createPool(configuration);
     }
 
     connection = await pool.getConnection();
@@ -137,9 +137,7 @@ async function executeBunch(ctx, sqlCommand, values = [], noLog = false) {
 
     throw error;
   } finally {
-    if (connection) {
-      connection.close();
-    }
+    connection?.close();
   }
 }
 
