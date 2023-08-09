@@ -35,7 +35,7 @@
 var pg = require('pg');
 var co = require('co');
 var types = require('pg').types;
-var sqlBase = require('./baseConnector');
+const connectorUtilities = require('./connectorUtilities');
 const config = require('config');
 var configSql = config.get('services.CoAuthoring.sql');
 const cfgTableResult = config.get('services.CoAuthoring.sql.tableResult');
@@ -109,7 +109,7 @@ function getUpsertString(task, values) {
   let dateNow = new Date();
   let cbInsert = task.callback;
   if (isSupportOnConflict && task.callback) {
-    let userCallback = new sqlBase.UserCallback();
+    let userCallback = new connectorUtilities.UserCallback();
     userCallback.fromValues(task.userIndex, task.callback);
     cbInsert = userCallback.toSQLInsert();
   }
@@ -130,7 +130,7 @@ function getUpsertString(task, values) {
     sqlCommand += ` ON CONFLICT (tenant, id) DO UPDATE SET last_open_date = ${p9}`;
     if (task.callback) {
       let p10 = addSqlParam(JSON.stringify(task.callback), values);
-      sqlCommand += `, callback = ${cfgTableResult}.callback || '${sqlBase.UserCallback.prototype.delimiter}{"userIndex":' `;
+      sqlCommand += `, callback = ${cfgTableResult}.callback || '${connectorUtilities.UserCallback.prototype.delimiter}{"userIndex":' `;
       sqlCommand += ` || (${cfgTableResult}.user_index + 1)::text || ',"callback":' || ${p10}::text || '}'`;
     }
     if (task.baseurl) {

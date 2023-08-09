@@ -33,7 +33,7 @@
 'use strict';
 
 const co = require('co');
-var sqlBase = require('./baseConnector');
+const connectorUtilities = require('./connectorUtilities');
 const db = require("dmdb");
 const config = require('config');
 
@@ -146,7 +146,7 @@ exports.upsert = function(ctx, task, opt_updateUserIndex) {
     let values = [];
     let cbInsert = task.callback;
     if (task.callback) {
-      let userCallback = new sqlBase.UserCallback();
+      let userCallback = new connectorUtilities.UserCallback();
       userCallback.fromValues(task.userIndex, task.callback);
       cbInsert = userCallback.toSQLInsert();
     }
@@ -166,7 +166,7 @@ exports.upsert = function(ctx, task, opt_updateUserIndex) {
     sqlCommand += `WHEN MATCHED THEN UPDATE SET last_open_date = ${p9}`;
     if (task.callback) {
       let p10 = addSqlParam(JSON.stringify(task.callback), values);
-      sqlCommand += `, callback = CONCAT(callback , '${sqlBase.UserCallback.prototype.delimiter}{"userIndex":' , (user_index + 1) , ',"callback":', ${p10}, '}')`;
+      sqlCommand += `, callback = CONCAT(callback , '${connectorUtilities.UserCallback.prototype.delimiter}{"userIndex":' , (user_index + 1) , ',"callback":', ${p10}, '}')`;
     }
     if (task.baseurl) {
       let p11 = addSqlParam(task.baseurl, values);
