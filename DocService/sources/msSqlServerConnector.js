@@ -149,6 +149,17 @@ async function executeSql(ctx, sqlCommand, values = {}, noModifyRes = false, noL
   }
 }
 
+async function executeBulk(ctx, table) {
+  const pool = new sql.ConnectionPool(configuration);
+  await pool.connect();
+  const request = pool.request();
+  await request.bulk(table);
+    // await sql.connect(configuration);
+    // await new sql.Request().bulk(table);
+
+    return { affectedRows: 0};
+}
+
 function addSqlParameterObjectBased(parameter, name, accumulatedObject) {
   accumulatedObject[`${placeholderPrefix}${name}`] = parameter;
   return `@${placeholderPrefix}${name}`;
@@ -247,6 +258,28 @@ async function insertChangesAsync(ctx, tableChanges, startIndex, objChanges, doc
   if (startIndex === objChanges.length) {
     return { affectedRows: 0 };
   }
+
+  // const table = new sql.Table(tableChanges);
+  // table.columns.add('tenant', sql.NVarChar, { nullable: false, length: 'max' });
+  // table.columns.add('id', sql.NVarChar, { nullable: false, length: 'max' });
+  // table.columns.add('change_id', sql.Int, { nullable: false });
+  // table.columns.add('user_id', sql.NVarChar, { nullable: false , length: 'max' });
+  // table.columns.add('user_id_original', sql.NVarChar, { nullable: false, length: 'max' });
+  // table.columns.add('user_name', sql.NVarChar, { nullable: false, length: 'max' });
+  // table.columns.add('change_data', sql.NVarChar, { nullable: false, length: 'max' });
+  // table.columns.add('change_date', sql.DateTime2, { nullable: false });
+  //
+  // const msSqlParametersCapacity = 1000000000;
+  // const parametersInQuery = 8;
+  // const rowsLimit = Math.trunc(msSqlParametersCapacity / parametersInQuery);
+  //
+  // let rowCounts = 1;
+  // let currentIndex = startIndex;
+  // for (; currentIndex < objChanges.length && rowCounts <= rowsLimit; ++currentIndex, ++index) {
+  //   table.rows.add(ctx.tenant, docId, index, user.id, user.idOriginal, user.username, objChanges[currentIndex].change, objChanges[currentIndex].time);
+  // }
+  // return await executeBulk(ctx, table);
+
 
   let sqlInsert = `INSERT INTO ${tableChanges} VALUES`;
 
