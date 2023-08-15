@@ -35,14 +35,18 @@
 const sql = require("mssql");
 const config = require('config');
 const connectorUtilities = require('./connectorUtilities');
+const utils = require('./../../Common/sources/utils');
 
 const configSql = config.get('services.CoAuthoring.sql');
 const cfgTableResult = configSql.get('tableResult');
+const cfgTableChanges = configSql.get('tableChanges');
+const cfgMaxPacketSize = configSql.get('max_allowed_packet');
 
 const connectionConfiguration = {
   user: configSql.get('dbUser'),
   password: configSql.get('dbPass'),
   server: configSql.get('dbHost'),
+  port: configSql.get('dbPort'),
   database: configSql.get('dbName'),
   pool: {
     max: configSql.get('connectionlimit'),
@@ -102,8 +106,16 @@ function convertPlaceholdersValues(values) {
 }
 
 function registerPlaceholderValues(values, statement) {
-  for (const key of Object.keys(values)) {
-    statement.input(key, dataType(values[key]));
+  if (values._typesMetadata !== undefined) {
+      for (const placeholderName of Object.keys(values._typesMetadata)) {
+        statement.input(placeholderName, values._typesMetadata[placeholderName]);
+      }
+
+      delete values._typesMetadata;
+  } else {
+    for (const key of Object.keys(values)) {
+      statement.input(key, dataType(values[key]));
+    }
   }
 }
 
@@ -150,19 +162,28 @@ async function executeSql(ctx, sqlCommand, values = {}, noModifyRes = false, noL
 }
 
 async function executeBulk(ctx, table) {
-  const pool = new sql.ConnectionPool(configuration);
-  await pool.connect();
-  const request = pool.request();
-  await request.bulk(table);
-    // await sql.connect(configuration);
-    // await new sql.Request().bulk(table);
+  try {
+    await sql.connect(configuration);
+    const result = await new sql.Request().bulk(table);
 
-    return { affectedRows: 0};
+    return { affectedRows: result?.rowsAffected ?? 0 };
+  } catch (error) {
+    errorHandle(`sqlQuery() error while executing bulk for table ${table.name}`, error, ctx);
+
+    throw error;
+  }
 }
 
-function addSqlParameterObjectBased(parameter, name, accumulatedObject) {
-  accumulatedObject[`${placeholderPrefix}${name}`] = parameter;
-  return `@${placeholderPrefix}${name}`;
+function addSqlParameterObjectBased(parameter, name, type, accumulatedObject) {
+  if (accumulatedObject._typesMetadata === undefined) {
+    accumulatedObject._typesMetadata = {};
+  }
+
+  const placeholder = `${placeholderPrefix}${name}`;
+  accumulatedObject[placeholder] = parameter;
+  accumulatedObject._typesMetadata[placeholder] = type;
+
+  return `@${placeholder}`;
 }
 
 function addSqlParameter(parameter, accumulatedArray) {
@@ -179,6 +200,26 @@ function getTableColumns(ctx, tableName) {
   return executeSql(ctx, sqlCommand);
 }
 
+function getDocumentsWithChanges(ctx) {
+  const existingId = `SELECT TOP(1) id FROM ${cfgTableChanges} WHERE tenant=${cfgTableResult}.tenant AND id = ${cfgTableResult}.id`;
+  const sqlCommand = `SELECT * FROM ${cfgTableResult} WHERE EXISTS(${existingId});`;
+
+  return executeSql(ctx, sqlCommand);
+}
+
+function getExpired(ctx, maxCount, expireSeconds) {
+  const expireDate = new Date();
+  utils.addSeconds(expireDate, -expireSeconds);
+
+  const values = {};
+  const date = addSqlParameterObjectBased(expireDate, 'expireDate', sql.TYPES.DateTime(), values);
+  const count = addSqlParameterObjectBased(maxCount, 'maxCount', sql.TYPES.Int(), values);
+  const notExistingTenantAndId = `SELECT TOP(1) tenant, id FROM ${cfgTableChanges} WHERE ${cfgTableChanges}.tenant = ${cfgTableResult}.tenant AND ${cfgTableChanges}.id = ${cfgTableResult}.id`
+  const sqlCommand = `SELECT TOP(${count}) * FROM ${cfgTableResult} WHERE last_open_date <= ${date} AND NOT EXISTS(${notExistingTenantAndId});`;
+
+ return executeSql(ctx, sqlCommand, values);
+}
+
 async function upsert(ctx, task, opt_updateUserIndex) {
   task.completeDefaults();
 
@@ -193,15 +234,15 @@ async function upsert(ctx, task, opt_updateUserIndex) {
 
   const values = {};
   const insertValuesPlaceholder = [
-    addSqlParameterObjectBased(task.tenant, 'tenant', values),
-    addSqlParameterObjectBased(task.key, 'key', values),
-    addSqlParameterObjectBased(task.status, 'status', values),
-    addSqlParameterObjectBased(task.statusInfo, 'statusInfo', values),
-    addSqlParameterObjectBased(dateNow, 'dateNow', values),
-    addSqlParameterObjectBased(task.userIndex, 'userIndex', values),
-    addSqlParameterObjectBased(task.changeId, 'changeId', values),
-    addSqlParameterObjectBased(cbInsert, 'cbInsert', values),
-    addSqlParameterObjectBased(task.baseurl, 'baseurl', values),
+    addSqlParameterObjectBased(task.tenant, 'tenant', sql.TYPES.NVarChar(510), values),
+    addSqlParameterObjectBased(task.key, 'key', sql.TYPES.NVarChar(510), values),
+    addSqlParameterObjectBased(task.status, 'status', sql.TYPES.SmallInt(), values),
+    addSqlParameterObjectBased(task.statusInfo, 'statusInfo', sql.TYPES.Int(), values),
+    addSqlParameterObjectBased(dateNow, 'dateNow', sql.TYPES.DateTime(), values),
+    addSqlParameterObjectBased(task.userIndex, 'userIndex', sql.TYPES.Decimal(18, 0), values),
+    addSqlParameterObjectBased(task.changeId, 'changeId', sql.TYPES.Decimal(18, 0), values),
+    addSqlParameterObjectBased(cbInsert, 'cbInsert', sql.TYPES.NVarChar(sql.MAX), values),
+    addSqlParameterObjectBased(task.baseurl, 'baseurl', sql.TYPES.NVarChar(sql.MAX), values),
   ];
 
   const tenant = insertValuesPlaceholder[0];
@@ -217,7 +258,7 @@ async function upsert(ctx, task, opt_updateUserIndex) {
   let updateColumns = `target.last_open_date = ${lastOpenDate}`;
 
   if (task.callback) {
-    const parameter = addSqlParameterObjectBased(JSON.stringify(task.callback), 'callback', values);
+    const parameter = addSqlParameterObjectBased(JSON.stringify(task.callback), 'callback', sql.TYPES.NVarChar(sql.MAX), values);
     const concatenatedColumns = concatParams(
       'target.callback', `'${connectorUtilities.UserCallback.prototype.delimiter}{"userIndex":'`, '(target.user_index + 1)', `',"callback":'`, parameter, `'}'`
     );
@@ -259,68 +300,34 @@ async function insertChangesAsync(ctx, tableChanges, startIndex, objChanges, doc
     return { affectedRows: 0 };
   }
 
-  // const table = new sql.Table(tableChanges);
-  // table.columns.add('tenant', sql.NVarChar, { nullable: false, length: 'max' });
-  // table.columns.add('id', sql.NVarChar, { nullable: false, length: 'max' });
-  // table.columns.add('change_id', sql.Int, { nullable: false });
-  // table.columns.add('user_id', sql.NVarChar, { nullable: false , length: 'max' });
-  // table.columns.add('user_id_original', sql.NVarChar, { nullable: false, length: 'max' });
-  // table.columns.add('user_name', sql.NVarChar, { nullable: false, length: 'max' });
-  // table.columns.add('change_data', sql.NVarChar, { nullable: false, length: 'max' });
-  // table.columns.add('change_date', sql.DateTime2, { nullable: false });
-  //
-  // const msSqlParametersCapacity = 1000000000;
-  // const parametersInQuery = 8;
-  // const rowsLimit = Math.trunc(msSqlParametersCapacity / parametersInQuery);
-  //
-  // let rowCounts = 1;
-  // let currentIndex = startIndex;
-  // for (; currentIndex < objChanges.length && rowCounts <= rowsLimit; ++currentIndex, ++index) {
-  //   table.rows.add(ctx.tenant, docId, index, user.id, user.idOriginal, user.username, objChanges[currentIndex].change, objChanges[currentIndex].time);
-  // }
-  // return await executeBulk(ctx, table);
+  const table = new sql.Table(tableChanges);
+  table.columns.add('tenant', sql.TYPES.NVarChar(sql.MAX), { nullable: false, length: 'max' });
+  table.columns.add('id', sql.TYPES.NVarChar(sql.MAX), { nullable: false, length: 'max' });
+  table.columns.add('change_id', sql.TYPES.Int, { nullable: false });
+  table.columns.add('user_id', sql.TYPES.NVarChar(sql.MAX), { nullable: false , length: 'max' });
+  table.columns.add('user_id_original', sql.TYPES.NVarChar(sql.MAX), { nullable: false, length: 'max' });
+  table.columns.add('user_name', sql.TYPES.NVarChar(sql.MAX), { nullable: false, length: 'max' });
+  table.columns.add('change_data', sql.TYPES.NVarChar(sql.MAX), { nullable: false, length: 'max' });
+  table.columns.add('change_date', sql.TYPES.DateTime, { nullable: false });
 
-
-  let sqlInsert = `INSERT INTO ${tableChanges} VALUES`;
-
-  const values = {};
-  // MS SQL Server can handle only 1000 parameters in one query.
-  const msSqlParametersCapacity = 1000;
-  const parametersInQuery = 8;
-  const rowsLimit = Math.trunc(msSqlParametersCapacity / parametersInQuery);
-
-  let rowCounts = 1;
+  const indexBytes = 4;
+  const timeBytes = 8;
+  let bytes = 0;
   let currentIndex = startIndex;
-  for (; currentIndex < objChanges.length && rowCounts <= rowsLimit; ++currentIndex, ++index) {
-    if (rowCounts !== 1) {
-      sqlInsert += ',';
-    }
+  for (; currentIndex < objChanges.length && bytes <= cfgMaxPacketSize; ++currentIndex, ++index) {
+    bytes += indexBytes + timeBytes
+      + 4 * (ctx.tenant.length + docId.length + user.id.length + user.idOriginal.length + user.username.length + objChanges[currentIndex].change.length);
 
-    rowCounts++;
-
-    const valuesPlaceholder = [
-      addSqlParameterObjectBased(ctx.tenant, `tenant${currentIndex}`, values),
-      addSqlParameterObjectBased(docId, `docId${currentIndex}`, values),
-      addSqlParameterObjectBased(index, `index${currentIndex}`, values),
-      addSqlParameterObjectBased(user.id, `id${currentIndex}`, values),
-      addSqlParameterObjectBased(user.idOriginal, `idOriginal${currentIndex}`, values),
-      addSqlParameterObjectBased(user.username, `username${currentIndex}`, values),
-      addSqlParameterObjectBased(objChanges[currentIndex].change, `change${currentIndex}`, values),
-      addSqlParameterObjectBased(objChanges[currentIndex].time, `time${currentIndex}`, values)
-    ];
-
-    sqlInsert += `(${valuesPlaceholder.join(',')})`;
+    table.rows.add(ctx.tenant, docId, index, user.id, user.idOriginal, user.username, objChanges[currentIndex].change, objChanges[currentIndex].time);
   }
 
-  sqlInsert += ';';
-
-  const result = await executeSql(ctx,sqlInsert, values);
+  const result = await executeBulk(ctx, table);
   if (currentIndex < objChanges.length) {
     const recursiveValue = await insertChangesAsync(ctx, tableChanges, currentIndex, objChanges, docId, index, user);
     result.affectedRows += recursiveValue.affectedRows;
   }
 
-  return result;
+  return result
 }
 
 module.exports = {
@@ -328,6 +335,8 @@ module.exports = {
   addSqlParameter,
   concatParams,
   getTableColumns,
+  getDocumentsWithChanges,
+  getExpired,
   upsert,
   insertChanges
 };
