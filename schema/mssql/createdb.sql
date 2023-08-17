@@ -1,20 +1,20 @@
 USE onlyoffice;
 
 CREATE TABLE doc_changes(
-    tenant NVARCHAR(510) NOT NULL,
-    id NVARCHAR(510) NOT NULL,
+    tenant NVARCHAR(255) NOT NULL,
+    id NVARCHAR(255) NOT NULL,
     change_id DECIMAL NOT NULL CONSTRAINT unsigned_doc_changes CHECK(change_id BETWEEN 0 AND 4294967295),
-    user_id NVARCHAR(510) NOT NULL,
-    user_id_original NVARCHAR(510) NOT NULL,
-    user_name NVARCHAR(510) NOT NULL,
+    user_id NVARCHAR(255) NOT NULL,
+    user_id_original NVARCHAR(255) NOT NULL,
+    user_name NVARCHAR(255) NOT NULL,
     change_data NVARCHAR(MAX) NOT NULL,
     change_date DATETIME NOT NULL,
     UNIQUE (tenant, id, change_id)
 );
 
 CREATE TABLE task_result (
-    tenant NVARCHAR(510) NOT NULL,
-    id NVARCHAR(510) NOT NULL,
+    tenant NVARCHAR(255) NOT NULL,
+    id NVARCHAR(255) NOT NULL,
     status SMALLINT NOT NULL,
     status_info INT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP NOT NULL,
