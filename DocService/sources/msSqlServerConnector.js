@@ -234,8 +234,8 @@ async function upsert(ctx, task, opt_updateUserIndex) {
 
   const values = {};
   const insertValuesPlaceholder = [
-    addSqlParameterObjectBased(task.tenant, 'tenant', sql.TYPES.NVarChar(510), values),
-    addSqlParameterObjectBased(task.key, 'key', sql.TYPES.NVarChar(510), values),
+    addSqlParameterObjectBased(task.tenant, 'tenant', sql.TYPES.NVarChar(255), values),
+    addSqlParameterObjectBased(task.key, 'key', sql.TYPES.NVarChar(255), values),
     addSqlParameterObjectBased(task.status, 'status', sql.TYPES.SmallInt(), values),
     addSqlParameterObjectBased(task.statusInfo, 'statusInfo', sql.TYPES.Int(), values),
     addSqlParameterObjectBased(dateNow, 'dateNow', sql.TYPES.DateTime(), values),
