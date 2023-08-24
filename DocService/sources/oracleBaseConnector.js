@@ -35,9 +35,12 @@
 const oracledb = require('oracledb');
 const config = require('config');
 const connectorUtilities = require('./connectorUtilities');
+const utils = require('./../../Common/sources/utils');
+const {result} = require("underscore");
 
 const configSql = config.get('services.CoAuthoring.sql');
 const cfgTableResult = configSql.get('tableResult');
+const cfgTableChanges = configSql.get('tableChanges');
 const cfgMaxPacketSize = configSql.get('max_allowed_packet');
 
 const connectionConfiguration = {
@@ -152,6 +155,26 @@ function concatParams(firstParameter, secondParameter) {
 
 function getTableColumns(ctx, tableName) {
   return executeQuery(ctx, `SELECT LOWER(column_name) AS column_name FROM user_tab_columns WHERE table_name = '${tableName.toUpperCase()}'`);
+}
+
+function getDocumentsWithChanges(ctx) {
+  const existingId = `SELECT id FROM ${cfgTableChanges} WHERE tenant=${cfgTableResult}.tenant AND id = ${cfgTableResult}.id AND ROWNUM <= 1`;
+  const sqlCommand = `SELECT * FROM ${cfgTableResult} WHERE EXISTS(${existingId})`;
+
+  return executeQuery(ctx, sqlCommand);
+}
+
+function getExpired(ctx, maxCount, expireSeconds) {
+  const expireDate = new Date();
+  utils.addSeconds(expireDate, -expireSeconds);
+
+  const values = [];
+  const date = addSqlParameter(expireDate, values);
+  const count = addSqlParameter(maxCount, values);
+  const notExistingTenantAndId = `SELECT tenant, id FROM ${cfgTableChanges} WHERE ${cfgTableChanges}.tenant = ${cfgTableResult}.tenant AND ${cfgTableChanges}.id = ${cfgTableResult}.id AND ROWNUM <= 1`
+  const sqlCommand = `SELECT * FROM ${cfgTableResult} WHERE last_open_date <= ${date} AND NOT EXISTS(${notExistingTenantAndId}) AND ROWNUM <= ${count}`;
+
+  return executeQuery(ctx, sqlCommand, values);
 }
 
 function makeUpdateSql(dateNow, task, values, opt_updateUserIndex) {
@@ -306,6 +329,8 @@ module.exports = {
   addSqlParameter,
   concatParams,
   getTableColumns,
+  getDocumentsWithChanges,
+  getExpired,
   upsert,
   insertChanges
 }
