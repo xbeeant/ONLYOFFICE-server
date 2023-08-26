@@ -82,7 +82,7 @@ function dataType(value) {
     }
     case "object": {
       if (value instanceof Date) {
-        type = sql.TYPES.DateTime()
+        type = sql.TYPES.DateTime();
       }
 
       break;
@@ -132,7 +132,7 @@ async function executeSql(ctx, sqlCommand, values = {}, noModifyRes = false, noL
 
     const statement = new sql.PreparedStatement();
     const placeholders = convertPlaceholdersValues(values);
-    registerPlaceholderValues(placeholders, statement)
+    registerPlaceholderValues(placeholders, statement);
 
     await statement.prepare(sqlCommand);
     const result = await statement.execute(placeholders);
@@ -145,7 +145,7 @@ async function executeSql(ctx, sqlCommand, values = {}, noModifyRes = false, noL
     let output = result;
     if (!noModifyRes) {
       if (result.recordset) {
-        output = result.recordset
+        output = result.recordset;
       } else {
         output = { affectedRows: result.rowsAffected.pop() };
       }
@@ -172,6 +172,10 @@ async function executeBulk(ctx, table) {
 
     throw error;
   }
+}
+
+function closePool() {
+  sql.close();
 }
 
 function addSqlParameterObjectBased(parameter, name, type, accumulatedObject) {
@@ -250,7 +254,7 @@ async function upsert(ctx, task, opt_updateUserIndex) {
   const lastOpenDate = insertValuesPlaceholder[4];
   const baseUrl = insertValuesPlaceholder[8];
   const insertValues = insertValuesPlaceholder.join(', ');
-  const columns = ['tenant', 'id', 'status', 'status_info', 'last_open_date', 'user_index', 'change_id', 'callback', 'baseurl']
+  const columns = ['tenant', 'id', 'status', 'status_info', 'last_open_date', 'user_index', 'change_id', 'callback', 'baseurl'];
   const sourceColumns = columns.join(', ');
   const sourceValues = columns.map(column => `source.${column}`).join(', ');
 
@@ -327,11 +331,12 @@ async function insertChangesAsync(ctx, tableChanges, startIndex, objChanges, doc
     result.affectedRows += recursiveValue.affectedRows;
   }
 
-  return result
+  return result;
 }
 
 module.exports = {
   sqlQuery,
+  closePool,
   addSqlParameter,
   concatParams,
   getTableColumns,
