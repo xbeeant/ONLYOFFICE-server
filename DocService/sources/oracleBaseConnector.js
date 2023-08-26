@@ -157,6 +157,12 @@ function getTableColumns(ctx, tableName) {
   return executeQuery(ctx, `SELECT LOWER(column_name) AS column_name FROM user_tab_columns WHERE table_name = '${tableName.toUpperCase()}'`);
 }
 
+function getEmptyCallbacks(ctx) {
+  const joinCondition = 'ON t2.tenant = t1.tenant AND t2.id = t1.id WHERE t2.callback IS NULL';
+  const sqlCommand = `SELECT DISTINCT t1.tenant, t1.id FROM ${cfgTableChanges} t1 LEFT JOIN ${cfgTableResult} t2 ${joinCondition}`;
+  return executeQuery(ctx, sqlCommand);
+}
+
 function getDocumentsWithChanges(ctx) {
   const existingId = `SELECT id FROM ${cfgTableChanges} WHERE tenant=${cfgTableResult}.tenant AND id = ${cfgTableResult}.id AND ROWNUM <= 1`;
   const sqlCommand = `SELECT * FROM ${cfgTableResult} WHERE EXISTS(${existingId})`;
@@ -329,6 +335,7 @@ module.exports = {
   addSqlParameter,
   concatParams,
   getTableColumns,
+  getEmptyCallbacks,
   getDocumentsWithChanges,
   getExpired,
   upsert,
