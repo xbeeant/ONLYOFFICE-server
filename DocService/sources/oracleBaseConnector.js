@@ -158,8 +158,8 @@ function getTableColumns(ctx, tableName) {
 }
 
 function getEmptyCallbacks(ctx) {
-  const joinCondition = 'ON t2.tenant = t1.tenant AND t2.id = t1.id WHERE t2.callback IS NULL';
-  const sqlCommand = `SELECT DISTINCT t1.tenant, t1.id FROM ${cfgTableChanges} t1 LEFT JOIN ${cfgTableResult} t2 ${joinCondition}`;
+  const joinCondition = 'ON t2.tenant = t1.tenant AND t2.id = t1.id AND t2.callback IS NULL';
+  const sqlCommand = `SELECT DISTINCT t1.tenant, t1.id FROM ${cfgTableChanges} t1 INNER JOIN ${cfgTableResult} t2 ${joinCondition}`;
   return executeQuery(ctx, sqlCommand);
 }
 
