@@ -311,14 +311,21 @@ describe('Base database connector', function () {
 
       test('Get changes in range', async function () {
         const docId = changesCases.range;
+        const additionalChangesCount = 5;
+        const dayBefore = new Date();
+        dayBefore.setDate(dayBefore.getDate() - 1);
+        const limitedByDateChanges = createChanges(additionalChangesCount, dayBefore);
+        const fullChanges = [...objChanges, ...limitedByDateChanges];
 
         await noRowsExistenceCheck(cfgTableChanges, docId);
 
-        await insertChangesLocal(objChanges, docId, index, user);
+        await insertChangesLocal(fullChanges, docId, index, user);
 
         const result = await baseConnector.getChangesPromise(ctx, docId, index, changesCount);
-
         expect(result.length).toEqual(changesCount);
+
+        const resultByDate = await baseConnector.getChangesPromise(ctx, docId, index, changesCount + additionalChangesCount, dayBefore);
+        expect(resultByDate.length).toEqual(additionalChangesCount);
       });
 
       test('Get changes index', async function () {
@@ -397,19 +404,20 @@ describe('Base database connector', function () {
     });
 
     test('Get expired', async function () {
+      const maxCount = 100;
       const dayBefore = new Date();
-      dayBefore.setDate(dayBefore.getDate() + 1);
+      dayBefore.setDate(dayBefore.getDate() - 1);
 
-      const resultBeforeNewRows = await baseConnector.getExpired(ctx, 3, 0);
+      const resultBeforeNewRows = await baseConnector.getExpired(ctx, maxCount, 0);
 
       for (const id of getExpiredCase) {
         const task = createTask(id);
         await insertResult(dayBefore, task);
       }
 
-      const resultAfterNewRows = await baseConnector.getExpired(ctx, 3, 0);
-      console.log('before', resultBeforeNewRows);
-      console.log('after', resultBeforeNewRows);
+      // 3 rows were added.
+      const resultAfterNewRows = await baseConnector.getExpired(ctx, maxCount + 3, 0);
+
       expect(resultAfterNewRows.length).toEqual(resultBeforeNewRows.length + getExpiredCase.length);
     });
   });
