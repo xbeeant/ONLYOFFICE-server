@@ -120,13 +120,13 @@ function registerPlaceholderValues(values, statement) {
 }
 
 function sqlQuery(ctx, sqlCommand, callbackFunction, opt_noModifyRes = false, opt_noLog = false, opt_values = {}) {
-  return executeSql(ctx, sqlCommand, opt_values, opt_noModifyRes, opt_noLog).then(
+  return executeQuery(ctx, sqlCommand, opt_values, opt_noModifyRes, opt_noLog).then(
     result => callbackFunction?.(null, result),
     error => callbackFunction?.(error)
   );
 }
 
-async function executeSql(ctx, sqlCommand, values = {}, noModifyRes = false, noLog = false) {
+async function executeQuery(ctx, sqlCommand, values = {}, noModifyRes = false, noLog = false) {
   try {
     await sql.connect(configuration);
 
@@ -201,14 +201,14 @@ function concatParams(...parameters) {
 
 function getTableColumns(ctx, tableName) {
   const sqlCommand = `SELECT column_name FROM information_schema.COLUMNS WHERE TABLE_NAME = '${tableName}' AND TABLE_SCHEMA = 'dbo';`;
-  return executeSql(ctx, sqlCommand);
+  return executeQuery(ctx, sqlCommand);
 }
 
 function getDocumentsWithChanges(ctx) {
   const existingId = `SELECT TOP(1) id FROM ${cfgTableChanges} WHERE tenant=${cfgTableResult}.tenant AND id = ${cfgTableResult}.id`;
   const sqlCommand = `SELECT * FROM ${cfgTableResult} WHERE EXISTS(${existingId});`;
 
-  return executeSql(ctx, sqlCommand);
+  return executeQuery(ctx, sqlCommand);
 }
 
 function getExpired(ctx, maxCount, expireSeconds) {
@@ -221,7 +221,7 @@ function getExpired(ctx, maxCount, expireSeconds) {
   const notExistingTenantAndId = `SELECT TOP(1) tenant, id FROM ${cfgTableChanges} WHERE ${cfgTableChanges}.tenant = ${cfgTableResult}.tenant AND ${cfgTableChanges}.id = ${cfgTableResult}.id`
   const sqlCommand = `SELECT TOP(${count}) * FROM ${cfgTableResult} WHERE last_open_date <= ${date} AND NOT EXISTS(${notExistingTenantAndId});`;
 
- return executeSql(ctx, sqlCommand, values);
+ return executeQuery(ctx, sqlCommand, values);
 }
 
 async function upsert(ctx, task, opt_updateUserIndex) {
@@ -285,7 +285,7 @@ async function upsert(ctx, task, opt_updateUserIndex) {
     + `WHEN NOT MATCHED THEN INSERT(${sourceColumns}) VALUES(${sourceValues}) `
     + `OUTPUT $ACTION as action, INSERTED.user_index as insertId;`;
 
-  const result = await executeSql(ctx, sqlMerge, values, true);
+  const result = await executeQuery(ctx, sqlMerge, values, true);
   const insertId = result.recordset[0].insertId;
   const affectedRows = result.recordset[0].action === 'UPDATE' ? 2 : 1;
 

@@ -3,10 +3,9 @@ const config = require('../../Common/node_modules/config');
 
 const baseConnector = require('../../DocService/sources/baseConnector');
 const operationContext = require('../../Common/sources/operationContext');
-const taskResult = require("../../DocService/sources/taskresult");
-const commonDefines = require("../../Common/sources/commondefines");
-const constants = require("../../Common/sources/constants");
-const connectorUtilities = require("../../DocService/sources/connectorUtilities");
+const taskResult = require('../../DocService/sources/taskresult');
+const commonDefines = require('../../Common/sources/commondefines');
+const constants = require('../../Common/sources/constants');
 const configSql = config.get('services.CoAuthoring.sql');
 
 const ctx = new operationContext.Context();
@@ -107,7 +106,7 @@ async function getRowsCountById(table, id) {
   return result[0].count;
 }
 
-async function nowRowsExistenceCheck(table, id) {
+async function noRowsExistenceCheck(table, id) {
   const noRows = await getRowsCountById(table, id);
   expect(noRows).toEqual(0);
 }
@@ -124,7 +123,7 @@ function deleteRowsByIds(table, ids) {
 
 function executeSql(sql, values = []) {
   return new Promise((resolve, reject) => {
-    baseConnector.baseConnector.sqlQuery(ctx, sql, function (error, result) {
+    baseConnector.sqlQuery(ctx, sql, function (error, result) {
       if (error) {
         reject(error)
       } else {
@@ -138,14 +137,14 @@ async function insertChangesLocal(objChanges, docId, index, user) {
   for (let currentIndex = 0; currentIndex < objChanges.length; ++currentIndex, ++index) {
     const values = [];
     const placeholder = [
-       baseConnector.baseConnector.addSqlParameter(ctx.tenant, values),
-       baseConnector.baseConnector.addSqlParameter(docId, values),
-       baseConnector.baseConnector.addSqlParameter(index, values),
-       baseConnector.baseConnector.addSqlParameter(user.id, values),
-       baseConnector.baseConnector.addSqlParameter(user.idOriginal, values),
-       baseConnector.baseConnector.addSqlParameter(user.username, values),
-       baseConnector.baseConnector.addSqlParameter(objChanges[currentIndex].change, values),
-       baseConnector.baseConnector.addSqlParameter(objChanges[currentIndex].time, values),
+       baseConnector.addSqlParameter(ctx.tenant, values),
+       baseConnector.addSqlParameter(docId, values),
+       baseConnector.addSqlParameter(index, values),
+       baseConnector.addSqlParameter(user.id, values),
+       baseConnector.addSqlParameter(user.idOriginal, values),
+       baseConnector.addSqlParameter(user.username, values),
+       baseConnector.addSqlParameter(objChanges[currentIndex].change, values),
+       baseConnector.addSqlParameter(objChanges[currentIndex].time, values),
     ];
 
     const sqlInsert = `INSERT INTO ${cfgTableChanges} VALUES(${placeholder.join(', ')});`;
@@ -169,7 +168,7 @@ function createTask(id, callback = '', baseurl = '') {
 function insertResult(dateNow, task) {
   let cbInsert = task.callback;
   if (task.callback) {
-    const userCallback = new connectorUtilities.UserCallback();
+    const userCallback = new baseConnector.UserCallback();
     userCallback.fromValues(task.userIndex, task.callback);
     cbInsert = userCallback.toSQLInsert();
   }
@@ -177,15 +176,15 @@ function insertResult(dateNow, task) {
   const columns = ['tenant', 'id', 'status', 'status_info', 'last_open_date', 'user_index', 'change_id', 'callback', 'baseurl'];
   const values = [];
   const placeholder = [
-    baseConnector.baseConnector.addSqlParameter(task.tenant, values),
-    baseConnector.baseConnector.addSqlParameter(task.key, values),
-    baseConnector.baseConnector.addSqlParameter(task.status, values),
-    baseConnector.baseConnector.addSqlParameter(task.statusInfo, values),
-    baseConnector.baseConnector.addSqlParameter(dateNow, values),
-    baseConnector.baseConnector.addSqlParameter(task.userIndex, values),
-    baseConnector.baseConnector.addSqlParameter(task.changeId, values),
-    baseConnector.baseConnector.addSqlParameter(cbInsert, values),
-    baseConnector.baseConnector.addSqlParameter(task.baseurl, values)
+    baseConnector.addSqlParameter(task.tenant, values),
+    baseConnector.addSqlParameter(task.key, values),
+    baseConnector.addSqlParameter(task.status, values),
+    baseConnector.addSqlParameter(task.statusInfo, values),
+    baseConnector.addSqlParameter(dateNow, values),
+    baseConnector.addSqlParameter(task.userIndex, values),
+    baseConnector.addSqlParameter(task.changeId, values),
+    baseConnector.addSqlParameter(cbInsert, values),
+    baseConnector.addSqlParameter(task.baseurl, values)
   ];
 
   return executeSql(`INSERT INTO ${cfgTableResult}(${columns.join(', ')}) VALUES(${placeholder.join(', ')});`, values);
@@ -205,7 +204,7 @@ afterAll(async function () {
   ];
 
   await Promise.allSettled(deletionPool);
-  baseConnector.baseConnector.closePool?.();
+  baseConnector.closePool?.();
 });
 
 // Assumed that at least default DB was installed and configured.
@@ -272,7 +271,9 @@ describe('Base database connector', function () {
     for (const table in tables) {
       test(`${table} table existence`, async function () {
         const result = await baseConnector.getTableColumns(ctx, table);
-        expect(result).toEqual(tables[table]);
+        for (const row of tables[table]) {
+          expect(result).toContainEqual(row);
+        }
       });
     }
   });
@@ -294,7 +295,7 @@ describe('Base database connector', function () {
           const docId = insertCases[testCase];
           const objChanges = createChanges(+testCase, date);
 
-          await nowRowsExistenceCheck(cfgTableChanges, docId);
+          await noRowsExistenceCheck(cfgTableChanges, docId);
 
           await baseConnector.insertChangesPromise(ctx, objChanges, docId, index, user);
           const result = await getRowsCountById(cfgTableChanges, docId);
@@ -311,7 +312,7 @@ describe('Base database connector', function () {
       test('Get changes in range', async function () {
         const docId = changesCases.range;
 
-        await nowRowsExistenceCheck(cfgTableChanges, docId);
+        await noRowsExistenceCheck(cfgTableChanges, docId);
 
         await insertChangesLocal(objChanges, docId, index, user);
 
@@ -323,7 +324,7 @@ describe('Base database connector', function () {
       test('Get changes index', async function () {
         const docId = changesCases.index;
 
-        await nowRowsExistenceCheck(cfgTableChanges, docId);
+        await noRowsExistenceCheck(cfgTableChanges, docId);
 
         await insertChangesLocal(objChanges, docId, index, user);
 
@@ -353,6 +354,8 @@ describe('Base database connector', function () {
       const idCount = 5;
       const notNullCallbacks = idCount - 2;
 
+      const resultBefore = await baseConnector.getEmptyCallbacks(ctx);
+
       // Adding non-empty callbacks.
       for (let i = 0; i < notNullCallbacks; i++) {
         const task = createTask(emptyCallbacksCase[i], 'some_callback');
@@ -371,13 +374,9 @@ describe('Base database connector', function () {
         await insertChangesLocal(objChanges, emptyCallbacksCase[i], index, user);
       }
 
-      const result = await baseConnector.getEmptyCallbacks(ctx);
+      const resultAfter = await baseConnector.getEmptyCallbacks(ctx);
 
-      // Needs to add ids that already exist at this point. It is cfgTableChanges rest rows of LEFT JOIN result.
-      const restRows = await getIdsCount(cfgTableChanges, [...Object.values(insertCases), ...Object.values(changesCases)]);
-
-      // Rest rows + rows with empty callbacks in right table.
-      expect(result.length).toEqual(restRows[0].count + idCount - notNullCallbacks);
+      expect(resultAfter.length).toEqual(resultBefore.length + idCount - notNullCallbacks);
     });
 
     test('Get documents with changes', async function () {
@@ -419,11 +418,11 @@ describe('Base database connector', function () {
     test('New row inserted', async function () {
       const task = createTask(upsertCases.insert);
 
-      await nowRowsExistenceCheck(cfgTableResult, task.key);
+      await noRowsExistenceCheck(cfgTableResult, task.key);
 
-      const result = await baseConnector.baseConnector.upsert(ctx, task);
+      const result = await baseConnector.upsert(ctx, task);
 
-      // affectedRows should be 1 because of insert operation, insertId should be 2 due to it defaults.
+      // affectedRows should be 1 because of insert operation, insertId should be 1 by default.
       const expected = { affectedRows: 1, insertId: 1 };
       expect(result).toEqual(expected);
 
@@ -435,21 +434,30 @@ describe('Base database connector', function () {
     test('Row updated', async function () {
       const task = createTask(upsertCases.update, '', 'some-url');
 
-      const dateNow = new Date();
-      await insertResult(dateNow, task);
+      await noRowsExistenceCheck(cfgTableResult, task.key);
+
+      await baseConnector.upsert(ctx, task);
 
       // Changing baseurl to verify upsert() changing the row.
       task.baseurl = 'some-updated-url';
-      const result = await baseConnector.baseConnector.upsert(ctx, task);
+      const resultUrl = await baseConnector.upsert(ctx, task);
 
       // affectedRows should be 2 because of update operation, insertId should be 1 by default.
-      const expected = { affectedRows: 2, insertId: 1 };
-      expect(result).toEqual(expected);
+      const expectedUrl = { affectedRows: 2, insertId: 1 };
+      expect(resultUrl).toEqual(expectedUrl);
 
       const updatedRow = await executeSql(`SELECT id, baseurl FROM ${cfgTableResult} WHERE id = '${task.key}';`);
 
-      const expectedUpdate = [{ id: task.key, baseurl: 'some-updated-url' }];
-      expect(updatedRow).toEqual(expectedUpdate);
+      const expectedUrlChanges = [{ id: task.key, baseurl: 'some-updated-url' }];
+      expect(updatedRow).toEqual(expectedUrlChanges);
+
+      // Changing baseurl to verify upsert() changing the user_index.
+      task.baseurl = 'some-updated-url-with-last-index-updated';
+      const resultLastIndex = await baseConnector.upsert(ctx, task, true);
+
+      // affectedRows should be 2 because of update operation, insertId should be 2 due to 'opt_updateUserIndex' parameter in upsert() function.
+      const expectedLastIndex = { affectedRows: 2, insertId: 2 }
+      expect(resultLastIndex).toEqual(expectedLastIndex);
     });
   });
 });

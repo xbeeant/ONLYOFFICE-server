@@ -33,10 +33,10 @@ CREATE TABLE onlyoffice.task_result (
     last_open_date TIMESTAMP NOT NULL,
     user_index NUMBER DEFAULT 1 NOT NULL,
     change_id NUMBER DEFAULT 0 NOT NULL,
-    callback NVARCHAR2(2000),  -- codebase uses '' as default values here, but Oracle treat '' as NULL, so NULL permitted for this value.
-    baseurl NVARCHAR2(2000),  -- codebase uses '' as default values here, but Oracle treat '' as NULL, so NULL permitted for this value.
-    password NVARCHAR2(2000) NULL,
-    additional NVARCHAR2(2000) NULL,
+    callback NCLOB,  -- codebase uses '' as default values here, but Oracle treat '' as NULL, so NULL permitted for this value.
+    baseurl NCLOB,  -- codebase uses '' as default values here, but Oracle treat '' as NULL, so NULL permitted for this value.
+    password NCLOB NULL,
+    additional NCLOB NULL,
     CONSTRAINT task_result_unique UNIQUE (tenant, id),
     CONSTRAINT task_result_unsigned_int CHECK (user_index BETWEEN 0 AND 4294967295 AND change_id BETWEEN 0 AND 4294967295)
 );
