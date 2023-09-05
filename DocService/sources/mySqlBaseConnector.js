@@ -148,6 +148,8 @@ function upsert(ctx, task, opt_updateUserIndex) {
     }
     if (opt_updateUserIndex) {
       sqlCommand += ', user_index = LAST_INSERT_ID(user_index + 1)';
+    } else {
+      sqlCommand += ', user_index = LAST_INSERT_ID(user_index)';
     }
     sqlCommand += ';';
 
@@ -155,7 +157,8 @@ function upsert(ctx, task, opt_updateUserIndex) {
       if (error) {
         reject(error);
       } else {
-        resolve({ affectedRows: result.affectedRows, insertId: result.insertId });
+        const insertId = result.affectedRows === 1 ? task.userIndex : result.insertId;
+        resolve({ affectedRows: result.affectedRows, insertId });
       }
     }, true, false, values);
   });
