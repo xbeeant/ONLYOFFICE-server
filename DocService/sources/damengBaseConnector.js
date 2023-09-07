@@ -139,7 +139,7 @@ let concatParams = function (val1, val2) {
 };
 exports.concatParams = concatParams;
 
-exports.upsert = function(ctx, task, opt_updateUserIndex) {
+exports.upsert = function(ctx, task) {
   return new Promise(function(resolve, reject) {
     task.completeDefaults();
     let dateNow = new Date();
@@ -172,19 +172,17 @@ exports.upsert = function(ctx, task, opt_updateUserIndex) {
       let p11 = addSqlParam(task.baseurl, values);
       sqlCommand += `, baseurl = ${p11}`;
     }
-    if (opt_updateUserIndex) {
-      sqlCommand += ', user_index = user_index + 1';
-    }
+    sqlCommand += ', user_index = user_index + 1';
     sqlCommand += ';';
     sqlCommand += `SELECT user_index FROM ${cfgTableResult} WHERE tenant = ${p0} AND id = ${p1};`;
     exports.sqlQuery(ctx, sqlCommand, function(error, result) {
       if (error) {
         reject(error);
       } else {
-        let out = {affectedRows: 0, insertId: 0};
+        let out = {};
         if (result?.length > 0) {
           var first = result[0];
-          out.affectedRows = task.userIndex !== first.user_index ? 2 : 1;
+          out.isInsert = task.userIndex === first.user_index;
           out.insertId = first.user_index;
         }
         resolve(out);

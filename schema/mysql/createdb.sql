@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS `doc_changes` (
   `user_id_original` varchar(255) NOT NULL,
   `user_name` varchar(255) NOT NULL,
   `change_data` longtext NOT NULL,
-  `change_date` datetime NOT NULL,
+  `change_date` datetime(6) NOT NULL,
   PRIMARY KEY (`tenant`, `id`,`change_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
@@ -54,8 +54,8 @@ CREATE TABLE IF NOT EXISTS `task_result` (
   `id` varchar(255) NOT NULL,
   `status` tinyint(3) NOT NULL,
   `status_info` int(10) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `last_open_date` datetime NOT NULL,
+  `created_at` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `last_open_date` datetime(6) NOT NULL,
   `user_index` int(10) unsigned NOT NULL DEFAULT 1,
   `change_id` int(10) unsigned NOT NULL DEFAULT 0,
   `callback` longtext NOT NULL,

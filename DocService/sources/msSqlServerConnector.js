@@ -224,7 +224,7 @@ function getExpired(ctx, maxCount, expireSeconds) {
  return executeQuery(ctx, sqlCommand, values);
 }
 
-async function upsert(ctx, task, opt_updateUserIndex) {
+async function upsert(ctx, task) {
   task.completeDefaults();
 
   let cbInsert = task.callback;
@@ -274,9 +274,7 @@ async function upsert(ctx, task, opt_updateUserIndex) {
     updateColumns += `, target.baseurl = ${baseUrl}`;
   }
 
-  if (opt_updateUserIndex) {
-    updateColumns += ', target.user_index = target.user_index + 1';
-  }
+  updateColumns += ', target.user_index = target.user_index + 1';
 
   let sqlMerge = `MERGE INTO ${cfgTableResult} AS target `
     + `USING(VALUES(${insertValues})) AS source(${sourceColumns}) `
@@ -287,9 +285,9 @@ async function upsert(ctx, task, opt_updateUserIndex) {
 
   const result = await executeQuery(ctx, sqlMerge, values, true);
   const insertId = result.recordset[0].insertId;
-  const affectedRows = result.recordset[0].action === 'UPDATE' ? 2 : 1;
+  const isInsert = result.recordset[0].action === 'INSERT';
 
-  return { affectedRows, insertId };
+  return { isInsert, insertId };
 }
 
 function insertChanges(ctx, tableChanges, startIndex, objChanges, docId, index, user, callback) {

@@ -191,7 +191,7 @@ function getExpired(ctx, maxCount, expireSeconds) {
   return executeQuery(ctx, sqlCommand, values);
 }
 
-function makeUpdateSql(dateNow, task, values, opt_updateUserIndex) {
+function makeUpdateSql(dateNow, task, values) {
   const lastOpenDate = addSqlParameter(dateNow, values);
 
   let callback = '';
@@ -206,10 +206,7 @@ function makeUpdateSql(dateNow, task, values, opt_updateUserIndex) {
     baseUrl = `, baseurl = ${parameter}`;
   }
 
-  let userIndex = '';
-  if (opt_updateUserIndex) {
-    userIndex = ', user_index = user_index + 1';
-  }
+  const userIndex = ', user_index = user_index + 1';
 
   const updateQuery = `last_open_date = ${lastOpenDate}${callback}${baseUrl}${userIndex}`;
   const tenant = addSqlParameter(task.tenant, values);
@@ -225,7 +222,7 @@ function getReturnedValue(returned) {
   return returned?.outBinds?.pop()?.pop();
 }
 
-async function upsert(ctx, task, opt_updateUserIndex) {
+async function upsert(ctx, task) {
   task.completeDefaults();
 
   let cbInsert = task.callback;
@@ -258,17 +255,17 @@ async function upsert(ctx, task, opt_updateUserIndex) {
     const insertResult = await executeQuery(ctx, sqlInsertTry, insertValues, true, true);
     const insertId = getReturnedValue(insertResult);
 
-    return { affectedRows: 1, insertId };
+    return { isInsert: true, insertId };
   } catch (insertError) {
     if (insertError.code !== 'ORA-00001') {
       throw insertError;
     }
 
     const values = [];
-    const updateResult = await executeQuery(ctx, makeUpdateSql(dateNow, task, values, opt_updateUserIndex), values, true);
+    const updateResult = await executeQuery(ctx, makeUpdateSql(dateNow, task, values), values, true);
     const insertId = getReturnedValue(updateResult);
 
-    return { affectedRows: 2, insertId };
+    return { isInsert: false, insertId };
   }
 }
 

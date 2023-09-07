@@ -160,8 +160,8 @@ exports.upsert = function(ctx, task) {
       } else {
         if (result && result.rows.length > 0) {
           var first = result.rows[0];
-          result = {affectedRows: 0, insertId: 0};
-          result.affectedRows = task.userIndex !== first.userindex ? 2 : 1;
+          result = {};
+          result.isInsert = task.userIndex === first.userindex;
           result.insertId = first.userindex;
         }
         resolve(result);

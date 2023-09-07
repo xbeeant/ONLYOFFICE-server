@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS "public"."doc_changes" (
 "user_id_original" varchar(255) COLLATE "default" NOT NULL,
 "user_name" varchar(255) COLLATE "default" NOT NULL,
 "change_data" text COLLATE "default" NOT NULL,
-"change_date" timestamp without time zone NOT NULL,
+"change_date" timestamp(6) without time zone NOT NULL,
 PRIMARY KEY ("tenant", "id", "change_id")
 )
 WITH (OIDS=FALSE);
@@ -28,8 +28,8 @@ CREATE TABLE IF NOT EXISTS "public"."task_result" (
 "id" varchar(255) COLLATE "default" NOT NULL,
 "status" int2 NOT NULL,
 "status_info" int4 NOT NULL,
-"created_at" timestamp without time zone DEFAULT NOW(),
-"last_open_date" timestamp without time zone NOT NULL,
+"created_at" timestamp(6) without time zone DEFAULT NOW(),
+"last_open_date" timestamp(6) without time zone NOT NULL,
 "user_index" int4 NOT NULL DEFAULT 1,
 "change_id" int4 NOT NULL DEFAULT 0,
 "callback" text COLLATE "default" NOT NULL,

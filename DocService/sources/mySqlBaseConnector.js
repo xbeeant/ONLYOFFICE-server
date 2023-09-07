@@ -101,20 +101,7 @@ function concatParams(val1, val2) {
   return `CONCAT(COALESCE(${val1}, ''), COALESCE(${val2}, ''))`;
 }
 
-function getTableColumns(ctx, tableName) {
-  return new Promise(function(resolve, reject) {
-    const sqlCommand = `SELECT column_name AS 'column_name' FROM information_schema.COLUMNS WHERE TABLE_NAME = '${tableName}';`;
-    sqlQuery(ctx, sqlCommand, function(error, result) {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(result);
-      }
-    });
-  });
-}
-
-function upsert(ctx, task, opt_updateUserIndex) {
+function upsert(ctx, task) {
   return new Promise(function(resolve, reject) {
     task.completeDefaults();
     let dateNow = new Date();
@@ -146,19 +133,19 @@ function upsert(ctx, task, opt_updateUserIndex) {
       let p11 = addSqlParameter(task.baseurl, values);
       sqlCommand += `, baseurl = ${p11}`;
     }
-    if (opt_updateUserIndex) {
-      sqlCommand += ', user_index = LAST_INSERT_ID(user_index + 1)';
-    } else {
-      sqlCommand += ', user_index = LAST_INSERT_ID(user_index)';
-    }
-    sqlCommand += ';';
+
+    sqlCommand += ', user_index = LAST_INSERT_ID(user_index + 1);';
 
     sqlQuery(ctx, sqlCommand, function(error, result) {
       if (error) {
         reject(error);
       } else {
         const insertId = result.affectedRows === 1 ? task.userIndex : result.insertId;
-        resolve({ affectedRows: result.affectedRows, insertId });
+        //if CLIENT_FOUND_ROWS don't specify 1 row is inserted , 2 row is updated, and 0 row is set to its current values
+        //http://dev.mysql.com/doc/refman/5.7/en/insert-on-duplicate.html
+        const isInsert = result.affectedRows === 1;
+
+        resolve({ isInsert, insertId });
       }
     }, true, false, values);
   });
@@ -169,6 +156,5 @@ module.exports = {
   closePool,
   addSqlParameter,
   concatParams,
-  getTableColumns,
   upsert
 }
