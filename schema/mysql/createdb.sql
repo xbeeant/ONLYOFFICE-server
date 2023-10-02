@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS `task_result` (
   `id` varchar(255) NOT NULL,
   `status` tinyint(3) NOT NULL,
   `status_info` int(10) NOT NULL,
-  `created_at` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
   `last_open_date` datetime(6) NOT NULL,
   `user_index` int(10) unsigned NOT NULL DEFAULT 1,
   `change_id` int(10) unsigned NOT NULL DEFAULT 0,

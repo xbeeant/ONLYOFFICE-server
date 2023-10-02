@@ -67,7 +67,7 @@ types.setTypeParser(1184, function(stringValue) {
 
 var maxPacketSize = configSql.get('max_allowed_packet');
 
-exports.sqlQuery = function(ctx, sqlCommand, callbackFunction, opt_noModifyRes, opt_noLog, opt_values) {
+function sqlQuery(ctx, sqlCommand, callbackFunction, opt_noModifyRes, opt_noLog, opt_values) {
   co(function *() {
     var result = null;
     var error = null;
@@ -92,16 +92,21 @@ exports.sqlQuery = function(ctx, sqlCommand, callbackFunction, opt_noModifyRes, 
       }
     }
   });
-};
-let addSqlParam = function (val, values) {
+}
+
+function closePool() {
+  pool.end();
+}
+
+function addSqlParameter(val, values) {
   values.push(val);
   return '$' + values.length;
-};
-exports.addSqlParameter = addSqlParam;
-let concatParams = function (val1, val2) {
+}
+
+function concatParams(val1, val2) {
   return `COALESCE(${val1}, '') || COALESCE(${val2}, '')`;
-};
-exports.concatParams = concatParams;
+}
+
 var isSupportOnConflict = true;
 
 function getUpsertString(task, values) {
@@ -113,28 +118,28 @@ function getUpsertString(task, values) {
     userCallback.fromValues(task.userIndex, task.callback);
     cbInsert = userCallback.toSQLInsert();
   }
-  let p0 = addSqlParam(task.tenant, values);
-  let p1 = addSqlParam(task.key, values);
-  let p2 = addSqlParam(task.status, values);
-  let p3 = addSqlParam(task.statusInfo, values);
-  let p4 = addSqlParam(dateNow, values);
-  let p5 = addSqlParam(task.userIndex, values);
-  let p6 = addSqlParam(task.changeId, values);
-  let p7 = addSqlParam(cbInsert, values);
-  let p8 = addSqlParam(task.baseurl, values);
+  let p0 = addSqlParameter(task.tenant, values);
+  let p1 = addSqlParameter(task.key, values);
+  let p2 = addSqlParameter(task.status, values);
+  let p3 = addSqlParameter(task.statusInfo, values);
+  let p4 = addSqlParameter(dateNow, values);
+  let p5 = addSqlParameter(task.userIndex, values);
+  let p6 = addSqlParameter(task.changeId, values);
+  let p7 = addSqlParameter(cbInsert, values);
+  let p8 = addSqlParameter(task.baseurl, values);
   if (isSupportOnConflict) {
-    let p9 = addSqlParam(dateNow, values);
+    let p9 = addSqlParameter(dateNow, values);
     //http://stackoverflow.com/questions/34762732/how-to-find-out-if-an-upsert-was-an-update-with-postgresql-9-5-upsert
     let sqlCommand = `INSERT INTO ${cfgTableResult} (tenant, id, status, status_info, last_open_date, user_index, change_id, callback, baseurl)`;
     sqlCommand += ` VALUES (${p0}, ${p1}, ${p2}, ${p3}, ${p4}, ${p5}, ${p6}, ${p7}, ${p8})`;
     sqlCommand += ` ON CONFLICT (tenant, id) DO UPDATE SET last_open_date = ${p9}`;
     if (task.callback) {
-      let p10 = addSqlParam(JSON.stringify(task.callback), values);
+      let p10 = addSqlParameter(JSON.stringify(task.callback), values);
       sqlCommand += `, callback = ${cfgTableResult}.callback || '${connectorUtilities.UserCallback.prototype.delimiter}{"userIndex":' `;
       sqlCommand += ` || (${cfgTableResult}.user_index + 1)::text || ',"callback":' || ${p10}::text || '}'`;
     }
     if (task.baseurl) {
-      let p11 = addSqlParam(task.baseurl, values);
+      let p11 = addSqlParameter(task.baseurl, values);
       sqlCommand += `, baseurl = ${p11}`;
     }
     sqlCommand += `, user_index = ${cfgTableResult}.user_index + 1 RETURNING user_index as userindex;`;
@@ -143,17 +148,18 @@ function getUpsertString(task, values) {
     return `SELECT * FROM merge_db(${p0}, ${p1}, ${p2}, ${p3}, ${p4}, ${p5}, ${p6}, ${p7}, ${p8});`;
   }
 }
-exports.upsert = function(ctx, task) {
+
+function upsert(ctx, task) {
   return new Promise(function(resolve, reject) {
     let values = [];
     var sqlCommand = getUpsertString(task, values);
-    exports.sqlQuery(ctx, sqlCommand, function(error, result) {
+    sqlQuery(ctx, sqlCommand, function(error, result) {
       if (error) {
         if (isSupportOnConflict && '42601' === error.code) {
           //SYNTAX ERROR
           isSupportOnConflict = false;
           ctx.logger.warn('checkIsSupportOnConflict false');
-          resolve(exports.upsert(ctx, task));
+          resolve(upsert(ctx, task));
         } else {
           reject(error);
         }
@@ -168,8 +174,9 @@ exports.upsert = function(ctx, task) {
       }
     }, true, undefined, values);
   });
-};
-exports.insertChanges = function(ctx, tableChanges, startIndex, objChanges, docId, index, user, callback) {
+}
+
+function insertChanges(ctx, tableChanges, startIndex, objChanges, docId, index, user, callback) {
   let i = startIndex;
   if (i >= objChanges.length) {
     return;
@@ -193,7 +200,7 @@ exports.insertChanges = function(ctx, tableChanges, startIndex, objChanges, docI
     //4 is max utf8 bytes per symbol
     curLength += 4 * (docId.length + user.id.length + user.idOriginal.length + user.username.length + objChanges[i].change.length) + 4 + 8;
     if (curLength >= maxPacketSize && i > startIndex) {
-      exports.sqlQuery(ctx, sqlCommand, function(error, output) {
+      sqlQuery(ctx, sqlCommand, function(error, output) {
         if (error && '42883' == error.code) {
           isSupported = false;
           ctx.logger.warn('postgresql does not support UNNEST');
@@ -201,7 +208,7 @@ exports.insertChanges = function(ctx, tableChanges, startIndex, objChanges, docI
         if (error) {
           callback(error, output, isSupported);
         } else {
-          exports.insertChanges(ctx, tableChanges, i, objChanges, docId, index, user, callback);
+          insertChanges(ctx, tableChanges, i, objChanges, docId, index, user, callback);
         }
       }, undefined, undefined, values);
       return;
@@ -215,11 +222,20 @@ exports.insertChanges = function(ctx, tableChanges, startIndex, objChanges, docI
     change.push(objChanges[i].change);
     time.push(objChanges[i].time);
   }
-  exports.sqlQuery(ctx, sqlCommand, function(error, output) {
+  sqlQuery(ctx, sqlCommand, function(error, output) {
     if (error && '42883' == error.code) {
       isSupported = false;
       ctx.logger.warn('postgresql does not support UNNEST');
     }
     callback(error, output, isSupported);
   }, undefined, undefined, values);
+}
+
+module.exports = {
+  sqlQuery,
+  closePool,
+  addSqlParameter,
+  concatParams,
+  upsert,
+  insertChanges
 };
