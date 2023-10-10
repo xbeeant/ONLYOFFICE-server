@@ -29,7 +29,7 @@
  * terms at http://creativecommons.org/licenses/by-sa/4.0/legalcode
  *
  */
-
+// something wfw
 'use strict';
 
 const sql = require("mssql");
