@@ -4,6 +4,7 @@ on:
     paths:
       - '**.js'
       - '!tests/integration/**'
+      - '!DocService/sources/**Connector.js'
 jobs:
   unit-tests:
     name: Service unit tests
