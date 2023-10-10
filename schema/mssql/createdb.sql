@@ -1,3 +1,6 @@
+CREATE DATABASE onlyoffice;
+GO
+
 USE onlyoffice;
 
 CREATE TABLE doc_changes(
@@ -28,3 +31,5 @@ CREATE TABLE task_result (
     UNIQUE (tenant, id),
     CONSTRAINT unsigned_task_result CHECK(change_id BETWEEN 0 AND 4294967295 AND user_index BETWEEN 0 AND 4294967295)
 );
+
+GO
