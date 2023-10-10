@@ -300,6 +300,7 @@ describe('Base database connector', function () {
         const result = await baseConnector.getChangesPromise(ctx, docId, index, changesCount);
         expect(result.length).toEqual(changesCount);
 
+        dayBefore.setSeconds(dayBefore.getSeconds() + 1);
         const resultByDate = await baseConnector.getChangesPromise(ctx, docId, index, changesCount + additionalChangesCount, dayBefore);
         expect(resultByDate.length).toEqual(additionalChangesCount);
       });

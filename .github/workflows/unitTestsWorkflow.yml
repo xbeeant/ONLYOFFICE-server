@@ -3,6 +3,8 @@ on:
   push:
     paths:
       - '**.js'
+    paths-ignore:
+      - '**/tests/integration/**.js'
 jobs:
   unit-tests:
     name: Service unit tests
