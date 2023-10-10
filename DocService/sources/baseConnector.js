@@ -29,7 +29,7 @@
  * terms at http://creativecommons.org/licenses/by-sa/4.0/legalcode
  *
  */
-// New line wfwf
+// New line w
 'use strict';
 
 const sqlDataBaseType = {

@@ -2,7 +2,7 @@ name: Integration databases tests
 on:
   push:
     paths:
-      - './DocService/sources/baseConnector.js'
+      - '**/DocService/sources/baseConnector.js'
 jobs:
   oracle-tests:
     name: Oracle database tests
