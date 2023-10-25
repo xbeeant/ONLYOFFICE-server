@@ -46,6 +46,7 @@ const cfgTableResult = config.get('services.CoAuthoring.sql.tableResult');
 var cfgDamengExtraOptions = config.get('services.CoAuthoring.sql.damengExtraOptions');
 
 let pool = null;
+//todo add '?loginEncrypt=false' connectString query param to config(for docker on win)
 let connectString = `dm://${cfgDbUser}:${cfgDbPass}@${cfgDbHost}:${cfgDbPort}`;
 let connectionConfig = {
   connectString: connectString,
